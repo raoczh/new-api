@@ -121,7 +121,7 @@ export default function UpstreamRatioSync(props) {
 
   // 分页相关状态
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(100);
 
   // 搜索相关状态
   const [searchKeyword, setSearchKeyword] = useState('');
