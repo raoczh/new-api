@@ -53,7 +53,7 @@ export default function ModelSettingsVisualEditor(props) {
   const [pricingSubMode, setPricingSubMode] = useState('ratio'); // 'ratio' or 'token-price'
   const [conflictOnly, setConflictOnly] = useState(false);
   const formRef = useRef(null);
-  const pageSize = 10;
+  const pageSize = 100;
   const quotaPerUnit = getQuotaPerUnit();
 
   useEffect(() => {

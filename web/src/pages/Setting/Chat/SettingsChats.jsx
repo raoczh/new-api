@@ -413,7 +413,7 @@ export default function SettingsChats(props) {
                 dataSource={filteredConfigs}
                 rowKey='id'
                 pagination={{
-                  pageSize: 10,
+                  pageSize: 100,
                   showSizeChanger: false,
                   showQuickJumper: true,
                   showTotal: (total, range) =>

@@ -47,7 +47,7 @@ export default function ModelRatioNotSetEditor(props) {
   const [currentModel, setCurrentModel] = useState(null);
   const [searchText, setSearchText] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(100);
   const [loading, setLoading] = useState(false);
   const [enabledModels, setEnabledModels] = useState([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);

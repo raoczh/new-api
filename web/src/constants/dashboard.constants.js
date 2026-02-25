@@ -142,8 +142,8 @@ export const STORAGE_KEYS = {
 
 // ========== 默认值 ==========
 export const DEFAULTS = {
-  PAGE_SIZE: 20,
+  PAGE_SIZE: 100,
   CHART_HEIGHT: 96,
-  MODEL_TABLE_PAGE_SIZE: 10,
+  MODEL_TABLE_PAGE_SIZE: 100,
   MAX_TREND_POINTS: 7,
 };
