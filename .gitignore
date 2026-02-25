@@ -32,3 +32,5 @@ data/
 .gomodcache/
 .gocache-temp
 .gopath
+
+docker-compose.yml
