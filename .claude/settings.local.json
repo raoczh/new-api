@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vite build:*)",
+      "Bash(sort:*)",
+      "Bash(yarn add:*)",
+      "Bash(ls:*)",
+      "Bash(go build:*)"
+    ]
+  }
+}

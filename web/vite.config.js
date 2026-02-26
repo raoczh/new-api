@@ -20,6 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import react from '@vitejs/plugin-react';
 import { defineConfig, transformWithEsbuild } from 'vite';
 import pkg from '@douyinfe/vite-plugin-semi';
+import { compression } from 'vite-plugin-compression2';
 import path from 'path';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 const { vitePluginSemi } = pkg;
@@ -55,6 +56,11 @@ export default defineConfig({
     vitePluginSemi({
       cssLayer: true,
     }),
+    compression({
+      algorithm: 'gzip',
+      threshold: 1024,
+      deleteOriginalAssets: false,
+    }),
   ],
   optimizeDeps: {
     force: true,
@@ -83,6 +89,23 @@ export default defineConfig({
             'i18next',
             'react-i18next',
             'i18next-browser-languagedetector',
+          ],
+          mermaid: ['mermaid'],
+          vchart: [
+            '@visactor/react-vchart',
+            '@visactor/vchart',
+            '@visactor/vchart-semi-theme',
+          ],
+          icons: ['lucide-react', '@lobehub/icons'],
+          'react-icons': ['react-icons'],
+          markdown: [
+            'react-markdown',
+            'rehype-highlight',
+            'rehype-katex',
+            'remark-breaks',
+            'remark-gfm',
+            'remark-math',
+            'katex',
           ],
         },
       },
