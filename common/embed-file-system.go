@@ -2,6 +2,7 @@ package common
 
 import (
 	"embed"
+	"io"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -54,7 +55,6 @@ func ServePrecompressedStatic(fsEmbed embed.FS, targetPath string) gin.HandlerFu
 	if err != nil {
 		panic(err)
 	}
-	fileServer := http.FileServer(http.FS(subFS))
 
 	return func(c *gin.Context) {
 		urlPath := strings.TrimPrefix(c.Request.URL.Path, "/")
@@ -69,27 +69,46 @@ func ServePrecompressedStatic(fsEmbed embed.FS, targetPath string) gin.HandlerFu
 			c.Next()
 			return
 		}
-		origFile.Close()
+		origStat, err := origFile.Stat()
+		if err != nil {
+			origFile.Close()
+			c.Next()
+			return
+		}
 
 		// If client accepts gzip, try to serve pre-compressed .gz file
 		if strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
 			gzPath := urlPath + ".gz"
-			data, err := fs.ReadFile(subFS, gzPath)
+			gzFile, err := subFS.Open(gzPath)
 			if err == nil {
-				contentType := mime.TypeByExtension(filepath.Ext(urlPath))
-				if contentType == "" {
-					contentType = "application/octet-stream"
+				defer gzFile.Close()
+				gzStat, err := gzFile.Stat()
+				if err == nil {
+					// Serve pre-compressed file with proper HTTP semantics
+					contentType := mime.TypeByExtension(filepath.Ext(urlPath))
+					if contentType == "" {
+						contentType = "application/octet-stream"
+					}
+					c.Header("Content-Encoding", "gzip")
+					c.Header("Vary", "Accept-Encoding")
+					c.Header("Content-Type", contentType)
+
+					// Use http.ServeContent for ETag, Last-Modified, Range support
+					http.ServeContent(c.Writer, c.Request, gzPath, gzStat.ModTime(), gzFile.(io.ReadSeeker))
+					origFile.Close()
+					c.Abort()
+					return
 				}
-				c.Header("Content-Encoding", "gzip")
-				c.Header("Vary", "Accept-Encoding")
-				c.Data(http.StatusOK, contentType, data)
-				c.Abort()
-				return
 			}
 		}
 
-		// Fallback: serve the original uncompressed file
-		fileServer.ServeHTTP(c.Writer, c.Request)
+		// Fallback: serve the original uncompressed file with proper HTTP semantics
+		contentType := mime.TypeByExtension(filepath.Ext(urlPath))
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		c.Header("Content-Type", contentType)
+		http.ServeContent(c.Writer, c.Request, urlPath, origStat.ModTime(), origFile.(io.ReadSeeker))
 		c.Abort()
 	}
 }
