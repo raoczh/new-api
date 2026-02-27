@@ -48,8 +48,8 @@ func EmbedFolder(fsEmbed embed.FS, targetPath string) static.ServeFileSystem {
 }
 
 // ServePrecompressedStatic serves static files from embed.FS,
-// preferring pre-compressed .gz files when the client supports gzip.
-// This avoids runtime gzip compression overhead.
+// preferring pre-compressed .br or .gz files when the client supports them.
+// This avoids runtime compression overhead.
 func ServePrecompressedStatic(fsEmbed embed.FS, targetPath string) gin.HandlerFunc {
 	subFS, err := fs.Sub(fsEmbed, targetPath)
 	if err != nil {
@@ -76,15 +76,39 @@ func ServePrecompressedStatic(fsEmbed embed.FS, targetPath string) gin.HandlerFu
 			return
 		}
 
-		// If client accepts gzip, try to serve pre-compressed .gz file
-		if strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
+		acceptEncoding := c.GetHeader("Accept-Encoding")
+
+		// Try Brotli first (better compression than gzip)
+		if strings.Contains(acceptEncoding, "br") {
+			brPath := urlPath + ".br"
+			brFile, err := subFS.Open(brPath)
+			if err == nil {
+				defer brFile.Close()
+				brStat, err := brFile.Stat()
+				if err == nil {
+					contentType := mime.TypeByExtension(filepath.Ext(urlPath))
+					if contentType == "" {
+						contentType = "application/octet-stream"
+					}
+					c.Header("Content-Encoding", "br")
+					c.Header("Vary", "Accept-Encoding")
+					c.Header("Content-Type", contentType)
+					http.ServeContent(c.Writer, c.Request, brPath, brStat.ModTime(), brFile.(io.ReadSeeker))
+					origFile.Close()
+					c.Abort()
+					return
+				}
+			}
+		}
+
+		// Fallback to gzip if client supports it
+		if strings.Contains(acceptEncoding, "gzip") {
 			gzPath := urlPath + ".gz"
 			gzFile, err := subFS.Open(gzPath)
 			if err == nil {
 				defer gzFile.Close()
 				gzStat, err := gzFile.Stat()
 				if err == nil {
-					// Serve pre-compressed file with proper HTTP semantics
 					contentType := mime.TypeByExtension(filepath.Ext(urlPath))
 					if contentType == "" {
 						contentType = "application/octet-stream"
@@ -92,8 +116,6 @@ func ServePrecompressedStatic(fsEmbed embed.FS, targetPath string) gin.HandlerFu
 					c.Header("Content-Encoding", "gzip")
 					c.Header("Vary", "Accept-Encoding")
 					c.Header("Content-Type", contentType)
-
-					// Use http.ServeContent for ETag, Last-Modified, Range support
 					http.ServeContent(c.Writer, c.Request, gzPath, gzStat.ModTime(), gzFile.(io.ReadSeeker))
 					origFile.Close()
 					c.Abort()
@@ -102,7 +124,7 @@ func ServePrecompressedStatic(fsEmbed embed.FS, targetPath string) gin.HandlerFu
 			}
 		}
 
-		// Fallback: serve the original uncompressed file with proper HTTP semantics
+		// Fallback: serve the original uncompressed file
 		contentType := mime.TypeByExtension(filepath.Ext(urlPath))
 		if contentType == "" {
 			contentType = "application/octet-stream"

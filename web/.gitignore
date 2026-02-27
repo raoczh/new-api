@@ -24,3 +24,8 @@ yarn-error.log*
 .idea
 package-lock.json
 yarn.lock
+# CDN 配置（包含密钥，不要提交）
+.env.production
+.env.local
+.env.*.local
+.qiniu.config.json
