@@ -5,7 +5,9 @@
       "Bash(sort:*)",
       "Bash(yarn add:*)",
       "Bash(ls:*)",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(bun run build)",
+      "Bash(git show:*)"
     ]
   }
 }

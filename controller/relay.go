@@ -121,13 +121,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
-	// 请求出错时也记录一条消费日志（quota=0），使错误请求在使用日志中可见
-	defer func() {
-		if newAPIError != nil {
-			recordErrorRequestLog(c, relayInfo, newAPIError)
-		}
-	}()
-
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.
@@ -388,52 +381,6 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, false, userGroup, other)
 	}
 
-}
-
-// recordErrorRequestLog 在请求出错时记录一条消费日志（quota=0），
-// 使错误请求和正常请求一样出现在使用日志中。
-func recordErrorRequestLog(c *gin.Context, relayInfo *relaycommon.RelayInfo, apiError *types.NewAPIError) {
-	if !common.LogConsumeEnabled {
-		return
-	}
-	tokenName := c.GetString("token_name")
-	channelId := c.GetInt("channel_id")
-	startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
-	if startTime.IsZero() {
-		startTime = time.Now()
-	}
-	useTimeSeconds := int(time.Since(startTime).Seconds())
-
-	other := make(map[string]interface{})
-	if c.Request != nil && c.Request.URL != nil {
-		other["request_path"] = c.Request.URL.Path
-	}
-	other["is_error"] = true
-	other["error_type"] = apiError.GetErrorType()
-	other["error_code"] = apiError.GetErrorCode()
-	other["status_code"] = apiError.StatusCode
-	if channelId != 0 {
-		other["channel_name"] = c.GetString("channel_name")
-		other["channel_type"] = c.GetInt("channel_type")
-	}
-	adminInfo := make(map[string]interface{})
-	adminInfo["use_channel"] = c.GetStringSlice("use_channel")
-	other["admin_info"] = adminInfo
-
-	content := fmt.Sprintf("错误：%s", apiError.MaskSensitiveErrorWithStatusCode())
-
-	model.RecordConsumeLog(c, relayInfo.UserId, model.RecordConsumeLogParams{
-		ChannelId:      channelId,
-		ModelName:      relayInfo.OriginModelName,
-		TokenName:      tokenName,
-		Quota:          0,
-		Content:        content,
-		TokenId:        relayInfo.TokenId,
-		UseTimeSeconds: useTimeSeconds,
-		IsStream:       relayInfo.IsStream,
-		Group:          relayInfo.UsingGroup,
-		Other:          other,
-	})
 }
 
 func RelayMidjourney(c *gin.Context) {
