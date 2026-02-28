@@ -220,6 +220,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		if newAPIError == nil {
 			relayInfo.LastError = nil
+			// Clear cooldown on success - this channel is working fine
+			service.ClearChannelCooldown(channel.Id, relayInfo.OriginModelName)
 			return
 		}
 
@@ -227,6 +229,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		relayInfo.LastError = newAPIError
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
+
+		// Mark channel cooldown if the error type warrants it
+		if service.ShouldCooldownChannel(newAPIError) {
+			service.MarkChannelCooldown(channel.Id, relayInfo.OriginModelName)
+		}
 
 		if !shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry()) {
 			break

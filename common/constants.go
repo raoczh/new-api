@@ -111,6 +111,8 @@ var PreConsumedQuota = 500
 
 var RetryTimes = 0
 
+var ChannelCooldownDuration = 120 // unit: seconds, 0 to disable
+
 //var RootUserEmail = ""
 
 var IsMasterNode bool

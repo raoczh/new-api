@@ -86,6 +86,9 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	selectGroup := param.TokenGroup
 	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
 
+	// Collect cooldown channel IDs to exclude from selection
+	cooldownIds := getCooldownExcludeIds(param.ModelName)
+
 	if param.TokenGroup == "auto" {
 		if len(setting.GetAutoGroups()) == 0 {
 			return nil, selectGroup, errors.New("auto groups is not enabled")
@@ -115,7 +118,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			}
 			logger.LogDebug(param.Ctx, "Auto selecting group: %s, priorityRetry: %d", autoGroup, priorityRetry)
 
-			channel, _ = model.GetRandomSatisfiedChannel(autoGroup, param.ModelName, priorityRetry)
+			channel, _ = model.GetRandomSatisfiedChannel(autoGroup, param.ModelName, priorityRetry, cooldownIds...)
 			if channel == nil {
 				// Current group has no available channel for this model, try next group
 				// 当前分组没有该模型的可用渠道，尝试下一个分组
@@ -153,10 +156,22 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			break
 		}
 	} else {
-		channel, err = model.GetRandomSatisfiedChannel(param.TokenGroup, param.ModelName, param.GetRetry())
+		channel, err = model.GetRandomSatisfiedChannel(param.TokenGroup, param.ModelName, param.GetRetry(), cooldownIds...)
 		if err != nil {
 			return nil, param.TokenGroup, err
 		}
 	}
 	return channel, selectGroup, nil
+}
+
+// getCooldownExcludeIds returns channel IDs that are currently in cooldown for the given model.
+func getCooldownExcludeIds(modelName string) []int {
+	if common.ChannelCooldownDuration <= 0 {
+		return nil
+	}
+	// We collect cooldown IDs from all known channels for this model.
+	// Since we don't have the candidate list here, we rely on IsChannelInCooldown
+	// being checked per-channel inside GetRandomSatisfiedChannel via the excludeIds filter.
+	// This function returns IDs collected from the cooldown map directly.
+	return CollectCooldownChannelIds(modelName)
 }
