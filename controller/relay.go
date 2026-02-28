@@ -230,11 +230,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
 
-		// Mark channel cooldown if the error type warrants it
-		if service.ShouldCooldownChannel(newAPIError) {
-			service.MarkChannelCooldown(channel.Id, relayInfo.OriginModelName)
-		}
-
 		if !shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry()) {
 			break
 		}
@@ -309,6 +304,11 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 		return nil, types.NewError(fmt.Errorf("获取分组 %s 下模型 %s 的可用渠道失败（retry）: %s", selectGroup, info.OriginModelName, err.Error()), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 	if channel == nil {
+		cooldownIds := service.CollectCooldownChannelIds(info.OriginModelName)
+		if len(cooldownIds) > 0 {
+			logger.LogError(c, fmt.Sprintf("分组 %s 下模型 %s 的所有渠道均处于冷却中（冷却渠道: %v），无可用渠道", selectGroup, info.OriginModelName, cooldownIds))
+			return nil, types.NewError(fmt.Errorf("分组 %s 下模型 %s 的所有渠道均处于冷却中，请稍后重试", selectGroup, info.OriginModelName), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
+		}
 		return nil, types.NewError(fmt.Errorf("分组 %s 下模型 %s 的可用渠道不存在（retry）", selectGroup, info.OriginModelName), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 
@@ -358,11 +358,17 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		})
 	}
 
+	// Mark channel cooldown if the error type warrants it
+	modelName := c.GetString("original_model")
+	cooldown := service.ShouldCooldownChannel(err)
+	if cooldown {
+		service.MarkChannelCooldown(channelError.ChannelId, modelName)
+	}
+
 	if constant.ErrorLogEnabled && types.IsRecordErrorLog(err) {
 		// 保存错误日志到mysql中
 		userId := c.GetInt("id")
 		tokenName := c.GetString("token_name")
-		modelName := c.GetString("original_model")
 		tokenId := c.GetInt("token_id")
 		userGroup := c.GetString("group")
 		channelId := c.GetInt("channel_id")
@@ -376,6 +382,10 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		other["channel_id"] = channelId
 		other["channel_name"] = c.GetString("channel_name")
 		other["channel_type"] = c.GetInt("channel_type")
+		if cooldown {
+			other["cooldown"] = true
+			other["cooldown_duration"] = common.ChannelCooldownDuration
+		}
 		adminInfo := make(map[string]interface{})
 		adminInfo["use_channel"] = c.GetStringSlice("use_channel")
 		isMultiKey := common.GetContextKeyBool(c, constant.ContextKeyChannelIsMultiKey)
@@ -390,7 +400,12 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 			startTime = time.Now()
 		}
 		useTimeSeconds := int(time.Since(startTime).Seconds())
-		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, false, userGroup, other)
+		// Append cooldown info to error message so it's visible in the web UI
+		errMsg := err.MaskSensitiveErrorWithStatusCode()
+		if cooldown {
+			errMsg = fmt.Sprintf("%s [已加入冷却 %ds]", errMsg, common.ChannelCooldownDuration)
+		}
+		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, errMsg, tokenId, useTimeSeconds, false, userGroup, other)
 	}
 
 }
