@@ -115,6 +115,26 @@ func GetQuotaDataByUserId(userId int, startTime int64, endTime int64) (quotaData
 	return quotaDatas, err
 }
 
+// UserQuotaSummary 用户使用量汇总
+type UserQuotaSummary struct {
+	UserID    int    `json:"user_id"`
+	Username  string `json:"username"`
+	Count     int    `json:"count"`
+	Quota     int    `json:"quota"`
+	TokenUsed int    `json:"token_used"`
+}
+
+func GetQuotaDataGroupByUser(startTime int64, endTime int64) ([]UserQuotaSummary, error) {
+	var results []UserQuotaSummary
+	err := DB.Table("quota_data").
+		Select("user_id, username, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
+		Where("created_at >= ? AND created_at <= ?", startTime, endTime).
+		Group("user_id, username").
+		Order("quota DESC").
+		Find(&results).Error
+	return results, err
+}
+
 func GetAllQuotaDates(startTime int64, endTime int64, username string) (quotaData []*QuotaData, err error) {
 	if username != "" {
 		return GetQuotaDataByUsername(username, startTime, endTime)

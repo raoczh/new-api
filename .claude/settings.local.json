@@ -8,7 +8,12 @@
       "Bash(go build:*)",
       "Bash(bun run build)",
       "Bash(git show:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(bun run i18n:sync:*)",
+      "Bash(where bun)",
+      "Bash(where:*)",
+      "Bash(npm:*)",
+      "Bash(npx i18next-cli:*)"
     ]
   }
 }

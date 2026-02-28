@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useContext, useEffect } from 'react';
+import React, { useContext, useEffect, useRef } from 'react';
 import { getRelativeTime } from '../../helpers';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
@@ -29,6 +29,7 @@ import ApiInfoPanel from './ApiInfoPanel';
 import AnnouncementsPanel from './AnnouncementsPanel';
 import FaqPanel from './FaqPanel';
 import UptimePanel from './UptimePanel';
+import UserUsageTable from './UserUsageTable';
 import SearchModal from './modals/SearchModal';
 
 import { useDashboardData } from '../../hooks/dashboard/useDashboardData';
@@ -134,9 +135,25 @@ const Dashboard = () => {
   );
 
   // ========== Effects ==========
+  const viewModeInitialized = useRef(false);
+
   useEffect(() => {
     initChart();
+    if (dashboardData.isAdminUser && dashboardData.viewMode === 'overall') {
+      dashboardData.loadUserStats();
+    }
   }, []);
+
+  useEffect(() => {
+    if (!viewModeInitialized.current) {
+      viewModeInitialized.current = true;
+      return;
+    }
+    initChart();
+    if (dashboardData.isAdminUser && dashboardData.viewMode === 'overall') {
+      dashboardData.loadUserStats();
+    }
+  }, [dashboardData.viewMode]);
 
   return (
     <div className='h-full'>
@@ -147,6 +164,9 @@ const Dashboard = () => {
         refresh={handleRefresh}
         loading={dashboardData.loading}
         t={dashboardData.t}
+        isAdminUser={dashboardData.isAdminUser}
+        viewMode={dashboardData.viewMode}
+        onViewModeChange={dashboardData.handleViewModeChange}
       />
 
       <SearchModal
@@ -202,6 +222,18 @@ const Dashboard = () => {
           )}
         </div>
       </div>
+
+      {/* 用户使用量排行（仅管理员整体模式） */}
+      {dashboardData.isAdminUser && dashboardData.viewMode === 'overall' && (
+        <div className='mb-4'>
+          <UserUsageTable
+            data={dashboardData.userStatsData}
+            loading={dashboardData.userStatsLoading}
+            CARD_PROPS={CARD_PROPS}
+            t={dashboardData.t}
+          />
+        </div>
+      )}
 
       {/* 系统公告和常见问答卡片 */}
       {dashboardData.hasInfoPanels && (

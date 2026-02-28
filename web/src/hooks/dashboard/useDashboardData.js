@@ -76,6 +76,11 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     tpm: [],
   });
 
+  // ========== 视图模式（管理员用） ==========
+  const [viewMode, setViewMode] = useState('overall'); // 'personal' | 'overall'
+  const [userStatsData, setUserStatsData] = useState([]);
+  const [userStatsLoading, setUserStatsLoading] = useState(false);
+
   // ========== Uptime 数据 ==========
   const [uptimeData, setUptimeData] = useState([]);
   const [uptimeLoading, setUptimeLoading] = useState(false);
@@ -155,6 +160,10 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     setSearchModalVisible(false);
   }, []);
 
+  const handleViewModeChange = useCallback((mode) => {
+    setViewMode(mode);
+  }, []);
+
   // ========== API 调用函数 ==========
   const loadQuotaData = useCallback(async () => {
     setLoading(true);
@@ -164,7 +173,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
       let localStartTimestamp = Date.parse(start_timestamp) / 1000;
       let localEndTimestamp = Date.parse(end_timestamp) / 1000;
 
-      if (isAdminUser) {
+      if (isAdminUser && viewMode === 'overall') {
         url = `/api/data/?username=${username}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&default_time=${dataExportDefaultTime}`;
       } else {
         url = `/api/data/self/?start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&default_time=${dataExportDefaultTime}`;
@@ -191,7 +200,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     } finally {
       setLoading(false);
     }
-  }, [inputs, dataExportDefaultTime, isAdminUser, now]);
+  }, [inputs, dataExportDefaultTime, isAdminUser, viewMode, now]);
 
   const loadUptimeData = useCallback(async () => {
     setUptimeLoading(true);
@@ -223,11 +232,36 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     }
   }, [userDispatch]);
 
+  const loadUserStats = useCallback(async () => {
+    if (!isAdminUser || viewMode !== 'overall') return;
+    setUserStatsLoading(true);
+    try {
+      const { start_timestamp, end_timestamp } = inputs;
+      let localStartTimestamp = Date.parse(start_timestamp) / 1000;
+      let localEndTimestamp = Date.parse(end_timestamp) / 1000;
+      const url = `/api/data/user-stats?start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}`;
+      const res = await API.get(url);
+      const { success, message, data } = res.data;
+      if (success) {
+        setUserStatsData(data || []);
+      } else {
+        showError(message);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUserStatsLoading(false);
+    }
+  }, [inputs, isAdminUser, viewMode]);
+
   const refresh = useCallback(async () => {
     const data = await loadQuotaData();
     await loadUptimeData();
+    if (isAdminUser && viewMode === 'overall') {
+      await loadUserStats();
+    }
     return data;
-  }, [loadQuotaData, loadUptimeData]);
+  }, [loadQuotaData, loadUptimeData, loadUserStats, isAdminUser, viewMode]);
 
   const handleSearchConfirm = useCallback(
     async (updateChartDataCallback) => {
@@ -310,11 +344,18 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     handleInputChange,
     showSearchModal,
     handleCloseModal,
+    handleViewModeChange,
     loadQuotaData,
     loadUptimeData,
+    loadUserStats,
     getUserData,
     refresh,
     handleSearchConfirm,
+
+    // 视图模式（管理员用）
+    viewMode,
+    userStatsData,
+    userStatsLoading,
 
     // 导航和翻译
     navigate,
