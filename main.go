@@ -88,6 +88,8 @@ func main() {
 		}()
 
 		go model.SyncChannelCache(common.SyncFrequency)
+		// Start channel cooldown cleanup goroutine
+		service.StartCooldownCleanup()
 	}
 
 	// 热更新配置
