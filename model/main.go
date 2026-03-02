@@ -280,6 +280,12 @@ func migrateDB() error {
 	if err != nil {
 		return err
 	}
+	if err := ensureLogIPLocationColumn(DB); err != nil {
+		return err
+	}
+	if err := ensureUserRecordIPLogSetting(DB); err != nil {
+		return err
+	}
 	if common.UsingSQLite {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
 			return err
@@ -365,6 +371,64 @@ func migrateLOGDB() error {
 	var err error
 	if err = LOG_DB.AutoMigrate(&Log{}); err != nil {
 		return err
+	}
+	if err = ensureLogIPLocationColumn(LOG_DB); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ensureLogIPLocationColumn(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	if !db.Migrator().HasTable(&Log{}) {
+		return nil
+	}
+	if db.Migrator().HasColumn(&Log{}, "IpLocation") {
+		return nil
+	}
+	return db.Migrator().AddColumn(&Log{}, "IpLocation")
+}
+
+func ensureUserRecordIPLogSetting(db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	if !db.Migrator().HasTable(&User{}) {
+		return nil
+	}
+
+	type userSettingRow struct {
+		Id      int    `gorm:"column:id"`
+		Setting string `gorm:"column:setting"`
+	}
+
+	rows := make([]userSettingRow, 0)
+	if err := db.Model(&User{}).Select("id, setting").Find(&rows).Error; err != nil {
+		return err
+	}
+
+	for _, row := range rows {
+		settingMap := map[string]interface{}{}
+		if strings.TrimSpace(row.Setting) != "" {
+			m, err := common.StrToMap(row.Setting)
+			if err != nil {
+				continue
+			}
+			settingMap = m
+		}
+		if _, exists := settingMap["record_ip_log"]; exists {
+			continue
+		}
+		settingMap["record_ip_log"] = true
+		payload, err := common.Marshal(settingMap)
+		if err != nil {
+			continue
+		}
+		if err = db.Model(&User{}).Where("id = ?", row.Id).Update("setting", string(payload)).Error; err != nil {
+			return err
+		}
 	}
 	return nil
 }

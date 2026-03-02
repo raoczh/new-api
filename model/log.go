@@ -35,6 +35,7 @@ type Log struct {
 	TokenId          int    `json:"token_id" gorm:"default:0;index"`
 	Group            string `json:"group" gorm:"index"`
 	Ip               string `json:"ip" gorm:"index;default:''"`
+	IpLocation       string `json:"ip_location" gorm:"type:varchar(255);default:''"`
 	RequestId        string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	Other            string `json:"other"`
 }
@@ -53,6 +54,7 @@ const (
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelName = ""
+		logs[i].IpLocation = ""
 		var otherMap map[string]interface{}
 		otherMap, _ = common.StrToMap(logs[i].Other)
 		if otherMap != nil {
@@ -102,6 +104,12 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 			needRecordIp = true
 		}
 	}
+	clientIp := ""
+	ipLocation := ""
+	if needRecordIp {
+		clientIp = c.ClientIP()
+		ipLocation = queryIPLocation(clientIp)
+	}
 	log := &Log{
 		UserId:           userId,
 		Username:         username,
@@ -118,14 +126,10 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		UseTime:          useTimeSeconds,
 		IsStream:         isStream,
 		Group:            group,
-		Ip: func() string {
-			if needRecordIp {
-				return c.ClientIP()
-			}
-			return ""
-		}(),
-		RequestId: requestId,
-		Other:     otherStr,
+		Ip:               clientIp,
+		IpLocation:       ipLocation,
+		RequestId:        requestId,
+		Other:            otherStr,
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {
@@ -163,6 +167,12 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 			needRecordIp = true
 		}
 	}
+	clientIp := ""
+	ipLocation := ""
+	if needRecordIp {
+		clientIp = c.ClientIP()
+		ipLocation = queryIPLocation(clientIp)
+	}
 	log := &Log{
 		UserId:           userId,
 		Username:         username,
@@ -179,14 +189,10 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		UseTime:          params.UseTimeSeconds,
 		IsStream:         params.IsStream,
 		Group:            params.Group,
-		Ip: func() string {
-			if needRecordIp {
-				return c.ClientIP()
-			}
-			return ""
-		}(),
-		RequestId: requestId,
-		Other:     otherStr,
+		Ip:               clientIp,
+		IpLocation:       ipLocation,
+		RequestId:        requestId,
+		Other:            otherStr,
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {
