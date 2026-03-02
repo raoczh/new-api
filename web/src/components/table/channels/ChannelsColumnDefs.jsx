@@ -304,6 +304,22 @@ export const getChannelsColumns = ({
       dataIndex: 'name',
       render: (text, record, index) => {
         const passThroughEnabled = isRequestPassThroughEnabled(record);
+        const baseUrl =
+          typeof record.base_url === 'string' ? record.base_url.trim() : '';
+        const nameTextNode = baseUrl ? (
+          <a
+            href={baseUrl}
+            target='_blank'
+            rel='noopener noreferrer'
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+          >
+            {text}
+          </a>
+        ) : (
+          <span>{text}</span>
+        );
         const nameNode =
           record.remark && record.remark.trim() !== '' ? (
             <Tooltip
@@ -333,10 +349,10 @@ export const getChannelsColumns = ({
               trigger='hover'
               position='topLeft'
             >
-              <span>{text}</span>
+              {nameTextNode}
             </Tooltip>
           ) : (
-            <span>{text}</span>
+            nameTextNode
           );
 
         if (!passThroughEnabled) {
