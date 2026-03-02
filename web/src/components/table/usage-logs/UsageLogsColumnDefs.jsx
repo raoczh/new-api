@@ -465,6 +465,7 @@ export const getLogsColumns = ({
   copyText,
   showUserInfoFunc,
   openChannelAffinityUsageCacheModal,
+  channelApiUrlMap,
   isAdminUser,
   billingDisplayMode = 'price',
 }) => {
@@ -479,6 +480,11 @@ export const getLogsColumns = ({
       title: t('渠道'),
       dataIndex: 'channel',
       render: (text, record, index) => {
+        const channelId = Number(text);
+        const channelApiUrl =
+          Number.isInteger(channelId) && channelId > 0
+            ? channelApiUrlMap?.[channelId] || ''
+            : '';
         let isMultiKey = false;
         let multiKeyIndex = -1;
         let content = t('渠道') + `：${record.channel}`;
@@ -511,14 +517,32 @@ export const getLogsColumns = ({
           <Space>
             <span style={{ position: 'relative', display: 'inline-block' }}>
               <Tooltip content={record.channel_name || t('未知渠道')}>
-                <span>
-                  <Tag
-                    color={colors[parseInt(text) % colors.length]}
-                    shape='circle'
+                {channelApiUrl ? (
+                  <a
+                    href={channelApiUrl}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
                   >
-                    {text}
-                  </Tag>
-                </span>
+                    <Tag
+                      color={colors[parseInt(text) % colors.length]}
+                      shape='circle'
+                    >
+                      {text}
+                    </Tag>
+                  </a>
+                ) : (
+                  <span>
+                    <Tag
+                      color={colors[parseInt(text) % colors.length]}
+                      shape='circle'
+                    >
+                      {text}
+                    </Tag>
+                  </span>
+                )}
               </Tooltip>
               {showMarker && (
                 <Tooltip
@@ -830,18 +854,37 @@ export const getLogsColumns = ({
       ),
       dataIndex: 'ip',
       render: (text, record, index) => {
+        const ipLocation =
+          typeof record.ip_location === 'string'
+            ? record.ip_location.trim()
+            : '';
+        const showLocation = isAdminUser && ipLocation;
+        const tooltipContent = showLocation ? `${text} (${ipLocation})` : text;
         return (record.type === 2 || record.type === 5) && text ? (
-          <Tooltip content={text}>
+          <Tooltip content={tooltipContent}>
             <span>
-              <Tag
-                color='orange'
-                shape='circle'
-                onClick={(event) => {
-                  copyText(event, text);
-                }}
-              >
-                {text}
-              </Tag>
+              <div style={{ display: 'inline-flex', flexDirection: 'column' }}>
+                <Tag
+                  color='orange'
+                  shape='circle'
+                  onClick={(event) => {
+                    copyText(event, text);
+                  }}
+                >
+                  {text}
+                </Tag>
+                {showLocation ? (
+                  <span
+                    style={{
+                      marginTop: 2,
+                      fontSize: 11,
+                      color: 'var(--semi-color-text-2)',
+                    }}
+                  >
+                    {ipLocation}
+                  </span>
+                ) : null}
+              </div>
             </span>
           </Tooltip>
         ) : (

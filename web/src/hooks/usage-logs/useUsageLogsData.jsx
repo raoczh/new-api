@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@douyinfe/semi-ui';
 import {
@@ -106,6 +106,31 @@ export const useLogsData = () => {
     logType: '0',
   };
 
+  // Load saved column preferences from localStorage
+  useEffect(() => {
+    const savedColumns = localStorage.getItem(STORAGE_KEY);
+    if (savedColumns) {
+      try {
+        const parsed = JSON.parse(savedColumns);
+        const defaults = getDefaultColumnVisibility();
+        const merged = { ...defaults, ...parsed };
+
+        // For non-admin users, force-hide admin-only columns (does not touch admin settings)
+        if (!isAdminUser) {
+          merged[COLUMN_KEYS.CHANNEL] = false;
+          merged[COLUMN_KEYS.USERNAME] = false;
+          merged[COLUMN_KEYS.RETRY] = false;
+        }
+        setVisibleColumns(merged);
+      } catch (e) {
+        console.error('Failed to parse saved column preferences', e);
+        initDefaultColumns();
+      }
+    } else {
+      initDefaultColumns();
+    }
+  }, []);
+
   // Get default column visibility based on user role
   const getDefaultColumnVisibility = () => {
     return {
@@ -184,6 +209,9 @@ export const useLogsData = () => {
     useState(null);
   const [showParamOverrideModal, setShowParamOverrideModal] = useState(false);
   const [paramOverrideTarget, setParamOverrideTarget] = useState(null);
+
+const [channelApiUrlMap, setChannelApiUrlMap] = useState({});
+const channelApiUrlLoadingRef = useRef(new Set());
 
   // Initialize default column visibility
   const initDefaultColumns = () => {
@@ -346,6 +374,65 @@ export const useLogsData = () => {
       key_fp: a.key_fp || '',
     });
     setShowChannelAffinityUsageCacheModal(true);
+  };
+
+  const loadChannelApiUrls = async (logs) => {
+    if (!isAdminUser || !Array.isArray(logs) || logs.length === 0) {
+      return;
+    }
+
+    const channelIds = [
+      ...new Set(
+        logs
+          .map((item) => Number(item.channel))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    ];
+
+    const missingIds = channelIds.filter((id) => {
+      if (channelApiUrlMap[id] !== undefined) {
+        return false;
+      }
+      if (channelApiUrlLoadingRef.current.has(id)) {
+        return false;
+      }
+      return true;
+    });
+
+    if (missingIds.length === 0) {
+      return;
+    }
+
+    missingIds.forEach((id) => channelApiUrlLoadingRef.current.add(id));
+
+    try {
+      const results = await Promise.all(
+        missingIds.map(async (id) => {
+          try {
+            const res = await API.get(`/api/channel/${id}`);
+            const { success, data } = res?.data || {};
+            if (success) {
+              const baseUrl =
+                typeof data?.base_url === 'string' ? data.base_url.trim() : '';
+              return [id, baseUrl];
+            }
+          } catch {
+            // ignore
+          }
+          return [id, ''];
+        }),
+      );
+
+      setChannelApiUrlMap((prev) => {
+        const next = { ...prev };
+        results.forEach(([id, baseUrl]) => {
+          next[id] = baseUrl;
+        });
+        return next;
+      });
+    } finally {
+      missingIds.forEach((id) => channelApiUrlLoadingRef.current.delete(id));
+    }
   };
 
   const openParamOverrideModal = (log, other) => {
@@ -731,6 +818,7 @@ export const useLogsData = () => {
       setLogCount(data.total);
 
       setLogsFormat(newPageData);
+      loadChannelApiUrls(newPageData).then();
     } else {
       showError(message);
     }
@@ -846,6 +934,7 @@ export const useLogsData = () => {
     showParamOverrideModal,
     setShowParamOverrideModal,
     paramOverrideTarget,
+    channelApiUrlMap,
 
     // Functions
     loadLogs,
