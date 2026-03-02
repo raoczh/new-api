@@ -859,32 +859,19 @@ export const getLogsColumns = ({
             ? record.ip_location.trim()
             : '';
         const showLocation = isAdminUser && ipLocation;
-        const tooltipContent = showLocation ? `${text} (${ipLocation})` : text;
+        const tooltipContent = showLocation ? `${text}\n${ipLocation}` : text;
         return (record.type === 2 || record.type === 5) && text ? (
           <Tooltip content={tooltipContent}>
             <span>
-              <div style={{ display: 'inline-flex', flexDirection: 'column' }}>
-                <Tag
-                  color='orange'
-                  shape='circle'
-                  onClick={(event) => {
-                    copyText(event, text);
-                  }}
-                >
-                  {text}
-                </Tag>
-                {showLocation ? (
-                  <span
-                    style={{
-                      marginTop: 2,
-                      fontSize: 11,
-                      color: 'var(--semi-color-text-2)',
-                    }}
-                  >
-                    {ipLocation}
-                  </span>
-                ) : null}
-              </div>
+              <Tag
+                color='orange'
+                shape='circle'
+                onClick={(event) => {
+                  copyText(event, text);
+                }}
+              >
+                {text}
+              </Tag>
             </span>
           </Tooltip>
         ) : (
