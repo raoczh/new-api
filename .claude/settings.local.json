@@ -13,7 +13,11 @@
       "Bash(where bun)",
       "Bash(where:*)",
       "Bash(npm:*)",
-      "Bash(npx i18next-cli:*)"
+      "Bash(npx i18next-cli:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl:*)"
     ]
   }
 }

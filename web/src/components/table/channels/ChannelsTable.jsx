@@ -35,12 +35,15 @@ const ChannelsTable = (channelsData) => {
     pageSize,
     channelCount,
     enableBatchDelete,
+    enableTagMode,
     compactMode,
     visibleColumns,
     setSelectedChannels,
     handlePageChange,
     handlePageSizeChange,
     handleRow,
+    expandedTagKeys,
+    setExpandedTagKeys,
     t,
     COLUMN_KEYS,
     // Column functions and data
@@ -140,7 +143,13 @@ const ChannelsTable = (channelsData) => {
         onPageChange: handlePageChange,
       }}
       hidePagination={true}
-      expandAllRows={false}
+      {...(enableTagMode
+        ? {
+            expandedRowKeys: expandedTagKeys,
+            onExpandedRowsChange: (expandedRows) =>
+              setExpandedTagKeys(expandedRows),
+          }
+        : { expandAllRows: false })}
       onRow={handleRow}
       rowSelection={
         enableBatchDelete
