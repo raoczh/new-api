@@ -35,6 +35,8 @@ import {
 } from '../../constants';
 import { useIsMobile } from '../common/useIsMobile';
 import { useTableCompactMode } from '../common/useTableCompactMode';
+import { useChannelUpstreamUpdates } from './useChannelUpstreamUpdates';
+import { parseUpstreamUpdateMeta } from './upstreamUpdateUtils';
 import { Modal, Button } from '@douyinfe/semi-ui';
 import { openCodexUsageModal } from '../../components/table/channels/modals/CodexUsageModal';
 
@@ -238,6 +240,9 @@ export const useChannelsData = () => {
     let channelTags = {};
 
     for (let i = 0; i < channels.length; i++) {
+      channels[i].upstreamUpdateMeta = parseUpstreamUpdateMeta(
+        channels[i].settings,
+      );
       channels[i].key = '' + channels[i].id;
       if (!enableTagMode) {
         channelDates.push(channels[i]);
@@ -434,6 +439,8 @@ export const useChannelsData = () => {
       );
     }
   };
+
+  const upstreamUpdates = useChannelUpstreamUpdates({ t, refresh });
 
   // Channel management
   const manageChannel = async (id, action, record, value) => {
@@ -1223,6 +1230,7 @@ export const useChannelsData = () => {
     setShowMultiKeyManageModal,
     currentMultiKeyChannel,
     setCurrentMultiKeyChannel,
+    ...upstreamUpdates,
 
     // Tag mode expand states
     expandedTagKeys,
