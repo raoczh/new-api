@@ -114,6 +114,9 @@ export const useChannelsData = () => {
   // 使用 ref 来避免闭包问题，类似旧版实现
   const shouldStopBatchTestingRef = useRef(false);
 
+  // Tag mode expand states
+  const [expandedTagKeys, setExpandedTagKeys] = useState([]);
+
   // Multi-key management states
   const [showMultiKeyManageModal, setShowMultiKeyManageModal] = useState(false);
   const [currentMultiKeyChannel, setCurrentMultiKeyChannel] = useState(null);
@@ -654,17 +657,43 @@ export const useChannelsData = () => {
     setShowEdit(false);
   };
 
+  // Toggle tag row expand
+  const toggleExpandedTagKey = (key) => {
+    setExpandedTagKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+    );
+  };
+
   // Row style
   const handleRow = (record, index) => {
+    const props = {};
+
     if (record.status !== 1) {
-      return {
-        style: {
-          background: 'var(--semi-color-disabled-border)',
-        },
+      props.style = {
+        background: 'var(--semi-color-disabled-border)',
       };
-    } else {
-      return {};
     }
+
+    // In tag mode, make tag parent rows clickable to expand/collapse children
+    if (enableTagMode && record.children !== undefined) {
+      props.onClick = (e) => {
+        // Exclude buttons, inputs, links, and other interactive elements
+        if (
+          e.target.closest(
+            'button, a, input, .semi-input-number, .semi-dropdown, .semi-tag, .semi-table-expand-icon',
+          )
+        ) {
+          return;
+        }
+        toggleExpandedTagKey(record.key);
+      };
+      props.style = {
+        ...props.style,
+        cursor: 'pointer',
+      };
+    }
+
+    return props;
   };
 
   // Batch operations
@@ -1202,6 +1231,10 @@ export const useChannelsData = () => {
     currentMultiKeyChannel,
     setCurrentMultiKeyChannel,
     ...upstreamUpdates,
+
+    // Tag mode expand states
+    expandedTagKeys,
+    setExpandedTagKeys,
 
     // Form
     formApi,
