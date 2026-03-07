@@ -44,6 +44,7 @@ const LogsTable = (logsData) => {
     channelApiUrlMap,
     hasExpandableRows,
     isAdminUser,
+    billingDisplayMode,
     t,
     COLUMN_KEYS,
   } = logsData;
@@ -58,6 +59,7 @@ const LogsTable = (logsData) => {
       openChannelAffinityUsageCacheModal,
       channelApiUrlMap,
       isAdminUser,
+      billingDisplayMode,
     });
   }, [
     t,
@@ -67,6 +69,7 @@ const LogsTable = (logsData) => {
     openChannelAffinityUsageCacheModal,
     channelApiUrlMap,
     isAdminUser,
+    billingDisplayMode,
   ]);
 
   // Filter columns based on visibility settings
