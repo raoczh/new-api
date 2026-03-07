@@ -187,7 +187,9 @@ export const useLogsData = () => {
   };
 
   // Column visibility state
-  const [visibleColumns, setVisibleColumns] = useState(getInitialVisibleColumns);
+  const [visibleColumns, setVisibleColumns] = useState(
+    getInitialVisibleColumns,
+  );
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [billingDisplayMode, setBillingDisplayMode] = useState(
     getInitialBillingDisplayMode,
@@ -210,8 +212,33 @@ export const useLogsData = () => {
   const [showParamOverrideModal, setShowParamOverrideModal] = useState(false);
   const [paramOverrideTarget, setParamOverrideTarget] = useState(null);
 
-const [channelApiUrlMap, setChannelApiUrlMap] = useState({});
-const channelApiUrlLoadingRef = useRef(new Set());
+  const [channelApiUrlMap, setChannelApiUrlMap] = useState({});
+  const channelApiUrlLoadingRef = useRef(new Set());
+
+  // Load saved column preferences from localStorage
+  useEffect(() => {
+    const savedColumns = localStorage.getItem(STORAGE_KEY);
+    if (savedColumns) {
+      try {
+        const parsed = JSON.parse(savedColumns);
+        const defaults = getDefaultColumnVisibility();
+        const merged = { ...defaults, ...parsed };
+
+        // For non-admin users, force-hide admin-only columns (does not touch admin settings)
+        if (!isAdminUser) {
+          merged[COLUMN_KEYS.CHANNEL] = false;
+          merged[COLUMN_KEYS.USERNAME] = false;
+          merged[COLUMN_KEYS.RETRY] = false;
+        }
+        setVisibleColumns(merged);
+      } catch (e) {
+        console.error('Failed to parse saved column preferences', e);
+        initDefaultColumns();
+      }
+    } else {
+      initDefaultColumns();
+    }
+  }, []);
 
   // Initialize default column visibility
   const initDefaultColumns = () => {
@@ -468,7 +495,10 @@ const channelApiUrlLoadingRef = useRef(new Set());
       let other = getLogOther(logs[i].other);
       let expandDataLocal = [];
 
-      if (isAdminUser && (logs[i].type === 0 || logs[i].type === 2 || logs[i].type === 6)) {
+      if (
+        isAdminUser &&
+        (logs[i].type === 0 || logs[i].type === 2 || logs[i].type === 6)
+      ) {
         expandDataLocal.push({
           key: t('渠道信息'),
           value: `${logs[i].channel} - ${logs[i].channel_name || '[未知]'}`,
@@ -675,7 +705,14 @@ const channelApiUrlLoadingRef = useRef(new Set());
           expandDataLocal.push({
             key: t('失败原因'),
             value: (
-              <div style={{ maxWidth: 600, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.6 }}>
+              <div
+                style={{
+                  maxWidth: 600,
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-word',
+                  lineHeight: 1.6,
+                }}
+              >
                 {other.reason}
               </div>
             ),
