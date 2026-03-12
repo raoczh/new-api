@@ -24,6 +24,7 @@ web/yarn.lock
 web/node_modules
 node_modules
 plans
+.claude
 
 electron/node_modules
 electron/dist
