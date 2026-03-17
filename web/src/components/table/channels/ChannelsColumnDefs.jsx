@@ -553,7 +553,12 @@ export const getChannelsColumns = ({
                   </Tag>
                 </Tooltip>
                 <Tooltip
-                  content={t('剩余额度$') + record.balance + t('，点击更新')}
+                  content={
+                    t('剩余额度') +
+                    ': ' +
+                    renderQuotaWithAmount(record.balance) +
+                    t('，点击更新')
+                  }
                 >
                   <Tag
                     color='white'
