@@ -21,7 +21,9 @@
       "Bash(bun add:*)",
       "WebFetch(domain:icons.lobehub.com)",
       "WebSearch",
-      "WebFetch(domain:unpkg.com)"
+      "WebFetch(domain:unpkg.com)",
+      "Bash(git status:*)",
+      "Bash(go test:*)"
     ]
   }
 }

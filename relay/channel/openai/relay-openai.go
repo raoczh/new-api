@@ -121,16 +121,54 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	var usage = &dto.Usage{}
 	var streamItems []string // store stream items
 	var lastStreamData string
+	var sentAnyChunk bool
+	var streamErr *types.NewAPIError
+	var pendingChunks []string
 	var secondLastStreamData string // 存储倒数第二个stream data，用于音频模型
 
 	// 检查是否为音频模型
 	isAudioModel := strings.Contains(strings.ToLower(model), "audio")
 
+	flushPendingChunks := func() bool {
+		if len(pendingChunks) == 0 {
+			return true
+		}
+		for _, pending := range pendingChunks {
+			if err := HandleStreamFormat(c, info, pending, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent); err != nil {
+				common.SysLog("error handling buffered stream format: " + err.Error())
+				streamErr = types.NewOpenAIError(err, types.ErrorCodeBadResponse, http.StatusInternalServerError)
+				return false
+			}
+			sentAnyChunk = true
+		}
+		pendingChunks = nil
+		return true
+	}
+
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 		if lastStreamData != "" {
-			if err := HandleStreamFormat(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent); err != nil {
-				common.SysLog("error handling stream format: " + err.Error())
-				sr.Error(err)
+			if chunkErr := tryConvertStreamChunkError(lastStreamData); chunkErr != nil {
+				if !sentAnyChunk {
+					streamErr = chunkErr
+					sr.Stop(streamErr)
+					return
+				}
+				recordLateUpstreamStreamError(c, info, chunkErr)
+				return
+			}
+			if !sentAnyChunk && shouldDelayOpenAIStreamChunk(lastStreamData) {
+				pendingChunks = append(pendingChunks, lastStreamData)
+			} else {
+				if !sentAnyChunk && !flushPendingChunks() {
+					sr.Error(streamErr)
+					return
+				}
+				if err := HandleStreamFormat(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent); err != nil {
+					common.SysLog("error handling stream format: " + err.Error())
+					sr.Error(err)
+				} else {
+					sentAnyChunk = true
+				}
 			}
 		}
 		if len(data) > 0 {
@@ -145,6 +183,21 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	})
 
 	// 对音频模型，从倒数第二个stream data中提取usage信息
+	if streamErr != nil {
+		return nil, streamErr
+	}
+
+	if chunkErr := tryConvertStreamChunkError(lastStreamData); chunkErr != nil {
+		if !sentAnyChunk {
+			return nil, chunkErr
+		}
+		recordLateUpstreamStreamError(c, info, chunkErr)
+	}
+
+	if !sentAnyChunk && !flushPendingChunks() {
+		return nil, streamErr
+	}
+
 	if isAudioModel && secondLastStreamData != "" {
 		var streamResp struct {
 			Usage *dto.Usage `json:"usage"`
@@ -163,15 +216,17 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	}
 
 	// 处理最后的响应
-	shouldSendLastResp := true
-	if err := handleLastResponse(lastStreamData, &responseId, &createAt, &systemFingerprint, &model, &usage,
-		&containStreamUsage, info, &shouldSendLastResp); err != nil {
-		logger.LogError(c, fmt.Sprintf("error handling last response: %s, lastStreamData: [%s]", err.Error(), lastStreamData))
-	}
+	if lastStreamData != "" {
+		shouldSendLastResp := true
+		if err := handleLastResponse(lastStreamData, &responseId, &createAt, &systemFingerprint, &model, &usage,
+			&containStreamUsage, info, &shouldSendLastResp); err != nil {
+			logger.LogError(c, fmt.Sprintf("error handling last response: %s, lastStreamData: [%s]", err.Error(), lastStreamData))
+		}
 
-	if info.RelayFormat == types.RelayFormatOpenAI {
-		if shouldSendLastResp {
-			_ = sendStreamData(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent)
+		if info.RelayFormat == types.RelayFormatOpenAI {
+			if shouldSendLastResp {
+				_ = sendStreamData(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent)
+			}
 		}
 	}
 

@@ -68,6 +68,33 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 	return &usage, nil
 }
 
+func convertResponsesStreamEventError(streamResponse dto.ResponsesStreamResponse) *types.NewAPIError {
+	if streamResponse.Response != nil {
+		if oaiErr := streamResponse.Response.GetOpenAIError(); oaiErr != nil &&
+			(oaiErr.Type != "" || oaiErr.Message != "" || oaiErr.Code != nil) {
+			return types.WithOpenAIError(*oaiErr, inferStreamChunkStatusCode(oaiErr, nil, nil))
+		}
+	}
+	return types.NewOpenAIError(fmt.Errorf("responses stream error: %s", streamResponse.Type), types.ErrorCodeBadResponse, http.StatusInternalServerError)
+}
+
+type bufferedResponsesStreamEvent struct {
+	streamResponse dto.ResponsesStreamResponse
+	data           string
+}
+
+func shouldDelayResponsesStreamEvent(streamResponse dto.ResponsesStreamResponse) bool {
+	if streamResponse.Delta != "" || responsesStreamItemHasVisiblePayload(streamResponse.Item) {
+		return false
+	}
+	switch streamResponse.Type {
+	case "response.created", "response.in_progress", dto.ResponsesOutputTypeItemAdded, "response.content_part.added", "response.content_part.done":
+		return true
+	default:
+		return false
+	}
+}
+
 func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
 	if resp == nil || resp.Body == nil {
 		logger.LogError(c, "invalid response or response body")
@@ -78,6 +105,20 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 
 	var usage = &dto.Usage{}
 	var responseTextBuilder strings.Builder
+	var sentAnyChunk bool
+	var streamErr *types.NewAPIError
+	var pendingEvents []bufferedResponsesStreamEvent
+
+	flushPendingEvents := func() {
+		if len(pendingEvents) == 0 {
+			return
+		}
+		for _, pending := range pendingEvents {
+			sendResponsesStreamData(c, pending.streamResponse, pending.data)
+			sentAnyChunk = true
+		}
+		pendingEvents = nil
+	}
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 
@@ -88,7 +129,29 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			sr.Error(err)
 			return
 		}
-		sendResponsesStreamData(c, streamResponse, data)
+		if streamResponse.Type == "response.error" || streamResponse.Type == "response.failed" {
+			responseErr := convertResponsesStreamEventError(streamResponse)
+			if !sentAnyChunk {
+				streamErr = responseErr
+				sr.Stop(streamErr)
+				return
+			}
+			recordLateUpstreamStreamError(c, info, responseErr)
+			sr.Error(responseErr)
+			return
+		}
+		if !sentAnyChunk && shouldDelayResponsesStreamEvent(streamResponse) {
+			pendingEvents = append(pendingEvents, bufferedResponsesStreamEvent{
+				streamResponse: streamResponse,
+				data:           data,
+			})
+		} else {
+			if !sentAnyChunk {
+				flushPendingEvents()
+			}
+			sendResponsesStreamData(c, streamResponse, data)
+			sentAnyChunk = true
+		}
 		switch streamResponse.Type {
 		case "response.completed":
 			if streamResponse.Response != nil {
@@ -129,6 +192,14 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			}
 		}
 	})
+
+	if streamErr != nil {
+		return nil, streamErr
+	}
+
+	if !sentAnyChunk {
+		flushPendingEvents()
+	}
 
 	if usage.CompletionTokens == 0 {
 		// 计算输出文本的 token 数量

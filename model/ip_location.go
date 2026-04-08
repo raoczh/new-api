@@ -14,7 +14,8 @@ import (
 
 const (
 	defaultIPLocationAPIURL = "https://ipinfo.dkly.net/api/"
-	defaultIPLocationAPIKey = "a3b3be25941f14415ba93648ea46308cd5f9d6d7c256dc4753a351eaf8cc9b0e"
+	// defaultIPLocationAPIKey = "a3b3be25941f14415ba93648ea46308cd5f9d6d7c256dc4753a351eaf8cc9b0e"
+	defaultIPLocationAPIKey = "1808fe69f01e49a678cdf473ade022ccdd7668488592238d8f4e799054f3c13b"
 	ipLocationCacheTTL      = 24 * time.Hour
 )
 

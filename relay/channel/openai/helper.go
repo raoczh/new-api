@@ -2,6 +2,8 @@ package openai
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -258,4 +260,134 @@ func sendResponsesStreamData(c *gin.Context, streamResponse dto.ResponsesStreamR
 		return
 	}
 	helper.ResponseChunkData(c, streamResponse, data)
+}
+
+func shouldDelayOpenAIStreamChunk(data string) bool {
+	if strings.TrimSpace(data) == "" {
+		return false
+	}
+	if tryConvertStreamChunkError(data) != nil {
+		return false
+	}
+
+	var streamResponse dto.ChatCompletionsStreamResponseSimple
+	if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
+		return false
+	}
+	if service.ValidUsage(streamResponse.Usage) {
+		return false
+	}
+	if len(streamResponse.Choices) == 0 {
+		return false
+	}
+
+	for _, choice := range streamResponse.Choices {
+		if choice.FinishReason != nil && *choice.FinishReason != "" {
+			return false
+		}
+		if choice.Delta.GetContentString() != "" || choice.Delta.GetReasoningContent() != "" {
+			return false
+		}
+		if len(choice.Delta.ToolCalls) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func responsesStreamItemHasVisiblePayload(item *dto.ResponsesOutput) bool {
+	if item == nil {
+		return false
+	}
+	if item.Arguments != "" {
+		return true
+	}
+	for _, content := range item.Content {
+		if content.Text != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func recordLateUpstreamStreamError(c *gin.Context, info *relaycommon.RelayInfo, streamErr *types.NewAPIError) {
+	if streamErr == nil {
+		return
+	}
+	logger.LogError(c, fmt.Sprintf("upstream stream error after response started: %s", streamErr.ErrorWithStatusCode()))
+	if info == nil || !service.ShouldCooldownChannel(streamErr) {
+		return
+	}
+	channelID := c.GetInt("channel_id")
+	if channelID <= 0 {
+		return
+	}
+	service.MarkChannelCooldown(channelID, info.OriginModelName)
+}
+
+func tryConvertStreamChunkError(data string) *types.NewAPIError {
+	if strings.TrimSpace(data) == "" {
+		return nil
+	}
+
+	var payload struct {
+		Error      any  `json:"error"`
+		Status     *int `json:"status,omitempty"`
+		StatusCode *int `json:"status_code,omitempty"`
+	}
+	if err := common.UnmarshalJsonStr(data, &payload); err != nil {
+		return nil
+	}
+
+	oaiErr := dto.GetOpenAIError(payload.Error)
+	if oaiErr == nil {
+		return nil
+	}
+	if oaiErr.Message == "" && oaiErr.Type == "" && oaiErr.Code == nil {
+		return nil
+	}
+
+	return types.WithOpenAIError(*oaiErr, inferStreamChunkStatusCode(oaiErr, payload.StatusCode, payload.Status))
+}
+
+func inferStreamChunkStatusCode(oaiErr *types.OpenAIError, explicitStatusCode *int, explicitStatus *int) int {
+	if explicitStatusCode != nil && *explicitStatusCode >= 100 && *explicitStatusCode <= 599 {
+		return *explicitStatusCode
+	}
+	if explicitStatus != nil && *explicitStatus >= 100 && *explicitStatus <= 599 {
+		return *explicitStatus
+	}
+	if oaiErr == nil {
+		return http.StatusInternalServerError
+	}
+
+	lowerFields := []string{
+		strings.ToLower(oaiErr.Message),
+		strings.ToLower(oaiErr.Type),
+		strings.ToLower(fmt.Sprintf("%v", oaiErr.Code)),
+	}
+
+	containsAny := func(patterns ...string) bool {
+		for _, field := range lowerFields {
+			for _, pattern := range patterns {
+				if strings.Contains(field, pattern) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	switch {
+	case containsAny("429", "rate limit", "too many requests", "too_many_requests", "rate_limit"):
+		return http.StatusTooManyRequests
+	case containsAny("401", "unauthorized", "invalid_api_key", "authentication"):
+		return http.StatusUnauthorized
+	case containsAny("403", "forbidden", "permission"):
+		return http.StatusForbidden
+	case containsAny("400", "invalid_request", "bad request"):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
+	}
 }
