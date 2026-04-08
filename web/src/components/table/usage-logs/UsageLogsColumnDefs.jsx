@@ -903,14 +903,8 @@ export const getLogsColumns = ({
       ),
       dataIndex: 'ip',
       render: (text, record, index) => {
-        const ipLocation =
-          typeof record.ip_location === 'string'
-            ? record.ip_location.trim()
-            : '';
-        const showLocation = isAdminUser && ipLocation;
-        const tooltipContent = showLocation ? `${text}\n${ipLocation}` : text;
         return (record.type === 2 || record.type === 5) && text ? (
-          <Tooltip content={tooltipContent}>
+          <Tooltip content={text}>
             <span>
               <Tag
                 color='orange'

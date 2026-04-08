@@ -284,9 +284,6 @@ func migrateDB() error {
 	if err != nil {
 		return err
 	}
-	if err := ensureLogIPLocationColumn(DB); err != nil {
-		return err
-	}
 	if err := ensureUserRecordIPLogSetting(DB); err != nil {
 		return err
 	}
@@ -376,23 +373,7 @@ func migrateLOGDB() error {
 	if err = LOG_DB.AutoMigrate(&Log{}); err != nil {
 		return err
 	}
-	if err = ensureLogIPLocationColumn(LOG_DB); err != nil {
-		return err
-	}
 	return nil
-}
-
-func ensureLogIPLocationColumn(db *gorm.DB) error {
-	if db == nil {
-		return nil
-	}
-	if !db.Migrator().HasTable(&Log{}) {
-		return nil
-	}
-	if db.Migrator().HasColumn(&Log{}, "IpLocation") {
-		return nil
-	}
-	return db.Migrator().AddColumn(&Log{}, "IpLocation")
 }
 
 func ensureUserRecordIPLogSetting(db *gorm.DB) error {

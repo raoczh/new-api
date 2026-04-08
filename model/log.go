@@ -35,7 +35,6 @@ type Log struct {
 	TokenId          int    `json:"token_id" gorm:"default:0;index"`
 	Group            string `json:"group" gorm:"index"`
 	Ip               string `json:"ip" gorm:"index;default:''"`
-	IpLocation       string `json:"ip_location" gorm:"type:varchar(255);default:''"`
 	RequestId        string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	Other            string `json:"other"`
 }
@@ -54,7 +53,6 @@ const (
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelName = ""
-		logs[i].IpLocation = ""
 		var otherMap map[string]interface{}
 		otherMap, _ = common.StrToMap(logs[i].Other)
 		if otherMap != nil {
@@ -106,10 +104,8 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		}
 	}
 	clientIp := ""
-	ipLocation := ""
 	if needRecordIp {
 		clientIp = c.ClientIP()
-		ipLocation = queryIPLocation(clientIp)
 	}
 	log := &Log{
 		UserId:           userId,
@@ -128,7 +124,6 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		IsStream:         isStream,
 		Group:            group,
 		Ip:               clientIp,
-		IpLocation:       ipLocation,
 		RequestId:        requestId,
 		Other:            otherStr,
 	}
@@ -169,10 +164,8 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		}
 	}
 	clientIp := ""
-	ipLocation := ""
 	if needRecordIp {
 		clientIp = c.ClientIP()
-		ipLocation = queryIPLocation(clientIp)
 	}
 	log := &Log{
 		UserId:           userId,
@@ -191,7 +184,6 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		IsStream:         params.IsStream,
 		Group:            params.Group,
 		Ip:               clientIp,
-		IpLocation:       ipLocation,
 		RequestId:        requestId,
 		Other:            otherStr,
 	}
