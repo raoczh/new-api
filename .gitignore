@@ -34,3 +34,5 @@ data/
 .gopath
 
 docker-compose.yml
+
+token_estimator_test.go

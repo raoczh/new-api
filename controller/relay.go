@@ -151,7 +151,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
 	if err != nil {
-		newAPIError = types.NewError(err, types.ErrorCodeModelPriceError)
+		newAPIError = types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest))
 		return
 	}
 
@@ -406,12 +406,13 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 			startTime = time.Now()
 		}
 		useTimeSeconds := int(time.Since(startTime).Seconds())
+		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, common.GetContextKeyBool(c, constant.ContextKeyIsStream), userGroup, other)
 		// Append cooldown info to error message so it's visible in the web UI
 		errMsg := err.MaskSensitiveErrorWithStatusCode()
 		if cooldown {
 			errMsg = fmt.Sprintf("%s [已加入冷却 %ds]", errMsg, common.ChannelCooldownDuration)
 		}
-		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, errMsg, tokenId, useTimeSeconds, false, userGroup, other)
+		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, errMsg, tokenId, useTimeSeconds, common.GetContextKeyBool(c, constant.ContextKeyIsStream), userGroup, other)
 	}
 
 }
