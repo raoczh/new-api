@@ -328,6 +328,48 @@ export const useDashboardCharts = (
     color: { type: 'ordinal', range: USER_COLORS },
   });
 
+  // ========== Admin: 用户调用次数排行 ==========
+  const [spec_user_call_rank, setSpecUserCallRank] = useState({
+    type: 'bar',
+    data: [{ id: 'userCallRankData', values: [] }],
+    xField: 'rawCount',
+    yField: 'User',
+    seriesField: 'User',
+    direction: 'horizontal',
+    legends: { visible: false },
+    title: {
+      visible: true,
+      text: t('用户调用排行'),
+      subtext: '',
+    },
+    bar: {
+      state: { hover: { stroke: '#000', lineWidth: 1 } },
+    },
+    label: {
+      visible: true,
+      position: 'outside',
+      formatMethod: (value, datum) => renderNumber(datum['rawCount'] || 0),
+    },
+    axes: [{
+      orient: 'left',
+      type: 'band',
+      label: { visible: true },
+    }, {
+      orient: 'bottom',
+      type: 'linear',
+      visible: false,
+    }],
+    tooltip: {
+      mark: {
+        content: [{
+          key: (datum) => datum['User'],
+          value: (datum) => renderNumber(datum['rawCount'] || 0),
+        }],
+      },
+    },
+    color: { type: 'ordinal', range: USER_COLORS },
+  });
+
   // ========== Admin: 用户消耗趋势 ==========
   const [spec_user_trend, setSpecUserTrend] = useState({
     type: 'area',
@@ -588,6 +630,31 @@ export const useDashboardCharts = (
         },
       }));
 
+      // ===== 用户调用次数排行 top 10 =====
+      const userCountTotal = new Map();
+      data.forEach((item) => {
+        const prev = userCountTotal.get(item.username) || 0;
+        userCountTotal.set(item.username, prev + (item.count || 0));
+      });
+      const userCallRankValues = Array.from(userCountTotal.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([username, count]) => ({ User: username, rawCount: count }))
+        .sort((a, b) => a.rawCount - b.rawCount);
+      const totalUserCount = userCallRankValues.reduce(
+        (s, i) => s + i.rawCount,
+        0,
+      );
+
+      setSpecUserCallRank((prev) => ({
+        ...prev,
+        data: [{ id: 'userCallRankData', values: userCallRankValues }],
+        title: {
+          ...prev.title,
+          subtext: `${t('总计')}：${renderNumber(totalUserCount)}`,
+        },
+      }));
+
       const userTrendValues = userTrend.map((item) => ({
         Time: item.Time,
         User: item.User,
@@ -620,6 +687,7 @@ export const useDashboardCharts = (
     spec_model_line,
     spec_rank_bar,
     spec_user_rank,
+    spec_user_call_rank,
     spec_user_trend,
     updateChartData,
     updateUserChartData,
