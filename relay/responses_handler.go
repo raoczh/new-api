@@ -70,8 +70,33 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 		return types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())
 	}
 	adaptor.Init(info)
+
+	passThroughGlobal := model_setting.GetGlobalSettings().PassThroughRequestEnabled
+	if !passThroughGlobal &&
+		!info.ChannelSetting.PassThroughBodyEnabled &&
+		info.ChannelSetting.ForceChatCompletions {
+		if info.RelayMode == relayconstant.RelayModeResponsesCompact {
+			return types.NewErrorWithStatusCode(
+				fmt.Errorf("force_chat_completions does not support /v1/responses/compact endpoint"),
+				types.ErrorCodeInvalidRequest,
+				http.StatusBadRequest,
+				types.ErrOptionWithSkipRetry(),
+			)
+		}
+		usage, apiErr := responsesViaChatCompletions(c, info, adaptor, request)
+		if apiErr != nil {
+			return apiErr
+		}
+		if strings.HasPrefix(info.OriginModelName, "gpt-4o-audio") {
+			service.PostAudioConsumeQuota(c, info, usage, "")
+		} else {
+			service.PostTextConsumeQuota(c, info, usage, nil)
+		}
+		return nil
+	}
+
 	var requestBody io.Reader
-	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled {
+	if passThroughGlobal || info.ChannelSetting.PassThroughBodyEnabled {
 		storage, err := common.GetBodyStorage(c)
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeReadRequestBodyFailed, types.ErrOptionWithSkipRetry())

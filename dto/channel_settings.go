@@ -8,6 +8,7 @@ type ChannelSettings struct {
 	SystemPrompt           string `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
 	UseResponsesAPI        bool   `json:"use_responses_api,omitempty"`
+	ForceChatCompletions   bool   `json:"force_chat_completions,omitempty"`
 }
 
 type VertexKeyType string

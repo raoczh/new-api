@@ -194,6 +194,7 @@ const EditChannelModal = (props) => {
     proxy: '',
     pass_through_body_enabled: false,
     use_responses_api: false,
+    force_chat_completions: false,
     system_prompt: '',
     system_prompt_override: false,
     settings: '',
@@ -500,6 +501,7 @@ const EditChannelModal = (props) => {
     proxy: '',
     pass_through_body_enabled: false,
     use_responses_api: false,
+    force_chat_completions: false,
     system_prompt: '',
   });
   const showApiConfigCard = true; // 控制是否显示 API 配置卡片
@@ -522,6 +524,53 @@ const EditChannelModal = (props) => {
     const newSettings = { ...channelSettings, [key]: value };
     const settingsJson = JSON.stringify(newSettings);
     handleInputChange('setting', settingsJson);
+  };
+
+  // use_responses_api 与 force_chat_completions 互斥：开启一个时自动关闭另一个
+  const handleUseResponsesApiChange = (value) => {
+    if (value && channelSettings.force_chat_completions) {
+      const newSettings = {
+        ...channelSettings,
+        use_responses_api: true,
+        force_chat_completions: false,
+      };
+      setChannelSettings(newSettings);
+      if (formApiRef.current) {
+        formApiRef.current.setValue('use_responses_api', true);
+        formApiRef.current.setValue('force_chat_completions', false);
+      }
+      setInputs((prev) => ({
+        ...prev,
+        use_responses_api: true,
+        force_chat_completions: false,
+      }));
+      handleInputChange('setting', JSON.stringify(newSettings));
+      return;
+    }
+    handleChannelSettingsChange('use_responses_api', value);
+  };
+
+  const handleForceChatCompletionsChange = (value) => {
+    if (value && channelSettings.use_responses_api) {
+      const newSettings = {
+        ...channelSettings,
+        force_chat_completions: true,
+        use_responses_api: false,
+      };
+      setChannelSettings(newSettings);
+      if (formApiRef.current) {
+        formApiRef.current.setValue('force_chat_completions', true);
+        formApiRef.current.setValue('use_responses_api', false);
+      }
+      setInputs((prev) => ({
+        ...prev,
+        force_chat_completions: true,
+        use_responses_api: false,
+      }));
+      handleInputChange('setting', JSON.stringify(newSettings));
+      return;
+    }
+    handleChannelSettingsChange('force_chat_completions', value);
   };
 
   const handleChannelOtherSettingsChange = (key, value) => {
@@ -853,6 +902,8 @@ const EditChannelModal = (props) => {
             parsedSettings.pass_through_body_enabled || false;
           data.use_responses_api =
             parsedSettings.use_responses_api || false;
+          data.force_chat_completions =
+            parsedSettings.force_chat_completions || false;
           data.system_prompt = parsedSettings.system_prompt || '';
           data.system_prompt_override =
             parsedSettings.system_prompt_override || false;
@@ -863,6 +914,7 @@ const EditChannelModal = (props) => {
           data.proxy = '';
           data.pass_through_body_enabled = false;
           data.use_responses_api = false;
+          data.force_chat_completions = false;
           data.system_prompt = '';
           data.system_prompt_override = false;
         }
@@ -872,6 +924,7 @@ const EditChannelModal = (props) => {
         data.proxy = '';
         data.pass_through_body_enabled = false;
         data.use_responses_api = false;
+        data.force_chat_completions = false;
         data.system_prompt = '';
         data.system_prompt_override = false;
       }
@@ -982,6 +1035,7 @@ const EditChannelModal = (props) => {
         proxy: data.proxy,
         pass_through_body_enabled: data.pass_through_body_enabled,
         use_responses_api: data.use_responses_api,
+        force_chat_completions: data.force_chat_completions,
         system_prompt: data.system_prompt,
         system_prompt_override: data.system_prompt_override || false,
       });
@@ -1372,6 +1426,7 @@ const EditChannelModal = (props) => {
       proxy: '',
       pass_through_body_enabled: false,
       use_responses_api: false,
+      force_chat_completions: false,
       system_prompt: '',
       system_prompt_override: false,
     });
@@ -1743,6 +1798,7 @@ const EditChannelModal = (props) => {
       proxy: localInputs.proxy || '',
       pass_through_body_enabled: localInputs.pass_through_body_enabled || false,
       use_responses_api: localInputs.use_responses_api || false,
+      force_chat_completions: localInputs.force_chat_completions || false,
       system_prompt: localInputs.system_prompt || '',
       system_prompt_override: localInputs.system_prompt_override || false,
     };
@@ -1825,6 +1881,7 @@ const EditChannelModal = (props) => {
     delete localInputs.proxy;
     delete localInputs.pass_through_body_enabled;
     delete localInputs.use_responses_api;
+    delete localInputs.force_chat_completions;
     delete localInputs.system_prompt;
     delete localInputs.system_prompt_override;
     delete localInputs.is_enterprise_account;
@@ -2517,7 +2574,8 @@ const EditChannelModal = (props) => {
 
                   <Form.Switch field='thinking_to_content' label={t('思考内容转换')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('thinking_to_content', value)} extraText={t('将 reasoning_content 转换为 <think> 标签拼接到内容中')} />
                   <Form.Switch field='pass_through_body_enabled' label={t('透传请求体')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('pass_through_body_enabled', value)} extraText={t('启用请求体透传功能')} />
-                  <Form.Switch field='use_responses_api' label={t('使用 Responses API')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('use_responses_api', value)} extraText={t('开启后，该渠道收到 chat/completions 请求时自动转换为 Responses API 格式发送给上游')} />
+                  <Form.Switch field='use_responses_api' label={t('使用 Responses API')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleUseResponsesApiChange(value)} extraText={t('开启后，该渠道收到 chat/completions 请求时自动转换为 Responses API 格式发送给上游')} />
+                  <Form.Switch field='force_chat_completions' label={t('强制使用 /v1/chat/completions')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleForceChatCompletionsChange(value)} extraText={t('开启后，该渠道收到 /v1/responses 或 /v1/messages 请求时强制转换为 /v1/chat/completions 格式发送给上游（与"使用 Responses API"互斥）')} />
                   <Form.Input field='proxy' label={t('代理地址')} placeholder={t('例如: socks5://user:pass@host:port')} onChange={(value) => handleChannelSettingsChange('proxy', value)} showClear extraText={t('用于配置网络代理，支持 socks5 协议')} />
 
                   <Form.TextArea field='system_prompt' label={t('系统提示词')} placeholder={t('输入系统提示词，用户的系统提示词将优先于此设置')} onChange={(value) => handleChannelSettingsChange('system_prompt', value)} autosize showClear extraText={t('用户优先：如果用户在请求中指定了系统提示词，将优先使用用户的设置')} />
