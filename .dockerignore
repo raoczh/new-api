@@ -7,4 +7,9 @@ Makefile
 docs
 .eslintcache
 .gocache
-/web/node_modules
+**/node_modules
+web/default/dist
+web/classic/dist
+.claude
+.idea
+*.log

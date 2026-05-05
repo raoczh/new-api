@@ -299,7 +299,7 @@ func responsesStreamItemHasVisiblePayload(item *dto.ResponsesOutput) bool {
 	if item == nil {
 		return false
 	}
-	if item.Arguments != "" {
+	if len(item.Arguments) > 0 {
 		return true
 	}
 	for _, content := range item.Content {

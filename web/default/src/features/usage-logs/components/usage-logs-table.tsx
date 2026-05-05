@@ -40,6 +40,7 @@ import type { LogCategory } from '../types'
 import { CommonLogsFilterBar } from './common-logs-filter-bar'
 import { CommonLogsStats } from './common-logs-stats'
 import { TaskLogsFilterBar } from './task-logs-filter-bar'
+import { useUsageLogsContext } from './usage-logs-provider'
 
 const route = getRouteApi('/_authenticated/usage-logs/$section')
 
@@ -130,6 +131,16 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   const logs = data?.items || []
   const columns = useColumnsByCategory(logCategory, isAdmin)
   const isLoadingData = isLoading || (isFetching && !data)
+
+  const { loadChannelApiUrls } = useUsageLogsContext()
+  useEffect(() => {
+    if (!isAdmin || logCategory !== 'common' || logs.length === 0) return
+    const ids = logs
+      .map((log) => Number((log as { channel?: number | string }).channel))
+      .filter((id) => Number.isInteger(id) && id > 0)
+    if (ids.length === 0) return
+    loadChannelApiUrls(ids)
+  }, [logs, isAdmin, logCategory, loadChannelApiUrls])
 
   const table = useReactTable({
     data: logs as Record<string, unknown>[],

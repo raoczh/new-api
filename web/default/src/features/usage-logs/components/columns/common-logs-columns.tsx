@@ -289,6 +289,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             sensitiveVisible,
             setAffinityTarget,
             setAffinityDialogOpen,
+            channelApiUrlMap,
           } = useUsageLogsContext()
           const log = row.original
 
@@ -306,6 +307,18 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             : `#${log.channel}`
           const channelIdDisplay = `#${log.channel}`
           const channelName = sensitiveVisible ? log.channel_name : '••••'
+          const channelApiUrl =
+            log.channel != null ? channelApiUrlMap[log.channel] || '' : ''
+
+          const badge = (
+            <StatusBadge
+              label={channelIdDisplay}
+              autoColor={String(log.channel)}
+              copyText={String(log.channel)}
+              size='sm'
+              className='font-mono'
+            />
+          )
 
           return (
             <TooltipProvider>
@@ -313,13 +326,18 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                 <TooltipTrigger asChild>
                   <div className='flex max-w-[160px] flex-col gap-0.5'>
                     <div className='relative inline-flex w-fit'>
-                      <StatusBadge
-                        label={channelIdDisplay}
-                        autoColor={String(log.channel)}
-                        copyText={String(log.channel)}
-                        size='sm'
-                        className='font-mono'
-                      />
+                      {channelApiUrl ? (
+                        <a
+                          href={channelApiUrl}
+                          target='_blank'
+                          rel='noopener noreferrer'
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {badge}
+                        </a>
+                      ) : (
+                        badge
+                      )}
                       {affinity && (
                         <button
                           type='button'

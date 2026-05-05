@@ -98,7 +98,7 @@ func buildResponsesResponseFromChat(c *gin.Context, info *relaycommon.RelayInfo,
 				Status:    "completed",
 				CallId:    callId,
 				Name:      name,
-				Arguments: tc.Function.Arguments,
+				Arguments: json.RawMessage(tc.Function.Arguments),
 			})
 		}
 	}
@@ -338,7 +338,7 @@ func OaiChatToResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 				Status:    "completed",
 				CallId:    item.callID,
 				Name:      item.name,
-				Arguments: item.arguments.String(),
+				Arguments: json.RawMessage(item.arguments.String()),
 			}
 			doneEvt := dto.ResponsesStreamResponse{
 				Type:        "response.output_item.done",
@@ -490,7 +490,7 @@ func OaiChatToResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 				Status:    "completed",
 				CallId:    item.callID,
 				Name:      item.name,
-				Arguments: item.arguments.String(),
+				Arguments: json.RawMessage(item.arguments.String()),
 			})
 		}
 

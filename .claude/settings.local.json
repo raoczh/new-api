@@ -23,7 +23,23 @@
       "WebSearch",
       "WebFetch(domain:unpkg.com)",
       "Bash(git status:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(bun --version)",
+      "Bash(npx --no-install tsc --noEmit -p tsconfig.json)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(docker --version)",
+      "Bash(docker run *)",
+      "Bash(MSYS_NO_PATHCONV=1 docker run --rm -v \"//d/workspace/new-api/web/classic:/app\" -w \"//app\" oven/bun:1 bun install)",
+      "Bash(MSYS_NO_PATHCONV=1 docker run --rm -v \"//d/workspace/new-api/web/default:/app\" -w \"//app\" oven/bun:1 bun install --frozen-lockfile --dry-run)",
+      "Bash(MSYS_NO_PATHCONV=1 docker run --rm -v \"//d/workspace/new-api/web/classic:/app\" -w \"//app\" oven/bun:1 bun install --frozen-lockfile --dry-run)",
+      "Bash(awk '-F\": \"' 'NR>1 && $0 !~ /^\\\\s*[{}]/ { *)",
+      "Bash(node -e 'JSON.parse\\(require\\('\\\\''fs'\\\\''\\).readFileSync\\('\\\\''web/default/src/i18n/locales/__TRACKED_VAR__.json'\\\\'','\\\\''utf8'\\\\''\\)\\)')",
+      "Bash(bun run *)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('web/default/src/i18n/locales/zh.json','utf8'\\)\\)\")",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('d:/workspace/new-api/web/default/src/i18n/locales/zh.json','utf8'\\)\\)\")",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(git --no-pager diff --stat -- .dockerignore web/default/)",
+      "Bash(node -e 'JSON.parse\\(require\\('\\\\''fs'\\\\''\\).readFileSync\\('\\\\''web/default/src/i18n/locales/__TRACKED_VAR__.json'\\\\'','\\\\''utf8'\\\\''\\)\\); console.log\\('\\\\''__TRACKED_VAR__.json OK'\\\\''\\)')"
     ]
   }
 }

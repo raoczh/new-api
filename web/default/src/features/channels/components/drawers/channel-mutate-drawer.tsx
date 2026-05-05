@@ -219,6 +219,8 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     values.force_format ||
     values.thinking_to_content ||
     values.pass_through_body_enabled ||
+    values.use_responses_api ||
+    values.force_chat_completions ||
     values.system_prompt_override ||
     values.claude_beta_query ||
     values.upstream_model_update_check_enabled ||
@@ -3077,6 +3079,70 @@ export function ChannelMutateDrawer({
                               <Switch
                                 checked={field.value}
                                 onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name='use_responses_api'
+                        render={({ field }) => (
+                          <FormItem className='flex items-center justify-between px-4 py-3'>
+                            <div className='space-y-0.5'>
+                              <FormLabel>{t('Use Responses API')}</FormLabel>
+                              <FormDescription>
+                                {t(
+                                  'Convert chat/completions requests to Responses API format when sent to upstream'
+                                )}
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={(value) => {
+                                  field.onChange(value)
+                                  if (value) {
+                                    form.setValue(
+                                      'force_chat_completions',
+                                      false,
+                                      { shouldDirty: true }
+                                    )
+                                  }
+                                }}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name='force_chat_completions'
+                        render={({ field }) => (
+                          <FormItem className='flex items-center justify-between px-4 py-3'>
+                            <div className='space-y-0.5'>
+                              <FormLabel>
+                                {t('Force /v1/chat/completions')}
+                              </FormLabel>
+                              <FormDescription>
+                                {t(
+                                  'Convert /v1/responses or /v1/messages requests to /v1/chat/completions when sent to upstream (mutually exclusive with Use Responses API)'
+                                )}
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={(value) => {
+                                  field.onChange(value)
+                                  if (value) {
+                                    form.setValue('use_responses_api', false, {
+                                      shouldDirty: true,
+                                    })
+                                  }
+                                }}
                               />
                             </FormControl>
                           </FormItem>

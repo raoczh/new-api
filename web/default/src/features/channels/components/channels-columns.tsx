@@ -533,12 +533,28 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
         // Regular channel row
         const settings = parseChannelSettings(channel.setting)
         const isPassThrough = settings.pass_through_body_enabled === true
+        const baseUrl =
+          typeof channel.base_url === 'string' ? channel.base_url.trim() : ''
+        const displayName = truncateText(name, 30)
+        const nameNode = baseUrl ? (
+          <a
+            href={baseUrl}
+            target='_blank'
+            rel='noopener noreferrer'
+            className='font-medium hover:underline'
+            onClick={(e) => e.stopPropagation()}
+          >
+            {displayName}
+          </a>
+        ) : (
+          <span className='font-medium'>{displayName}</span>
+        )
 
         return (
           <div className='flex items-center gap-2'>
             <div className='flex flex-col gap-1'>
               <div className='flex items-center gap-1.5'>
-                <span className='font-medium'>{truncateText(name, 30)}</span>
+                {nameNode}
                 {isPassThrough && (
                   <TooltipProvider delayDuration={100}>
                     <Tooltip>
