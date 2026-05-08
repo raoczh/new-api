@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -189,127 +188,140 @@ export function SubscriptionsMutateDrawer({
               />
 
               <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
-                <FormField
-                  control={form.control}
-                  name='price_amount'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Actual Amount')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          step='0.01'
-                          min={0}
-                          onChange={(e) =>
-                            field.onChange(parseFloat(e.target.value) || 0)
-                          }
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className='space-y-1.5'>
+                  <FormField
+                    control={form.control}
+                    name='price_amount'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Actual Amount')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type='number'
+                            step='0.01'
+                            min={0}
+                            onChange={(e) =>
+                              field.onChange(parseFloat(e.target.value) || 0)
+                            }
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className='hidden min-h-5 sm:block' />
+                </div>
 
-                <FormField
-                  control={form.control}
-                  name='total_amount'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        {t('Credited Amount')} ({currencyLabel})
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          step={tokensOnly ? 1 : 0.01}
-                          min={0}
-                          placeholder={
-                            tokensOnly
-                              ? t('Enter quota in tokens')
-                              : t('Enter quota in {{currency}}', {
-                                  currency: currencyLabel,
-                                })
-                          }
-                          onChange={(e) =>
-                            field.onChange(parseFloat(e.target.value) || 0)
-                          }
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t('0 means unlimited')} · {t('Raw Quota')}:{' '}
-                        {parseQuotaFromDollars(Number(creditedAmount || 0))}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className='space-y-1.5'>
+                  <FormField
+                    control={form.control}
+                    name='total_amount'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {t('Credited Amount')} ({currencyLabel})
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type='number'
+                            step={tokensOnly ? 1 : 0.01}
+                            min={0}
+                            placeholder={
+                              tokensOnly
+                                ? t('Enter quota in tokens')
+                                : t('Enter quota in {{currency}}', {
+                                    currency: currencyLabel,
+                                  })
+                            }
+                            onChange={(e) =>
+                              field.onChange(parseFloat(e.target.value) || 0)
+                            }
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <p className='text-muted-foreground min-h-5 text-xs leading-5'>
+                    {t('0 means unlimited')} · {t('Raw Quota')}:{' '}
+                    {parseQuotaFromDollars(Number(creditedAmount || 0))}
+                  </p>
+                </div>
               </div>
 
               <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
-                <FormField
-                  control={form.control}
-                  name='upgrade_group'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Upgrade Group')}</FormLabel>
-                      <Select
-                        items={[
-                          { value: '__none__', label: t('No Upgrade') },
-                          ...groupOptions.map((g) => ({ value: g, label: g })),
-                        ]}
-                        onValueChange={(v) =>
-                          field.onChange(v === '__none__' ? '' : v)
-                        }
-                        value={field.value || ''}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={t('No Upgrade')} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            <SelectItem value='__none__'>
-                              {t('No Upgrade')}
-                            </SelectItem>
-                            {groupOptions.map((g) => (
-                              <SelectItem key={g} value={g}>
-                                {g}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='max_purchase_per_user'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Purchase Limit')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          min={0}
-                          onChange={(e) =>
-                            field.onChange(parseInt(e.target.value, 10) || 0)
+                <div className='space-y-1.5'>
+                  <FormField
+                    control={form.control}
+                    name='upgrade_group'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Upgrade Group')}</FormLabel>
+                        <Select
+                          items={[
+                            { value: '__none__', label: t('No Upgrade') },
+                            ...groupOptions.map((g) => ({
+                              value: g,
+                              label: g,
+                            })),
+                          ]}
+                          onValueChange={(v) =>
+                            field.onChange(v === '__none__' ? '' : v)
                           }
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t('0 means unlimited')}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                          value={field.value || ''}
+                        >
+                          <FormControl>
+                            <SelectTrigger className='w-full'>
+                              <SelectValue placeholder={t('No Upgrade')} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent alignItemWithTrigger={false}>
+                            <SelectGroup>
+                              <SelectItem value='__none__'>
+                                {t('No Upgrade')}
+                              </SelectItem>
+                              {groupOptions.map((g) => (
+                                <SelectItem key={g} value={g}>
+                                  {g}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className='hidden min-h-5 sm:block' />
+                </div>
+
+                <div className='space-y-1.5'>
+                  <FormField
+                    control={form.control}
+                    name='max_purchase_per_user'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Purchase Limit')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type='number'
+                            min={0}
+                            onChange={(e) =>
+                              field.onChange(parseInt(e.target.value, 10) || 0)
+                            }
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <p className='text-muted-foreground min-h-5 text-xs leading-5'>
+                    {t('0 means unlimited')}
+                  </p>
+                </div>
               </div>
 
               <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
@@ -337,16 +349,19 @@ export function SubscriptionsMutateDrawer({
                   control={form.control}
                   name='enabled'
                   render={({ field }) => (
-                    <FormItem className='flex flex-row items-center gap-2 pt-8'>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <FormLabel className='!mt-0'>
-                        {t('Enabled Status')}
-                      </FormLabel>
+                    <FormItem>
+                      <FormLabel>{t('Enabled Status')}</FormLabel>
+                      <div className='border-input flex h-8 items-center justify-between rounded-lg border bg-transparent px-2.5'>
+                        <span className='text-muted-foreground text-sm'>
+                          {field.value ? t('Enabled') : t('Disabled')}
+                        </span>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </div>
                     </FormItem>
                   )}
                 />
@@ -378,7 +393,7 @@ export function SubscriptionsMutateDrawer({
                         value={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className='w-full'>
                             <SelectValue />
                           </SelectTrigger>
                         </FormControl>
@@ -468,7 +483,7 @@ export function SubscriptionsMutateDrawer({
                         value={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className='w-full'>
                             <SelectValue />
                           </SelectTrigger>
                         </FormControl>
