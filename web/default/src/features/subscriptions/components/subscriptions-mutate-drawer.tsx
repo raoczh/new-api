@@ -4,6 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { CalendarClock, CreditCard, RefreshCw, Settings2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
+import { parseQuotaFromDollars } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -85,6 +87,10 @@ export function SubscriptionsMutateDrawer({
 
   const durationUnit = form.watch('duration_unit')
   const resetPeriod = form.watch('quota_reset_period')
+  const creditedAmount = form.watch('total_amount')
+  const { meta: currencyMeta } = getCurrencyDisplay()
+  const currencyLabel = getCurrencyLabel()
+  const tokensOnly = currencyMeta.kind === 'tokens'
 
   const onSubmit = async (values: PlanFormValues) => {
     setIsSubmitting(true)
@@ -210,19 +216,30 @@ export function SubscriptionsMutateDrawer({
                   name='total_amount'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Total Quota')}</FormLabel>
+                      <FormLabel>
+                        {t('Credited Amount')} ({currencyLabel})
+                      </FormLabel>
                       <FormControl>
                         <Input
                           {...field}
                           type='number'
+                          step={tokensOnly ? 1 : 0.01}
                           min={0}
+                          placeholder={
+                            tokensOnly
+                              ? t('Enter quota in tokens')
+                              : t('Enter quota in {{currency}}', {
+                                  currency: currencyLabel,
+                                })
+                          }
                           onChange={(e) =>
                             field.onChange(parseFloat(e.target.value) || 0)
                           }
                         />
                       </FormControl>
                       <FormDescription>
-                        {t('0 means unlimited')}
+                        {t('0 means unlimited')} · {t('Raw Quota')}:{' '}
+                        {parseQuotaFromDollars(Number(creditedAmount || 0))}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
