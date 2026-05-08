@@ -3523,6 +3523,7 @@
     "Send a request": "Envoyer une requête",
     "Send code": "Envoyer le code",
     "Send email alerts when a user falls below this quota": "Envoyer des alertes par e-mail lorsqu'un utilisateur descend en dessous de ce quota",
+    "Send reset email": "Envoyer l'e-mail de réinitialisation",
     "Sending...": "Envoi en cours...",
     "Sensitive Words": "Mots sensibles",
     "Sent the API key to FluentRead.": "Clé API envoyée à FluentRead.",

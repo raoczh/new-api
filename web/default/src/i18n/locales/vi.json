@@ -3523,6 +3523,7 @@
     "Send a request": "Gửi yêu cầu",
     "Send code": "Gửi mã",
     "Send email alerts when a user falls below this quota": "Gửi cảnh báo email khi người dùng xuống dưới hạn mức này",
+    "Send reset email": "Gửi email đặt lại mật khẩu",
     "Sending...": "Đang gửi...",
     "Sensitive Words": "Từ ngữ nhạy cảm",
     "Sent the API key to FluentRead.": "Đã gửi khóa API đến FluentRead.",

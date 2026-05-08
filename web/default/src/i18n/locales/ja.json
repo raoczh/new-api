@@ -3523,6 +3523,7 @@
     "Send a request": "リクエストを送信",
     "Send code": "コードを送信",
     "Send email alerts when a user falls below this quota": "ユーザーがこのクォータを下回ったときにメールアラートを送信",
+    "Send reset email": "リセットメールを送信",
     "Sending...": "送信中...",
     "Sensitive Words": "機密語",
     "Sent the API key to FluentRead.": "API キーを FluentRead に送信しました。",

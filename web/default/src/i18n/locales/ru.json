@@ -3523,6 +3523,7 @@
     "Send a request": "Отправить запрос",
     "Send code": "Отправить код",
     "Send email alerts when a user falls below this quota": "Отправлять оповещения по электронной почте, когда пользователь опускается ниже этой квоты",
+    "Send reset email": "Отправить письмо для сброса пароля",
     "Sending...": "Отправка...",
     "Sensitive Words": "Чувствительные слова",
     "Sent the API key to FluentRead.": "API-ключ отправлен в FluentRead.",
