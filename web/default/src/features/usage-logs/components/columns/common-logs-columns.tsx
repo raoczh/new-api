@@ -353,13 +353,6 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                       ) : (
                           badge
                       )}
-                    <StatusBadge
-                      label={channelIdDisplay}
-                      autoColor={String(log.channel)}
-                      copyText={String(log.channel)}
-                      size='sm'
-                      className='font-mono'
-                    />
                     {affinity && (
                       <button
                         type='button'
