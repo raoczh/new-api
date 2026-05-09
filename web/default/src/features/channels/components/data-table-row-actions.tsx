@@ -76,6 +76,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [isTogglingStatus, setIsTogglingStatus] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const isEnabled = isChannelEnabled(channel)
   const isMultiKey = isMultiKeyChannel(channel)
@@ -298,8 +299,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
           {/* Delete */}
           <DropdownMenuItem
-            onSelect={(e) => {
-              e.preventDefault()
+            onClick={() => {
               setDeleteConfirmOpen(true)
             }}
             className='text-destructive focus:text-destructive'
@@ -317,11 +317,18 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         onOpenChange={setDeleteConfirmOpen}
         title={t('Delete Channel')}
         desc={`Are you sure you want to delete "${channel.name}"? This action cannot be undone.`}
-        confirmText='Delete'
+        confirmText={t('Delete')}
         destructive
-        handleConfirm={() => {
-          handleDeleteChannel(channel.id, queryClient)
-          setDeleteConfirmOpen(false)
+        isLoading={isDeleting}
+        handleConfirm={async () => {
+          setIsDeleting(true)
+          try {
+            await handleDeleteChannel(channel.id, queryClient, () => {
+              setDeleteConfirmOpen(false)
+            })
+          } finally {
+            setIsDeleting(false)
+          }
         }}
       />
     </div>

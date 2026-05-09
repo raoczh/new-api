@@ -1193,15 +1193,14 @@ func CopyChannel(c *gin.Context) {
 		clone.UsedQuota = 0
 	}
 
-	// insert
-	if err := model.BatchInsertChannels([]model.Channel{clone}); err != nil {
+	// insert and keep the generated ID on the cloned record
+	if err := clone.Insert(); err != nil {
 		common.SysError("failed to clone channel: " + err.Error())
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "复制渠道失败，请稍后重试"})
 		return
 	}
 	model.InitChannelCache()
-	// success
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": gin.H{"id": clone.Id}})
+	common.ApiSuccess(c, gin.H{"id": clone.Id})
 }
 
 // MultiKeyManageRequest represents the request for multi-key management operations

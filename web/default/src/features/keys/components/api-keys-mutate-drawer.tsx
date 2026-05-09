@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useState, type ReactNode } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -169,17 +169,31 @@ export function ApiKeysMutateDrawer({
   // Load existing data when updating
   useEffect(() => {
     if (open && isUpdate && currentRow) {
-      // For update, fetch fresh data
-      getApiKey(currentRow.id).then((result) => {
-        if (result.success && result.data) {
-          form.reset(transformApiKeyToFormDefaults(result.data))
-        }
-      })
+      form.reset(transformApiKeyToFormDefaults(currentRow))
+
+      let cancelled = false
+      getApiKey(currentRow.id)
+        .then((result) => {
+          if (cancelled) return
+          if (result.success && result.data) {
+            form.reset(transformApiKeyToFormDefaults(result.data))
+          } else {
+            toast.error(result.message || t(ERROR_MESSAGES.LOAD_FAILED))
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            toast.error(t(ERROR_MESSAGES.LOAD_FAILED))
+          }
+        })
+      return () => {
+        cancelled = true
+      }
     } else if (open && !isUpdate) {
       // For create, reset to defaults
       form.reset(getApiKeyFormDefaultValues(defaultUseAutoGroup))
     }
-  }, [open, isUpdate, currentRow, form, defaultUseAutoGroup])
+  }, [open, isUpdate, currentRow, form, defaultUseAutoGroup, t])
 
   const onSubmit = async (data: ApiKeyFormValues) => {
     setIsSubmitting(true)
@@ -236,6 +250,29 @@ export function ApiKeysMutateDrawer({
     }
   }
 
+  const onInvalidSubmit = (errors: FieldErrors<ApiKeyFormValues>) => {
+    if (errors.model_limits || errors.allow_ips) {
+      setAdvancedOpen(true)
+    }
+
+    if (errors.name) {
+      toast.error(t('Please enter a name'))
+      return
+    }
+
+    const firstMessage = Object.values(errors).find(
+      (error) => typeof error?.message === 'string'
+    )?.message
+
+    toast.error(
+      typeof firstMessage === 'string'
+        ? firstMessage
+        : t(ERROR_MESSAGES.UNEXPECTED)
+    )
+  }
+
+  const submitForm = form.handleSubmit(onSubmit, onInvalidSubmit)
+
   const handleSetExpiry = (months: number, days: number, hours: number) => {
     if (months === 0 && days === 0 && hours === 0) {
       form.setValue('expired_time', undefined)
@@ -288,7 +325,7 @@ export function ApiKeysMutateDrawer({
         <Form {...form}>
           <form
             id='api-key-form'
-            onSubmit={form.handleSubmit(onSubmit)}
+            onSubmit={submitForm}
             className='min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 sm:space-y-4 sm:px-4 sm:py-4'
           >
             <ApiKeyFormSection
@@ -602,9 +639,9 @@ export function ApiKeysMutateDrawer({
             {t('Close')}
           </SheetClose>
           <Button
-            form='api-key-form'
-            type='submit'
+            type='button'
             disabled={isSubmitting}
+            onClick={() => void submitForm()}
             className='w-full sm:w-auto'
           >
             {isSubmitting ? t('Saving...') : t('Save changes')}

@@ -76,6 +76,10 @@ export const ModelRatioForm = memo(function ModelRatioForm({
     [form]
   )
 
+  const handleVisualSave = useCallback(() => {
+    void form.handleSubmit(onSave)()
+  }, [form, onSave])
+
   const toggleEditMode = useCallback(() => {
     setEditMode((prev) => (prev === 'visual' ? 'json' : 'visual'))
   }, [])
@@ -149,7 +153,11 @@ export const ModelRatioForm = memo(function ModelRatioForm({
             />
 
             <div className='flex flex-wrap gap-4'>
-              <Button onClick={form.handleSubmit(onSave)} disabled={isSaving}>
+              <Button
+                type='button'
+                onClick={handleVisualSave}
+                disabled={isSaving}
+              >
                 {isSaving ? t('Saving...') : t('Save model prices')}
               </Button>
               <Button

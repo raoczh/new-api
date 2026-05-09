@@ -79,7 +79,9 @@ function ChatMenuItem({
             />
           }
         >
-          <span>{preset.name}</span>
+          <span className='min-w-0 flex-1 truncate whitespace-nowrap'>
+            {preset.name}
+          </span>
         </SidebarMenuSubButton>
       </SidebarMenuSubItem>
     )
@@ -95,11 +97,13 @@ function ChatMenuItem({
         isActive={false}
         className='justify-between'
       >
-        <span>{preset.name}</span>
+        <span className='min-w-0 flex-1 truncate whitespace-nowrap'>
+          {preset.name}
+        </span>
         {loading ? (
-          <Loader2 className='h-4 w-4 animate-spin' />
+          <Loader2 className='h-4 w-4 shrink-0 animate-spin' />
         ) : (
-          <ExternalLink className='h-4 w-4' />
+          <ExternalLink className='h-4 w-4 shrink-0' />
         )}
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>
@@ -121,9 +125,12 @@ function DropdownPresetItem({
   if (preset.type === 'web') {
     return (
       <DropdownMenuItem
+        className='min-w-0'
         render={<Link to='/chat/$chatId' params={{ chatId: preset.id }} />}
       >
-        {preset.name}
+        <span className='min-w-0 flex-1 truncate whitespace-nowrap'>
+          {preset.name}
+        </span>
       </DropdownMenuItem>
     )
   }
@@ -134,12 +141,15 @@ function DropdownPresetItem({
       onClick={() => {
         if (!loading) void onOpen(preset)
       }}
+      className='min-w-0'
     >
-      {preset.name}
+      <span className='min-w-0 flex-1 truncate whitespace-nowrap'>
+        {preset.name}
+      </span>
       {loading ? (
-        <Loader2 className='ml-auto h-4 w-4 animate-spin opacity-70' />
+        <Loader2 className='ml-auto h-4 w-4 shrink-0 animate-spin opacity-70' />
       ) : (
-        <ExternalLink className='ml-auto h-4 w-4 opacity-70' />
+        <ExternalLink className='ml-auto h-4 w-4 shrink-0 opacity-70' />
       )}
     </DropdownMenuItem>
   )
