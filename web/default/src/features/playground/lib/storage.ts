@@ -20,18 +20,34 @@ import { STORAGE_KEYS } from '../constants'
 import type { PlaygroundConfig, ParameterEnabled, Message } from '../types'
 import { sanitizeMessagesOnLoad } from './message-utils'
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 /**
  * Load playground config from localStorage
+ * Falls back to {} when the stored value is from an incompatible (e.g. classic) theme.
  */
 export function loadConfig(): Partial<PlaygroundConfig> {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.CONFIG)
     if (saved) {
-      return JSON.parse(saved)
+      const parsed: unknown = JSON.parse(saved)
+      // Classic theme stores `{ inputs, parameterEnabled, ... }`; treat that as incompatible.
+      if (!isPlainObject(parsed) || 'inputs' in parsed) {
+        localStorage.removeItem(STORAGE_KEYS.CONFIG)
+        return {}
+      }
+      return parsed as Partial<PlaygroundConfig>
     }
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to load config:', error)
+    try {
+      localStorage.removeItem(STORAGE_KEYS.CONFIG)
+    } catch {
+      /* ignore */
+    }
   }
   return {}
 }
@@ -55,11 +71,21 @@ export function loadParameterEnabled(): Partial<ParameterEnabled> {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.PARAMETER_ENABLED)
     if (saved) {
-      return JSON.parse(saved)
+      const parsed: unknown = JSON.parse(saved)
+      if (!isPlainObject(parsed)) {
+        localStorage.removeItem(STORAGE_KEYS.PARAMETER_ENABLED)
+        return {}
+      }
+      return parsed as Partial<ParameterEnabled>
     }
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to load parameter enabled:', error)
+    try {
+      localStorage.removeItem(STORAGE_KEYS.PARAMETER_ENABLED)
+    } catch {
+      /* ignore */
+    }
   }
   return {}
 }
@@ -83,13 +109,30 @@ export function saveParameterEnabled(
 
 /**
  * Load messages from localStorage
+ * Returns null when the stored value is not a valid new-format messages array
+ * (e.g. left over from the classic theme which stores `{ messages, timestamp }`).
  */
 export function loadMessages(): Message[] | null {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.MESSAGES)
     if (saved) {
-      const parsed: Message[] = JSON.parse(saved)
-      const sanitized = sanitizeMessagesOnLoad(parsed)
+      const parsed: unknown = JSON.parse(saved)
+      if (!Array.isArray(parsed)) {
+        localStorage.removeItem(STORAGE_KEYS.MESSAGES)
+        return null
+      }
+      // Reject elements that don't look like the new Message shape (must have `from` + `versions[]`).
+      const looksValid = parsed.every(
+        (m) =>
+          isPlainObject(m) &&
+          typeof (m as { from?: unknown }).from === 'string' &&
+          Array.isArray((m as { versions?: unknown }).versions)
+      )
+      if (!looksValid) {
+        localStorage.removeItem(STORAGE_KEYS.MESSAGES)
+        return null
+      }
+      const sanitized = sanitizeMessagesOnLoad(parsed as Message[])
       // Persist sanitized result to avoid re-sanitizing on subsequent loads
       if (sanitized !== parsed) {
         saveMessages(sanitized)
@@ -99,6 +142,11 @@ export function loadMessages(): Message[] | null {
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to load messages:', error)
+    try {
+      localStorage.removeItem(STORAGE_KEYS.MESSAGES)
+    } catch {
+      /* ignore */
+    }
   }
   return null
 }
