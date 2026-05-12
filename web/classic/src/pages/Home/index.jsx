@@ -18,54 +18,52 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useContext, useEffect, useState } from 'react';
-import { Button, Typography } from '@douyinfe/semi-ui';
+import {
+  Button,
+  Typography,
+  Input,
+  ScrollList,
+  ScrollItem,
+} from '@douyinfe/semi-ui';
 import { API, showError, copy, showSuccess } from '../../helpers';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
+import { API_ENDPOINTS } from '../../constants/common.constant';
 import { StatusContext } from '../../context/Status';
 import { useActualTheme } from '../../context/Theme';
 import { marked } from 'marked';
 import { useTranslation } from 'react-i18next';
-import { IconCopy, IconArrowRight, IconExternalOpen } from '@douyinfe/semi-icons';
+import {
+  IconGithubLogo,
+  IconPlay,
+  IconFile,
+  IconCopy,
+} from '@douyinfe/semi-icons';
 import { Link } from 'react-router-dom';
 import NoticeModal from '../../components/layout/NoticeModal';
+import {
+  Moonshot,
+  OpenAI,
+  XAI,
+  Zhipu,
+  Volcengine,
+  Cohere,
+  Claude,
+  Gemini,
+  Suno,
+  Minimax,
+  Wenxin,
+  Spark,
+  Qingyan,
+  DeepSeek,
+  Qwen,
+  Midjourney,
+  Grok,
+  AzureAI,
+  Hunyuan,
+  Xinference,
+} from '@lobehub/icons';
 
-const { Title, Text, Paragraph } = Typography;
-
-const CodeBlock = ({ children, onCopy }) => (
-  <div className='relative group'>
-    <pre className='bg-[#0d1117] text-[#e6edf3] rounded-lg p-4 pr-12 overflow-x-auto text-sm font-mono leading-relaxed border border-[#30363d]'>
-      <code>{children}</code>
-    </pre>
-    <button
-      onClick={onCopy}
-      className='absolute top-3 right-3 p-1.5 rounded-md bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#30363d] transition-colors opacity-0 group-hover:opacity-100'
-      title='复制'
-    >
-      <IconCopy size='small' />
-    </button>
-  </div>
-);
-
-const StepCard = ({ number, title, description, children }) => (
-  <div className='relative rounded-xl border border-semi-color-border bg-semi-color-bg-1/60 backdrop-blur-xl p-6 md:p-8 transition-all duration-300 hover:border-[#6366f1]/40 hover:shadow-lg hover:shadow-[#6366f1]/5'>
-    <div className='flex items-start gap-4 md:gap-5'>
-      <div className='flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] flex items-center justify-center text-white font-bold text-lg md:text-xl shadow-lg shadow-[#6366f1]/25'>
-        {number}
-      </div>
-      <div className='flex-1 min-w-0'>
-        <h3 className='text-lg md:text-xl font-semibold text-semi-color-text-0 mb-2'>
-          {title}
-        </h3>
-        {description && (
-          <p className='text-semi-color-text-2 text-sm md:text-base mb-4 leading-relaxed'>
-            {description}
-          </p>
-        )}
-        {children}
-      </div>
-    </div>
-  </div>
-);
+const { Text } = Typography;
 
 const Home = () => {
   const { t, i18n } = useTranslation();
@@ -75,8 +73,13 @@ const Home = () => {
   const [homePageContent, setHomePageContent] = useState('');
   const [noticeVisible, setNoticeVisible] = useState(false);
   const isMobile = useIsMobile();
+  const isDemoSiteMode = statusState?.status?.demo_site_enabled || false;
+  const docsLink = statusState?.status?.docs_link || '';
   const serverAddress =
     statusState?.status?.server_address || `${window.location.origin}`;
+  const endpointItems = API_ENDPOINTS.map((e) => ({ value: e }));
+  const [endpointIndex, setEndpointIndex] = useState(0);
+  const isChinese = i18n.language.startsWith('zh');
 
   const displayHomePageContent = async () => {
     setHomePageContent(localStorage.getItem('home_page_content') || '');
@@ -90,6 +93,7 @@ const Home = () => {
       setHomePageContent(content);
       localStorage.setItem('home_page_content', content);
 
+      // 如果内容是 URL，则发送主题模式
       if (data.startsWith('https://')) {
         const iframe = document.querySelector('iframe');
         if (iframe) {
@@ -106,8 +110,8 @@ const Home = () => {
     setHomePageContentLoaded(true);
   };
 
-  const handleCopy = async (text) => {
-    const ok = await copy(text);
+  const handleCopyBaseURL = async () => {
+    const ok = await copy(serverAddress);
     if (ok) {
       showSuccess(t('已复制到剪切板'));
     }
@@ -137,6 +141,13 @@ const Home = () => {
     displayHomePageContent().then();
   }, []);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setEndpointIndex((prev) => (prev + 1) % endpointItems.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [endpointItems.length]);
+
   return (
     <div className='w-full overflow-x-hidden'>
       <NoticeModal
@@ -146,8 +157,9 @@ const Home = () => {
       />
       {homePageContentLoaded && homePageContent === '' ? (
         <div className='w-full overflow-x-hidden'>
-          {/* Hero Section */}
-          <div className='w-full relative overflow-hidden min-h-[420px] md:min-h-[480px]'>
+          {/* Banner 部分 */}
+          <div className='w-full border-b border-semi-color-border min-h-[500px] md:min-h-[600px] lg:min-h-[700px] relative overflow-x-hidden'>
+            {/* 背景模糊晕染球 */}
             <div className='blur-ball blur-ball-indigo' />
             <div className='blur-ball blur-ball-teal' />
             <div className='flex items-center justify-center h-full px-4 py-20 md:py-24 lg:py-32 mt-10'>
@@ -199,189 +211,125 @@ const Home = () => {
                   </div>
                 </div>
 
-              <Link to='/console'>
-                <Button
-                  theme='solid'
-                  type='primary'
-                  size={isMobile ? 'default' : 'large'}
-                  className='!rounded-full !px-8'
-                  iconPosition='right'
-                  icon={<IconArrowRight />}
-                >
-                  前往控制台获取令牌
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Steps Section */}
-          <div className='max-w-3xl mx-auto px-4 pb-20 md:pb-28'>
-            <div className='flex flex-col gap-6 md:gap-8'>
-              {/* Step 1 */}
-              <StepCard
-                number={1}
-                title='安装 Node.js 22'
-                description='AI CLI 工具依赖 Node.js 运行时。前往官网下载并安装 Node.js 22 LTS 版本。'
-              >
-                <a
-                  href='https://nodejs.org/'
-                  target='_blank'
-                  rel='noopener noreferrer'
-                  className='inline-flex items-center gap-1.5 text-[#6366f1] hover:text-[#818cf8] text-sm font-medium transition-colors'
-                >
-                  nodejs.org
-                  <IconExternalOpen size='small' />
-                </a>
-                <div className='mt-4'>
-                  <Text type='tertiary' size='small' className='mb-2 block'>
-                    验证安装：
-                  </Text>
-                  <CodeBlock onCopy={() => handleCopy('node -v')}>
-                    node -v
-                  </CodeBlock>
-                </div>
-              </StepCard>
-
-              {/* Step 2 */}
-              <StepCard
-                number={2}
-                title='安装 AI CLI 工具'
-                description='根据需要安装一个或多个 AI 编程命令行工具。'
-              >
-                <div className='flex flex-col gap-3'>
-                  <div>
-                    <Text type='tertiary' size='small' className='mb-1.5 block'>
-                      Claude Code — Anthropic 官方 CLI
-                    </Text>
-                    <CodeBlock
-                      onCopy={() =>
-                        handleCopy(
-                          'npm i -g @anthropic-ai/claude-code@latest',
+                {/* 操作按钮 */}
+                <div className='flex flex-row gap-4 justify-center items-center'>
+                  <Link to='/console'>
+                    <Button
+                      theme='solid'
+                      type='primary'
+                      size={isMobile ? 'default' : 'large'}
+                      className='!rounded-3xl px-8 py-2'
+                      icon={<IconPlay />}
+                    >
+                      {t('获取密钥')}
+                    </Button>
+                  </Link>
+                  {isDemoSiteMode && statusState?.status?.version ? (
+                    <Button
+                      size={isMobile ? 'default' : 'large'}
+                      className='flex items-center !rounded-3xl px-6 py-2'
+                      icon={<IconGithubLogo />}
+                      onClick={() =>
+                        window.open(
+                          'https://github.com/QuantumNous/new-api',
+                          '_blank',
                         )
                       }
                     >
-                      npm i -g @anthropic-ai/claude-code@latest
-                    </CodeBlock>
-                  </div>
-                  <div>
-                    <Text type='tertiary' size='small' className='mb-1.5 block'>
-                      Codex — OpenAI 官方 CLI
-                    </Text>
-                    <CodeBlock
-                      onCopy={() =>
-                        handleCopy('npm i -g @openai/codex@latest')
-                      }
-                    >
-                      npm i -g @openai/codex@latest
-                    </CodeBlock>
-                  </div>
-                  <div>
-                    <Text type='tertiary' size='small' className='mb-1.5 block'>
-                      Gemini CLI — Google 官方 CLI
-                    </Text>
-                    <CodeBlock
-                      onCopy={() =>
-                        handleCopy('npm i -g @google/gemini-cli@latest')
-                      }
-                    >
-                      npm i -g @google/gemini-cli@latest
-                    </CodeBlock>
-                  </div>
+                      {statusState.status.version}
+                    </Button>
+                  ) : (
+                    docsLink && (
+                      <Button
+                        size={isMobile ? 'default' : 'large'}
+                        className='flex items-center !rounded-3xl px-6 py-2'
+                        icon={<IconFile />}
+                        onClick={() => window.open(docsLink, '_blank')}
+                      >
+                        {t('文档')}
+                      </Button>
+                    )
+                  )}
                 </div>
-              </StepCard>
 
-              {/* Step 3 */}
-              <StepCard
-                number={3}
-                title='安装 cc-switch'
-                description='cc-switch 是一个便捷的配置管理工具，可以帮你快速切换不同 AI CLI 的 API 配置。'
-              >
-                <a
-                  href='https://github.com/farion1231/cc-switch/releases'
-                  target='_blank'
-                  rel='noopener noreferrer'
-                  className='inline-flex items-center gap-1.5 text-[#6366f1] hover:text-[#818cf8] text-sm font-medium transition-colors'
-                >
-                  前往 GitHub Releases 下载
-                  <IconExternalOpen size='small' />
-                </a>
-              </StepCard>
-
-              {/* Step 4 */}
-              <StepCard
-                number={4}
-                title='配置 cc-switch'
-                description='打开 cc-switch，填入以下信息即可完成配置。'
-              >
-                <div className='flex flex-col gap-4'>
-                  <div className='rounded-lg border border-semi-color-border bg-semi-color-fill-0 p-4'>
-                    <div className='flex flex-col gap-3'>
-                      <div>
-                        <Text
-                          type='tertiary'
-                          size='small'
-                          className='block mb-1'
-                        >
-                          Base URL
-                        </Text>
-                        <div className='flex items-center gap-2'>
-                          <code className='flex-1 text-sm font-mono text-semi-color-text-0 bg-[#0d1117] text-[#e6edf3] rounded px-3 py-1.5 border border-[#30363d]'>
-                            {serverAddress}
-                          </code>
-                          <button
-                            onClick={() => handleCopy(serverAddress)}
-                            className='p-1.5 rounded-md text-semi-color-text-2 hover:text-semi-color-text-0 hover:bg-semi-color-fill-1 transition-colors'
-                          >
-                            <IconCopy size='small' />
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <Text
-                          type='tertiary'
-                          size='small'
-                          className='block mb-1'
-                        >
-                          API Key
-                        </Text>
-                        <Text type='secondary' size='small'>
-                          填写在
-                          <Link
-                            to='/console/token'
-                            className='text-[#6366f1] hover:text-[#818cf8] mx-1'
-                          >
-                            控制台 - 令牌管理
-                          </Link>
-                          中生成的令牌
-                        </Text>
-                      </div>
+                {/* 框架兼容性图标 */}
+                <div className='mt-12 md:mt-16 lg:mt-20 w-full'>
+                  <div className='flex items-center mb-6 md:mb-8 justify-center'>
+                    <Text
+                      type='tertiary'
+                      className='text-lg md:text-xl lg:text-2xl font-light'
+                    >
+                      {t('支持众多的大模型供应商')}
+                    </Text>
+                  </div>
+                  <div className='flex flex-wrap items-center justify-center gap-3 sm:gap-4 md:gap-6 lg:gap-8 max-w-5xl mx-auto px-4'>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Moonshot size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <OpenAI size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <XAI size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Zhipu.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Volcengine.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Cohere.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Claude.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Gemini.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Suno size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Minimax.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Wenxin.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Spark.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Qingyan.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <DeepSeek.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Qwen.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Midjourney size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Grok size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <AzureAI.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Hunyuan.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Xinference.Color size={40} />
+                    </div>
+                    <div className='w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center'>
+                      <Typography.Text className='!text-lg sm:!text-xl md:!text-2xl lg:!text-3xl font-bold'>
+                        30+
+                      </Typography.Text>
                     </div>
                   </div>
                 </div>
-              </StepCard>
-            </div>
-
-            {/* Bottom CTA */}
-            <div className='mt-16 md:mt-20 text-center'>
-              <div className='inline-block rounded-2xl border border-semi-color-border bg-semi-color-bg-1/60 backdrop-blur-xl p-8 md:p-10'>
-                <Title heading={4} className='!mb-3'>
-                  准备好了？
-                </Title>
-                <Paragraph type='tertiary' className='!mb-6 max-w-md'>
-                  前往控制台创建令牌，即刻开始使用 AI 编程助手。
-                </Paragraph>
-                <Link to='/console/token'>
-                  <Button
-                    theme='solid'
-                    type='primary'
-                    size={isMobile ? 'default' : 'large'}
-                    className='!rounded-full !px-8'
-                    iconPosition='right'
-                    icon={<IconArrowRight />}
-                  >
-                    获取 API Key
-                  </Button>
-                </Link>
               </div>
             </div>
           </div>
