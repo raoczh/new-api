@@ -150,26 +150,54 @@ const Home = () => {
           <div className='w-full relative overflow-hidden min-h-[420px] md:min-h-[480px]'>
             <div className='blur-ball blur-ball-indigo' />
             <div className='blur-ball blur-ball-teal' />
-
-            <div className='relative z-10 flex flex-col items-center justify-center text-center px-4 pt-24 pb-16 md:pt-32 md:pb-20'>
-              <div className='inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-semi-color-border bg-semi-color-bg-1/60 backdrop-blur-sm mb-6 md:mb-8'>
-                <span className='w-2 h-2 rounded-full bg-green-400 animate-pulse' />
-                <Text type='tertiary' size='small'>
-                  AI Coding CLI 快速配置指南
-                </Text>
-              </div>
-
-              <h1 className='text-3xl md:text-5xl lg:text-6xl font-bold text-semi-color-text-0 leading-tight mb-4 md:mb-6'>
-                几分钟完成
-                <br />
-                <span className='shine-text'>AI 编程工具配置</span>
-              </h1>
-
-              <p className='text-semi-color-text-2 text-base md:text-lg max-w-2xl leading-relaxed mb-8'>
-                配置 Claude Code、OpenAI Codex、Gemini CLI 连接到本站 API，
-                <br className='hidden md:block' />
-                通过 cc-switch 轻松管理和切换多个 AI 编程助手。
-              </p>
+            <div className='flex items-center justify-center h-full px-4 py-20 md:py-24 lg:py-32 mt-10'>
+              {/* 居中内容区 */}
+              <div className='flex flex-col items-center justify-center text-center max-w-4xl mx-auto'>
+                <div className='flex flex-col items-center justify-center mb-6 md:mb-8'>
+                  <h1
+                    className={`text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-semi-color-text-0 leading-tight ${isChinese ? 'tracking-wide md:tracking-wider' : ''}`}
+                  >
+                    <>
+                      {t('统一的')}
+                      <br />
+                      <span className='shine-text'>{t('大模型接口网关')}</span>
+                    </>
+                  </h1>
+                  <p className='text-base md:text-lg lg:text-xl text-semi-color-text-1 mt-4 md:mt-6 max-w-xl'>
+                    {t('多模型统一接入，只需将基址替换为：')}
+                  </p>
+                  {/* BASE URL 与端点选择 */}
+                  <div className='flex flex-col md:flex-row items-center justify-center gap-4 w-full mt-4 md:mt-6 max-w-md'>
+                    <Input
+                      readonly
+                      value={serverAddress}
+                      className='flex-1 !rounded-full'
+                      size={isMobile ? 'default' : 'large'}
+                      suffix={
+                        <div className='flex items-center gap-2'>
+                          <ScrollList
+                            bodyHeight={32}
+                            style={{ border: 'unset', boxShadow: 'unset' }}
+                          >
+                            <ScrollItem
+                              mode='wheel'
+                              cycled={true}
+                              list={endpointItems}
+                              selectedIndex={endpointIndex}
+                              onSelect={({ index }) => setEndpointIndex(index)}
+                            />
+                          </ScrollList>
+                          <Button
+                            type='primary'
+                            onClick={handleCopyBaseURL}
+                            icon={<IconCopy />}
+                            className='!rounded-full'
+                          />
+                        </div>
+                      }
+                    />
+                  </div>
+                </div>
 
               <Link to='/console'>
                 <Button
