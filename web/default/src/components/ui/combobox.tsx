@@ -49,83 +49,6 @@ type LegacyComboboxProps = {
   id?: string
 }
 
-function LegacyCombobox({
-  options,
-  value,
-  onValueChange,
-  placeholder,
-  searchPlaceholder,
-  emptyText,
-  allowCustomValue = false,
-  className,
-  id,
-}: LegacyComboboxProps) {
-  const selectedValue = value ?? ''
-
-  const selectedOption = React.useMemo(
-    () => options.find((option) => option.value === selectedValue),
-    [options, selectedValue]
-  )
-
-  // What to show in the input when the user is not actively editing:
-  // the selected option's label, or fall back to the raw value when custom
-  // values are allowed (so user-typed/non-listed values stay visible).
-  const displayLabel =
-    selectedOption?.label ?? (allowCustomValue ? selectedValue : '')
-
-  const [inputText, setInputText] = React.useState(displayLabel)
-
-  // Sync the visible text whenever the selected option's label changes
-  // externally (form reset, programmatic update, etc.).
-  React.useEffect(() => {
-    setInputText(displayLabel)
-  }, [displayLabel])
-
-  const handleInputChange = React.useCallback(
-    (next: string) => {
-      // Selecting from the dropdown calls onValueChange with the option's
-      // `value`. Detect that and swap the input back to the option's label
-      // so the user sees a human-readable name, not a raw ID.
-      const matchByValue = options.find((option) => option.value === next)
-      if (matchByValue) {
-        setInputText(matchByValue.label)
-        onValueChange?.(matchByValue.value)
-        return
-      }
-
-      // Otherwise the user is typing — keep the raw text in the input so
-      // the dropdown can filter against it.
-      setInputText(next)
-
-      const matchByLabel = options.find(
-        (option) => option.label.toLowerCase() === next.toLowerCase()
-      )
-      if (matchByLabel) {
-        onValueChange?.(matchByLabel.value)
-        return
-      }
-
-      if (allowCustomValue) {
-        onValueChange?.(next)
-      }
-      // else: just filtering the dropdown; leave the parent value alone.
-    },
-    [allowCustomValue, onValueChange, options]
-  )
-
-  return (
-    <LegacyComboboxInput
-      id={id}
-      options={options}
-      value={inputText}
-      onValueChange={handleInputChange}
-      placeholder={searchPlaceholder ?? placeholder}
-      emptyText={emptyText}
-      className={className}
-    />
-  )
-}
-
 function Combobox(props: LegacyComboboxProps): React.ReactElement
 function Combobox<Value, Multiple extends boolean | undefined = false>(
   props: ComboboxPrimitive.Root.Props<Value, Multiple>
@@ -136,7 +59,18 @@ function Combobox(
     | LegacyComboboxProps
 ) {
   if ('options' in props) {
-    return <LegacyCombobox {...props} />
+    return (
+      <LegacyComboboxInput
+        id={props.id}
+        options={props.options}
+        value={props.value ?? ''}
+        onValueChange={(value) => props.onValueChange?.(value)}
+        placeholder={props.searchPlaceholder ?? props.placeholder}
+        emptyText={props.emptyText}
+        className={props.className}
+        allowCustomValue={props.allowCustomValue}
+      />
+    )
   }
 
   return <ComboboxPrimitive.Root {...props} />
