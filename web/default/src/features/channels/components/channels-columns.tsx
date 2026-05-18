@@ -573,11 +573,11 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
           <div className='flex items-center gap-2'>
             <div className='flex flex-col gap-1'>
               <div className='flex items-center gap-1.5'>
-                <TruncatedText
+                {/* <TruncatedText
                   text={name}
                   className='font-medium'
                   maxWidth='max-w-[180px]'
-                />
+                /> */}
                 {nameNode}
                 {isPassThrough && (
                   <TooltipProvider delay={100}>
