@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useState, type ReactNode } from 'react'
-import { useForm, type FieldErrors } from 'react-hook-form'
+import { useForm, type SubmitErrorHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -65,7 +65,7 @@ import { MultiSelect } from '@/components/multi-select'
 import { createApiKey, updateApiKey, getApiKey } from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
-  apiKeyFormSchema,
+  getApiKeyFormSchema,
   type ApiKeyFormValues,
   getApiKeyFormDefaultValues,
   transformFormDataToPayload,
@@ -152,9 +152,10 @@ export function ApiKeysMutateDrawer({
     })
   )
   const backendHasAuto = groups.some((g) => g.value === 'auto')
+  const schema = getApiKeyFormSchema(t)
 
   const form = useForm<ApiKeyFormValues>({
-    resolver: zodResolver(apiKeyFormSchema),
+    resolver: zodResolver(schema),
     defaultValues: getApiKeyFormDefaultValues(defaultUseAutoGroup),
   })
 
@@ -239,28 +240,9 @@ export function ApiKeysMutateDrawer({
     }
   }
 
-  const onInvalidSubmit = (errors: FieldErrors<ApiKeyFormValues>) => {
-    if (errors.model_limits || errors.allow_ips) {
-      setAdvancedOpen(true)
-    }
-
-    if (errors.name) {
-      toast.error(t('Please enter a name'))
-      return
-    }
-
-    const firstMessage = Object.values(errors).find(
-      (error) => typeof error?.message === 'string'
-    )?.message
-
-    toast.error(
-      typeof firstMessage === 'string'
-        ? firstMessage
-        : t(ERROR_MESSAGES.UNEXPECTED)
-    )
+  const onInvalid: SubmitErrorHandler<ApiKeyFormValues> = () => {
+    toast.error(t('Please fix the highlighted fields before saving'))
   }
-
-  const submitForm = form.handleSubmit(onSubmit, onInvalidSubmit)
 
   const handleSetExpiry = (months: number, days: number, hours: number) => {
     if (months === 0 && days === 0 && hours === 0) {
@@ -314,7 +296,7 @@ export function ApiKeysMutateDrawer({
         <Form {...form}>
           <form
             id='api-key-form'
-            onSubmit={submitForm}
+            onSubmit={form.handleSubmit(onSubmit, onInvalid)}
             className='min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 sm:space-y-4 sm:px-4 sm:py-4'
           >
             <ApiKeyFormSection
@@ -628,9 +610,9 @@ export function ApiKeysMutateDrawer({
             {t('Close')}
           </SheetClose>
           <Button
-            type='button'
+            form='api-key-form'
+            type='submit'
             disabled={isSubmitting}
-            onClick={() => void submitForm()}
             className='w-full sm:w-auto'
           >
             {isSubmitting ? t('Saving...') : t('Save changes')}
