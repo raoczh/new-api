@@ -40,7 +40,9 @@
       "Bash(./node_modules/.bin/tsc --noEmit)",
       "Bash(git --no-pager diff --stat -- .dockerignore web/default/)",
       "Bash(node -e 'JSON.parse\\(require\\('\\\\''fs'\\\\''\\).readFileSync\\('\\\\''web/default/src/i18n/locales/__TRACKED_VAR__.json'\\\\'','\\\\''utf8'\\\\''\\)\\); console.log\\('\\\\''__TRACKED_VAR__.json OK'\\\\''\\)')",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Bash(git *)",
+      "Bash(python *)"
     ]
   }
 }
