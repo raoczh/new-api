@@ -23,6 +23,7 @@ import { formatQuota } from '@/lib/format'
 import { DataTableColumnHeader } from '@/components/data-table'
 import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge } from '@/components/status-badge'
+import { TableId } from '@/components/table-id'
 import { formatDuration, formatResetPeriod } from '../lib'
 import type { PlanRecord } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
@@ -35,13 +36,11 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
       {
         accessorFn: (row) => row.plan.id,
         id: 'id',
-        meta: { label: 'ID', mobileHidden: true },
+        meta: { label: t('ID'), mobileHidden: true },
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title='ID' />
+          <DataTableColumnHeader column={column} title={t('ID')} />
         ),
-        cell: ({ row }) => (
-          <span className='text-muted-foreground'>#{row.original.plan.id}</span>
-        ),
+        cell: ({ row }) => <TableId value={row.original.plan.id} />,
         size: 60,
       },
       {
@@ -104,7 +103,7 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
             {formatResetPeriod(row.original.plan, t)}
           </span>
         ),
-        size: 80,
+        size: 100,
       },
       {
         accessorFn: (row) => row.plan.sort_order,
@@ -118,7 +117,7 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
             {row.original.plan.sort_order}
           </span>
         ),
-        size: 80,
+        size: 100,
       },
       {
         accessorFn: (row) => row.plan.enabled,
@@ -163,6 +162,13 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
               {plan.creem_product_id && (
                 <StatusBadge label='Creem' variant='neutral' copyable={false} />
               )}
+              {plan.waffo_pancake_product_id && (
+                <StatusBadge
+                  label='Waffo Pancake'
+                  variant='neutral'
+                  copyable={false}
+                />
+              )}
             </div>
           )
         },
@@ -170,9 +176,9 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
       },
       {
         id: 'total_amount',
-        meta: { label: t('Credited Amount'), mobileHidden: true },
+        meta: { label: t('Received amount'), mobileHidden: true },
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title={t('Credited Amount')} />
+          <DataTableColumnHeader column={column} title={t('Received amount')} />
         ),
         cell: ({ row }) => {
           const total = Number(row.original.plan.total_amount || 0)
@@ -182,7 +188,7 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
             </span>
           )
         },
-        size: 100,
+        size: 150,
       },
       {
         id: 'upgrade_group',
@@ -199,7 +205,7 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
           }
           return <GroupBadge group={group} />
         },
-        size: 100,
+        size: 120,
       },
       {
         id: 'actions',

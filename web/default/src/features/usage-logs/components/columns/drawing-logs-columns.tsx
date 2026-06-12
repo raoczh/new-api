@@ -95,8 +95,8 @@ export function useDrawingLogsColumns(
         const submitTime = row.getValue('submit_time') as number
 
         return (
-          <div className='flex flex-col gap-0.5'>
-            <span className='font-mono text-xs tabular-nums'>
+          <div className='flex min-w-0 flex-col gap-0.5'>
+            <span className='truncate font-mono text-xs tabular-nums'>
               {formatTimestampToDate(submitTime)}
             </span>
             <StatusBadge
@@ -108,6 +108,7 @@ export function useDrawingLogsColumns(
           </div>
         )
       },
+      size: 180,
       meta: { label: t('Submit Time') },
     },
   ]
@@ -132,7 +133,6 @@ export function useDrawingLogsColumns(
           icon={getDrawingTypeIcon(action)}
           size='sm'
           copyable={false}
-          showDot={false}
         />
       )
     },
@@ -157,7 +157,6 @@ export function useDrawingLogsColumns(
             label={mjId}
             autoColor={mjId}
             size='sm'
-            showDot={false}
             className='border-border/60 bg-muted/30 max-w-full truncate rounded-md border px-1.5 py-0.5 font-mono'
           />
         </div>
@@ -189,7 +188,6 @@ export function useDrawingLogsColumns(
             variant={mjSubmitResultMapper.getVariant(String(code))}
             size='sm'
             copyable={false}
-            showDot
           />
         )
       },
@@ -234,7 +232,7 @@ export function useDrawingLogsColumns(
           </>
         )
       },
-      meta: { label: t('Image'), mobileHidden: true },
+      meta: { label: t('Image') },
     },
     {
       accessorKey: 'prompt',
@@ -271,7 +269,7 @@ export function useDrawingLogsColumns(
           </>
         )
       },
-      meta: { label: t('Prompt'), mobileHidden: true },
+      meta: { label: t('Prompt') },
       size: 200,
       maxSize: 220,
     },

@@ -118,7 +118,6 @@ export function loadMessages(): Message[] | null {
     if (saved) {
       const parsed: unknown = JSON.parse(saved)
       if (!Array.isArray(parsed)) {
-        localStorage.removeItem(STORAGE_KEYS.MESSAGES)
         return null
       }
       // Reject elements that don't look like the new Message shape (must have `from` + `versions[]`).
