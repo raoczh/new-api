@@ -105,17 +105,13 @@ func getChannelQuery(group string, model string, retry int) (*gorm.DB, error) {
 	return channelQuery, nil
 }
 
-func GetChannel(group string, model string, retry int, requestPath string, excludeIds ...int) (*Channel, error) {
+func GetChannel(group string, model string, retry int, requestPath string) (*Channel, error) {
 	var abilities []Ability
 
 	var err error = nil
 	channelQuery, err := getChannelQuery(group, model, retry)
 	if err != nil {
 		return nil, err
-	}
-	// Exclude cooldown channels from query
-	if len(excludeIds) > 0 {
-		channelQuery = channelQuery.Where("channel_id NOT IN ?", excludeIds)
 	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) || common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
 		err = channelQuery.Order("weight DESC").Find(&abilities).Error

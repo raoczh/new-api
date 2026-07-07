@@ -269,15 +269,12 @@ function renderBillingTag(record, t) {
   return null;
 }
 
-function renderModelName(record, copyText, t, isAdminUser) {
+function renderModelName(record, copyText, t) {
   let other = getLogOther(record.other);
   let modelMapped =
     other?.is_model_mapped &&
     other?.upstream_model_name &&
     other?.upstream_model_name !== '';
-  if (!isAdminUser) {
-    modelMapped = false;
-  }
   if (!modelMapped) {
     return renderModelTag(record.model_name, {
       onClick: (event) => {
@@ -483,7 +480,6 @@ export const getLogsColumns = ({
   copyText,
   showUserInfoFunc,
   openChannelAffinityUsageCacheModal,
-  channelApiUrlMap,
   isAdminUser,
   billingDisplayMode = 'price',
 }) => {
@@ -498,11 +494,6 @@ export const getLogsColumns = ({
       title: t('渠道'),
       dataIndex: 'channel',
       render: (text, record, index) => {
-        const channelId = Number(text);
-        const channelApiUrl =
-          Number.isInteger(channelId) && channelId > 0
-            ? channelApiUrlMap?.[channelId] || ''
-            : '';
         let isMultiKey = false;
         let multiKeyIndex = -1;
         let content = t('渠道') + `：${record.channel}`;
@@ -535,32 +526,14 @@ export const getLogsColumns = ({
           <Space>
             <span style={{ position: 'relative', display: 'inline-block' }}>
               <Tooltip content={record.channel_name || t('未知渠道')}>
-                {channelApiUrl ? (
-                  <a
-                    href={channelApiUrl}
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    onClick={(e) => {
-                      e.stopPropagation();
-                    }}
+                <span>
+                  <Tag
+                    color={colors[parseInt(text) % colors.length]}
+                    shape='circle'
                   >
-                    <Tag
-                      color={colors[parseInt(text) % colors.length]}
-                      shape='circle'
-                    >
-                      {text}
-                    </Tag>
-                  </a>
-                ) : (
-                  <span>
-                    <Tag
-                      color={colors[parseInt(text) % colors.length]}
-                      shape='circle'
-                    >
-                      {text}
-                    </Tag>
-                  </span>
-                )}
+                    {text}
+                  </Tag>
+                </span>
               </Tooltip>
               {showMarker && (
                 <Tooltip
@@ -715,7 +688,7 @@ export const getLogsColumns = ({
           record.type === 2 ||
           record.type === 5 ||
           record.type === 6 ? (
-          <>{renderModelName(record, copyText, t, isAdminUser)}</>
+          <>{renderModelName(record, copyText, t)}</>
         ) : (
           <></>
         );

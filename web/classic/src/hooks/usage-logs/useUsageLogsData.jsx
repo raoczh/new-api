@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@douyinfe/semi-ui';
 import {
@@ -108,31 +108,6 @@ export const useLogsData = () => {
     logType: '0',
   };
 
-  // Load saved column preferences from localStorage
-  useEffect(() => {
-    const savedColumns = localStorage.getItem(STORAGE_KEY);
-    if (savedColumns) {
-      try {
-        const parsed = JSON.parse(savedColumns);
-        const defaults = getDefaultColumnVisibility();
-        const merged = { ...defaults, ...parsed };
-
-        // For non-admin users, force-hide admin-only columns (does not touch admin settings)
-        if (!isAdminUser) {
-          merged[COLUMN_KEYS.CHANNEL] = false;
-          merged[COLUMN_KEYS.USERNAME] = false;
-          merged[COLUMN_KEYS.RETRY] = false;
-        }
-        setVisibleColumns(merged);
-      } catch (e) {
-        console.error('Failed to parse saved column preferences', e);
-        initDefaultColumns();
-      }
-    } else {
-      initDefaultColumns();
-    }
-  }, []);
-
   // Get default column visibility based on user role
   const getDefaultColumnVisibility = () => {
     return {
@@ -189,9 +164,7 @@ export const useLogsData = () => {
   };
 
   // Column visibility state
-  const [visibleColumns, setVisibleColumns] = useState(
-    getInitialVisibleColumns,
-  );
+  const [visibleColumns, setVisibleColumns] = useState(getInitialVisibleColumns);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [billingDisplayMode, setBillingDisplayMode] = useState(
     getInitialBillingDisplayMode,
@@ -213,34 +186,6 @@ export const useLogsData = () => {
     useState(null);
   const [showParamOverrideModal, setShowParamOverrideModal] = useState(false);
   const [paramOverrideTarget, setParamOverrideTarget] = useState(null);
-
-  const [channelApiUrlMap, setChannelApiUrlMap] = useState({});
-  const channelApiUrlLoadingRef = useRef(new Set());
-
-  // Load saved column preferences from localStorage
-  useEffect(() => {
-    const savedColumns = localStorage.getItem(STORAGE_KEY);
-    if (savedColumns) {
-      try {
-        const parsed = JSON.parse(savedColumns);
-        const defaults = getDefaultColumnVisibility();
-        const merged = { ...defaults, ...parsed };
-
-        // For non-admin users, force-hide admin-only columns (does not touch admin settings)
-        if (!isAdminUser) {
-          merged[COLUMN_KEYS.CHANNEL] = false;
-          merged[COLUMN_KEYS.USERNAME] = false;
-          merged[COLUMN_KEYS.RETRY] = false;
-        }
-        setVisibleColumns(merged);
-      } catch (e) {
-        console.error('Failed to parse saved column preferences', e);
-        initDefaultColumns();
-      }
-    } else {
-      initDefaultColumns();
-    }
-  }, []);
 
   // Initialize default column visibility
   const initDefaultColumns = () => {
@@ -405,65 +350,6 @@ export const useLogsData = () => {
     setShowChannelAffinityUsageCacheModal(true);
   };
 
-  const loadChannelApiUrls = async (logs) => {
-    if (!isAdminUser || !Array.isArray(logs) || logs.length === 0) {
-      return;
-    }
-
-    const channelIds = [
-      ...new Set(
-        logs
-          .map((item) => Number(item.channel))
-          .filter((id) => Number.isInteger(id) && id > 0),
-      ),
-    ];
-
-    const missingIds = channelIds.filter((id) => {
-      if (channelApiUrlMap[id] !== undefined) {
-        return false;
-      }
-      if (channelApiUrlLoadingRef.current.has(id)) {
-        return false;
-      }
-      return true;
-    });
-
-    if (missingIds.length === 0) {
-      return;
-    }
-
-    missingIds.forEach((id) => channelApiUrlLoadingRef.current.add(id));
-
-    try {
-      const results = await Promise.all(
-        missingIds.map(async (id) => {
-          try {
-            const res = await API.get(`/api/channel/${id}`);
-            const { success, data } = res?.data || {};
-            if (success) {
-              const baseUrl =
-                typeof data?.base_url === 'string' ? data.base_url.trim() : '';
-              return [id, baseUrl];
-            }
-          } catch {
-            // ignore
-          }
-          return [id, ''];
-        }),
-      );
-
-      setChannelApiUrlMap((prev) => {
-        const next = { ...prev };
-        results.forEach(([id, baseUrl]) => {
-          next[id] = baseUrl;
-        });
-        return next;
-      });
-    } finally {
-      missingIds.forEach((id) => channelApiUrlLoadingRef.current.delete(id));
-    }
-  };
-
   const openParamOverrideModal = (log, other) => {
     const lines = Array.isArray(other?.po) ? other.po.filter(Boolean) : [];
     if (lines.length === 0) {
@@ -497,10 +383,7 @@ export const useLogsData = () => {
       let other = getLogOther(logs[i].other);
       let expandDataLocal = [];
 
-      if (
-        isAdminUser &&
-        (logs[i].type === 0 || logs[i].type === 2 || logs[i].type === 6)
-      ) {
+      if (isAdminUser && (logs[i].type === 0 || logs[i].type === 2 || logs[i].type === 6)) {
         expandDataLocal.push({
           key: t('渠道信息'),
           value: `${logs[i].channel} - ${logs[i].channel_name || '[未知]'}`,
@@ -569,7 +452,7 @@ export const useLogsData = () => {
           other?.is_model_mapped &&
           other?.upstream_model_name &&
           other?.upstream_model_name !== '';
-        if (isAdminUser && modelMapped) {
+        if (modelMapped) {
           expandDataLocal.push({
             key: t('请求并计费模型'),
             value: logs[i].model_name,
@@ -637,14 +520,7 @@ export const useLogsData = () => {
           expandDataLocal.push({
             key: t('失败原因'),
             value: (
-              <div
-                style={{
-                  maxWidth: 600,
-                  whiteSpace: 'normal',
-                  wordBreak: 'break-word',
-                  lineHeight: 1.6,
-                }}
-              >
+              <div style={{ maxWidth: 600, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.6 }}>
                 {other.reason}
               </div>
             ),
@@ -810,7 +686,7 @@ export const useLogsData = () => {
             value: (
               <span style={{ color: 'var(--semi-color-warning)' }}>
                 {t(
-                  '该记录由旧版本实例写入，缺少审计信息，建议将实例升级至最新版本以便记录服务器IP、回调IP、支付方式与系统版本等审计字段。',
+                  '该条历史记录缺少审计字段。当前版本已支持记录服务器 IP、回调 IP、支付方式与系统版本等审计信息；这些字段仅会写入后续新产生的记录，历史记录无法自动补齐。',
                 )}
               </span>
             ),
@@ -890,7 +766,6 @@ export const useLogsData = () => {
       setLogCount(data.total);
 
       setLogsFormat(newPageData);
-      loadChannelApiUrls(newPageData).then();
     } else {
       showError(message);
     }
@@ -1006,7 +881,6 @@ export const useLogsData = () => {
     showParamOverrideModal,
     setShowParamOverrideModal,
     paramOverrideTarget,
-    channelApiUrlMap,
 
     // Functions
     loadLogs,

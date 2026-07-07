@@ -1,13 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query'
-import type { ColumnDef } from '@tanstack/react-table'
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
-  ListOrdered,
-  Shuffle,
-  SlidersHorizontal,
-} from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -27,7 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 /* eslint-disable react-refresh/only-export-components */
-import { useState, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import type { ColumnDef } from '@tanstack/react-table'
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  ListOrdered,
+  Shuffle,
+  SlidersHorizontal,
+} from 'lucide-react'
+import { useState, useMemo, useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -51,16 +51,13 @@ import {
   formatQuotaWithCurrency,
   getCurrencyLabel,
 } from '@/lib/currency'
-import {
-  formatTimestampToDate,
-  formatQuota as formatQuotaValue,
-} from '@/lib/format'
+import { toIntlLocale } from '@/i18n/languages'
+import { formatTimestampToDate } from '@/lib/format'
 import { truncateText } from '@/lib/utils'
 
 import { getCodexUsage } from '../api'
 import { CHANNEL_STATUS_CONFIG, MODEL_FETCHABLE_TYPES } from '../constants'
 import {
-  formatBalance,
   formatRelativeTime,
   formatResponseTime,
   getBalanceVariant,
@@ -79,6 +76,7 @@ import {
 } from '../lib'
 import { parseUpstreamUpdateMeta } from '../lib/upstream-update-utils'
 import type { Channel } from '../types'
+import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
 import { useChannels } from './channels-provider'
 import { DataTableRowActions } from './data-table-row-actions'
 import { DataTableTagRowActions } from './data-table-tag-row-actions'
@@ -200,8 +198,11 @@ function PriorityCell({ channel }: { channel: Channel }) {
           open={confirmOpen}
           onOpenChange={setConfirmOpen}
           title={t('Confirm Batch Update')}
-          desc={`This will update the priority to ${pendingValue} for all ${channelCount} channel(s) with tag "${tag}". Continue?`}
-          confirmText='Update'
+          desc={t(
+            'This will update the priority to {{value}} for all {{count}} channel(s) with tag "{{tag}}". Continue?',
+            { value: pendingValue, count: channelCount, tag }
+          )}
+          confirmText={t('Update')}
           handleConfirm={() => {
             if (pendingValue !== null) {
               handleUpdateTagField(tag, 'priority', pendingValue, queryClient)
@@ -255,8 +256,11 @@ function WeightCell({ channel }: { channel: Channel }) {
           open={confirmOpen}
           onOpenChange={setConfirmOpen}
           title={t('Confirm Batch Update')}
-          desc={`This will update the weight to ${pendingValue} for all ${channelCount} channel(s) with tag "${tag}". Continue?`}
-          confirmText='Update'
+          desc={t(
+            'This will update the weight to {{value}} for all {{count}} channel(s) with tag "{{tag}}". Continue?',
+            { value: pendingValue, count: channelCount, tag }
+          )}
+          confirmText={t('Update')}
           handleConfirm={() => {
             if (pendingValue !== null) {
               handleUpdateTagField(tag, 'weight', pendingValue, queryClient)
@@ -293,6 +297,7 @@ const SENSITIVE_MASK = '••••'
 function BalanceCell({ channel }: { channel: Channel }) {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
+  const layout = useContext(ChannelRowActionsLayoutContext)
   const { sensitiveVisible } = useChannels()
   const isTagRow = isTagAggregateRow(channel)
   const balance = channel.balance || 0
@@ -306,19 +311,44 @@ function BalanceCell({ channel }: { channel: Channel }) {
   const withSuffix = (value: string) =>
     tokenSuffix && value !== '-' ? `${value}${tokenSuffix}` : value
 
-  const locale = i18n.resolvedLanguage || i18n.language
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const balanceFormatOptions = {
+    digitsLarge: 2,
+    digitsSmall: 4,
+    abbreviate: false,
+    showSymbol: layout !== 'card',
+  } as const
   // Precise values are kept for the tooltip; long values are shown compactly inline.
-  const usedFull = withSuffix(formatQuotaValue(usedQuota))
-  const remainingFull = withSuffix(formatBalance(balance))
+  const usedFull = withSuffix(
+    formatQuotaWithCurrency(usedQuota, {
+      digitsLarge: 2,
+      digitsSmall: 4,
+      abbreviate: true,
+      showSymbol: layout !== 'card',
+    })
+  )
+  const remainingFull = withSuffix(
+    formatCurrencyFromUSD(balance, balanceFormatOptions)
+  )
   const usedDisplay =
     usedFull.length > MAX_INLINE_BALANCE_CHARS
       ? withSuffix(
-          formatQuotaWithCurrency(usedQuota, { compact: true, locale })
+          formatQuotaWithCurrency(usedQuota, {
+            compact: true,
+            locale,
+            showSymbol: layout !== 'card',
+          })
         )
       : usedFull
   const remainingDisplay =
     remainingFull.length > MAX_INLINE_BALANCE_CHARS
-      ? withSuffix(formatCurrencyFromUSD(balance, { compact: true, locale }))
+      ? withSuffix(
+          formatCurrencyFromUSD(balance, {
+            compact: true,
+            locale,
+            showSymbol: layout !== 'card',
+          })
+        )
       : remainingFull
   const usedLabel = `${t('Used:')} ${usedFull}`
   const remainingLabel = `${t('Remaining:')} ${remainingFull}`
@@ -482,10 +512,15 @@ function BalanceCell({ channel }: { channel: Channel }) {
 /**
  * Generate channels columns configuration
  */
-export function useChannelsColumns(): ColumnDef<Channel>[] {
+export function useChannelsColumns(
+  options: {
+    enableSelection?: boolean
+  } = {}
+): ColumnDef<Channel>[] {
   const { t, i18n } = useTranslation()
   const { sensitiveVisible } = useChannels()
-  const locale = i18n.resolvedLanguage || i18n.language
+  const enableSelection = options.enableSelection ?? true
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   // The column definitions only depend on the translation function, the active
   // locale, and sensitive-data visibility. Memoizing keeps the array (and every
   // cell renderer reference) stable across unrelated re-renders, so react-table
@@ -493,38 +528,42 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
   return useMemo<ColumnDef<Channel>[]>(
     () => [
       // Checkbox column
-      {
-        id: 'select',
-        header: ({ table }) => (
-          <Checkbox
-            checked={table.getIsAllPageRowsSelected()}
-            indeterminate={table.getIsSomePageRowsSelected()}
-            onCheckedChange={(value) =>
-              table.toggleAllPageRowsSelected(!!value)
-            }
-            aria-label='Select all'
-          />
-        ),
-        cell: ({ row }) => {
-          const isTagRow = isTagAggregateRow(row.original)
+      ...(enableSelection
+        ? [
+            {
+              id: 'select',
+              header: ({ table }) => (
+                <Checkbox
+                  checked={table.getIsAllPageRowsSelected()}
+                  indeterminate={table.getIsSomePageRowsSelected()}
+                  onCheckedChange={(value) =>
+                    table.toggleAllPageRowsSelected(!!value)
+                  }
+                  aria-label={t('Select all')}
+                />
+              ),
+              cell: ({ row }) => {
+                const isTagRow = isTagAggregateRow(row.original)
 
-          // Don't show checkbox for tag rows
-          if (isTagRow) {
-            return null
-          }
+                // Don't show checkbox for tag rows
+                if (isTagRow) {
+                  return null
+                }
 
-          return (
-            <Checkbox
-              checked={row.getIsSelected()}
-              onCheckedChange={(value) => row.toggleSelected(!!value)}
-              aria-label='Select row'
-            />
-          )
-        },
-        enableSorting: false,
-        enableHiding: false,
-        size: 40,
-      },
+                return (
+                  <Checkbox
+                    checked={row.getIsSelected()}
+                    onCheckedChange={(value) => row.toggleSelected(!!value)}
+                    aria-label={t('Select row')}
+                  />
+                )
+              },
+              enableSorting: false,
+              enableHiding: false,
+              size: 40,
+            } satisfies ColumnDef<Channel>,
+          ]
+        : []),
 
       // ID column
       {
@@ -537,7 +576,6 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
         },
         size: 80,
       },
-
       // Name column
       {
         accessorKey: 'name',
@@ -580,91 +618,74 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
             )
           }
 
-        // Regular channel row
-        const settings = parseChannelSettings(channel.setting)
-        const isPassThrough = settings.pass_through_body_enabled === true
-        const hasParamOverride = Boolean(channel.param_override?.trim())
-        const baseUrl =
-          typeof channel.base_url === 'string' ? channel.base_url.trim() : ''
-        const displayName = truncateText(name, 30)
-        const nameNode = baseUrl ? (
-          <a
-            href={baseUrl}
-            target='_blank'
-            rel='noopener noreferrer'
-            className='font-medium hover:underline'
-            onClick={(e) => e.stopPropagation()}
-          >
-            {displayName}
-          </a>
-        ) : (
-          <span className='font-medium'>{displayName}</span>
-        )
+          // Regular channel row
+          const settings = parseChannelSettings(channel.setting)
+          const isPassThrough = settings.pass_through_body_enabled === true
+          const hasParamOverride = Boolean(channel.param_override?.trim())
 
-        return (
-          <div className='flex items-center gap-2'>
-            <div className='flex flex-col gap-1'>
-              <div className='flex items-center gap-1.5'>
-                {/* <TruncatedText
-                  text={name}
-                  className='font-medium'
-                  maxWidth='max-w-[180px]'
-                /> */}
-                {nameNode}
-                {isPassThrough && (
-                  <TooltipProvider delay={100}>
+          return (
+            <div className='flex items-center gap-2'>
+              <div className='flex flex-col gap-1'>
+                <div className='flex items-center gap-1.5'>
+                  <TruncatedText
+                    text={sensitiveVisible ? name : SENSITIVE_MASK}
+                    className='font-medium'
+                    maxWidth='max-w-[180px]'
+                  />
+                  {isPassThrough && (
+                    <TooltipProvider delay={100}>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <AlertTriangle className='h-3.5 w-3.5 flex-shrink-0 text-amber-500' />
+                          }
+                        />
+                        <TooltipContent side='top'>
+                          {t(
+                            'Request body pass-through is enabled. The request body will be sent directly to the upstream without any conversion.'
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                  {hasParamOverride && (
+                    <TooltipProvider delay={100}>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <SlidersHorizontal className='text-info h-3.5 w-3.5 flex-shrink-0' />
+                          }
+                        />
+                        <TooltipContent side='top'>
+                          {t('Override request parameters')}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                  <UpstreamUpdateTags channel={channel} />
+                </div>
+                {channel.remark && (
+                  <TooltipProvider delay={200}>
                     <Tooltip>
                       <TooltipTrigger
                         render={
-                          <AlertTriangle className='h-3.5 w-3.5 flex-shrink-0 text-amber-500' />
+                          <span className='text-muted-foreground text-xs' />
                         }
-                      ></TooltipTrigger>
-                      <TooltipContent side='top'>
-                        {t(
-                          'Request body pass-through is enabled. The request body will be sent directly to the upstream without any conversion.'
-                        )}
+                      >
+                        {truncateText(channel.remark, 40)}
+                      </TooltipTrigger>
+                      <TooltipContent side='bottom' className='max-w-xs'>
+                        {channel.remark}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 )}
-                {hasParamOverride && (
-                  <TooltipProvider delay={100}>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <SlidersHorizontal className='text-info h-3.5 w-3.5 flex-shrink-0' />
-                        }
-                      ></TooltipTrigger>
-                      <TooltipContent side='top'>
-                        {t('Override request parameters')}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-                <UpstreamUpdateTags channel={channel} />
               </div>
-              {channel.remark && (
-                <TooltipProvider delay={200}>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span className='text-muted-foreground text-xs' />
-                      }
-                    >
-                      {truncateText(channel.remark, 40)}
-                    </TooltipTrigger>
-                    <TooltipContent side='bottom' className='max-w-xs'>
-                      {channel.remark}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
             </div>
-          </div>
-        )
+          )
+        },
+        minSize: 200,
       },
-      minSize: 200,
-    },
 
       // Type column
       {
@@ -1125,12 +1146,11 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
 
           return <DataTableRowActions row={row} />
         },
-        size: 132,
         enableSorting: false,
         enableHiding: false,
         meta: { pinned: 'right' as const },
       },
     ],
-    [t, locale, sensitiveVisible]
+    [enableSelection, t, locale, sensitiveVisible]
   )
 }

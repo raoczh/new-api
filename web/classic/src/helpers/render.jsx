@@ -99,13 +99,12 @@ import {
   SiOkta,
   SiOpenid,
   SiReddit,
-  SiSlack,
   SiTelegram,
   SiTwitch,
   SiWechat,
   SiX,
 } from 'react-icons/si';
-import { FaLinkedin } from 'react-icons/fa';
+import { FaLinkedin, FaSlack } from 'react-icons/fa';
 
 // 获取侧边栏Lucide图标组件
 export function getLucideIcon(key, selected = false) {
@@ -432,22 +431,6 @@ export function getLobeHubIcon(iconName, size = 14) {
     return <Avatar size='extra-extra-small'>?</Avatar>;
   }
 
-  // 支持 URL 图标（http/https 开头）
-  if (/^https?:\/\//i.test(iconName)) {
-    return (
-      <img
-        src={iconName}
-        alt='icon'
-        style={{
-          width: size,
-          height: size,
-          objectFit: 'contain',
-          borderRadius: 2,
-        }}
-      />
-    );
-  }
-
   // 解析组件路径与点号链式属性
   const segments = String(iconName).split('.');
   const baseKey = segments[0];
@@ -528,7 +511,7 @@ const oauthProviderIconMap = {
   linkedin: FaLinkedin,
   x: SiX,
   twitter: SiX,
-  slack: SiSlack,
+  slack: FaSlack,
   telegram: SiTelegram,
   wechat: SiWechat,
   keycloak: SiKeycloak,

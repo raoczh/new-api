@@ -16,11 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo, useCallback, useRef, useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { ExternalLink, Loader2, ChevronRight } from 'lucide-react'
+import { useMemo, useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+
 import {
   Collapsible,
   CollapsibleContent,
@@ -47,6 +48,7 @@ import {
   resolveChatUrl,
   type ChatPreset,
 } from '@/features/chat/lib/chat-links'
+
 import { normalizeHref } from '../lib/url-utils'
 import type { NavChatPresets } from '../types'
 
@@ -125,12 +127,9 @@ function DropdownPresetItem({
   if (preset.type === 'web') {
     return (
       <DropdownMenuItem
-        className='min-w-0'
         render={<Link to='/chat/$chatId' params={{ chatId: preset.id }} />}
       >
-        <span className='min-w-0 flex-1 truncate whitespace-nowrap'>
-          {preset.name}
-        </span>
+        {preset.name}
       </DropdownMenuItem>
     )
   }
@@ -141,15 +140,12 @@ function DropdownPresetItem({
       onClick={() => {
         if (!loading) void onOpen(preset)
       }}
-      className='min-w-0'
     >
-      <span className='min-w-0 flex-1 truncate whitespace-nowrap'>
-        {preset.name}
-      </span>
+      {preset.name}
       {loading ? (
-        <Loader2 className='ml-auto h-4 w-4 shrink-0 animate-spin opacity-70' />
+        <Loader2 className='ml-auto h-4 w-4 animate-spin opacity-70' />
       ) : (
-        <ExternalLink className='ml-auto h-4 w-4 shrink-0 opacity-70' />
+        <ExternalLink className='ml-auto h-4 w-4 opacity-70' />
       )}
     </DropdownMenuItem>
   )

@@ -294,12 +294,13 @@ func migrateDB() error {
 		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
 		&PerfMetric{},
+		&SystemInstance{},
 		&SystemTask{},
+		&SystemTaskLock{},
+		&CasbinRule{},
+		&AuthzRole{},
 	)
 	if err != nil {
-		return err
-	}
-	if err := ensureUserRecordIPLogSetting(DB); err != nil {
 		return err
 	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
@@ -347,7 +348,9 @@ func migrateDBFast() error {
 		{&CustomOAuthProvider{}, "CustomOAuthProvider"},
 		{&UserOAuthBinding{}, "UserOAuthBinding"},
 		{&PerfMetric{}, "PerfMetric"},
+		{&SystemInstance{}, "SystemInstance"},
 		{&SystemTask{}, "SystemTask"},
+		{&SystemTaskLock{}, "SystemTaskLock"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))
@@ -466,48 +469,6 @@ func syncClickHouseLogTTL(ttlDays int) error {
 		return nil
 	}
 	return LOG_DB.Exec("ALTER TABLE logs REMOVE TTL").Error
-}
-
-func ensureUserRecordIPLogSetting(db *gorm.DB) error {
-	if db == nil {
-		return nil
-	}
-	if !db.Migrator().HasTable(&User{}) {
-		return nil
-	}
-
-	type userSettingRow struct {
-		Id      int    `gorm:"column:id"`
-		Setting string `gorm:"column:setting"`
-	}
-
-	rows := make([]userSettingRow, 0)
-	if err := db.Model(&User{}).Select("id, setting").Find(&rows).Error; err != nil {
-		return err
-	}
-
-	for _, row := range rows {
-		settingMap := map[string]interface{}{}
-		if strings.TrimSpace(row.Setting) != "" {
-			m, err := common.StrToMap(row.Setting)
-			if err != nil {
-				continue
-			}
-			settingMap = m
-		}
-		if _, exists := settingMap["record_ip_log"]; exists {
-			continue
-		}
-		settingMap["record_ip_log"] = true
-		payload, err := common.Marshal(settingMap)
-		if err != nil {
-			continue
-		}
-		if err = db.Model(&User{}).Where("id = ?", row.Id).Update("setting", string(payload)).Error; err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func clickHouseLogTableHasTTL() (bool, error) {
