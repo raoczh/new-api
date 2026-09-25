@@ -26,6 +26,8 @@ import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 
+import { formatUseTime } from '@/lib/format'
+
 import { usageLogSchema, type UsageLog } from '../../data/schema'
 import { useCommonLogsColumns } from '../columns/common-logs-columns'
 import { UsageLogsMobileList } from '../usage-logs-mobile-card'
@@ -258,6 +260,39 @@ it.each([false, true])(
     ).not.toBeNull()
     if (streaming) {
       expect(within(row as HTMLElement).getByText('First token')).toBeVisible()
+    }
+  }
+)
+
+it.each([
+  { seconds: 9.999, color: 'text-success' },
+  { seconds: 10, color: 'text-success' },
+  { seconds: 10.001, color: 'text-warning' },
+  { seconds: 20, color: 'text-warning' },
+  { seconds: 20.001, color: 'text-orange-700' },
+  { seconds: 30, color: 'text-orange-700' },
+  { seconds: 30.001, color: 'text-destructive' },
+])(
+  'colors first token and duration at $seconds seconds by elapsed time',
+  ({ seconds, color }) => {
+    renderLogs({
+      logs: [
+        {
+          ...log,
+          is_stream: true,
+          use_time: seconds,
+          completion_tokens: 6000,
+          other: JSON.stringify({ frt: seconds * 1000 }),
+        },
+      ],
+    })
+    const values = screen.getAllByText(formatUseTime(seconds))
+    expect(values).toHaveLength(2)
+    for (const value of values) {
+      expect(value).toHaveClass(color)
+      if (color === 'text-orange-700') {
+        expect(value).toHaveClass('dark:text-orange-400')
+      }
     }
   }
 )

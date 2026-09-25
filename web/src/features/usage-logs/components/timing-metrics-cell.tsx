@@ -33,8 +33,18 @@ import {
 import { formatUseTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-import { getFirstResponseTimeColor, getResponseTimeColor } from '../lib/format'
+import { getTimeColor } from '../lib/format'
 import type { LogOtherData } from '../types'
+
+const timingTextColorMap = {
+  ...textColorMap,
+  orange: 'text-orange-700 dark:text-orange-400',
+}
+
+const timingDotColorMap = {
+  ...dotColorMap,
+  orange: 'bg-orange-600 dark:bg-orange-400',
+}
 
 /**
  * Softened fills for the full-height timing bar. The bar sits directly beside
@@ -43,16 +53,16 @@ import type { LogOtherData } from '../types'
  * keeps the status legible while matching the page's muted palette.
  */
 const barColorMap: Record<StatusVariant, string> = {
-  ...dotColorMap,
+  ...timingDotColorMap,
   success: 'bg-success/90',
   warning: 'bg-warning/80',
+  orange: 'bg-orange-600/80 dark:bg-orange-400/80',
   danger: 'bg-destructive/80',
   neutral: 'bg-neutral/80',
 }
 
 interface TimingMetricsCellProps {
   useTimeSec: number
-  completionTokens: number
   frtMs?: number
   isStream: boolean
   className?: string
@@ -73,13 +83,8 @@ export function TimingMetricsCell(props: TimingMetricsCellProps) {
   const firstTokenSeconds =
     props.frtMs != null && props.frtMs > 0 ? props.frtMs / 1000 : null
   const firstTokenVariant: StatusVariant =
-    firstTokenSeconds == null
-      ? 'neutral'
-      : getFirstResponseTimeColor(firstTokenSeconds)
-  const totalTimeVariant = getResponseTimeColor(
-    props.useTimeSec,
-    props.completionTokens
-  )
+    firstTokenSeconds == null ? 'neutral' : getTimeColor(firstTokenSeconds)
+  const totalTimeVariant = getTimeColor(props.useTimeSec)
   const firstTokenLabel =
     firstTokenSeconds == null ? t('N/A') : formatUseTime(firstTokenSeconds)
   const totalTimeLabel = formatUseTime(props.useTimeSec)
@@ -99,14 +104,19 @@ export function TimingMetricsCell(props: TimingMetricsCellProps) {
               aria-hidden
               className={cn(
                 'size-1.5 shrink-0 rounded-full',
-                dotColorMap[firstTokenVariant]
+                timingDotColorMap[firstTokenVariant]
               )}
             />
           )}
           <span className='text-muted-foreground shrink-0'>
             {t('First token')}
           </span>
-          <span className={cn('tabular-nums', textColorMap[firstTokenVariant])}>
+          <span
+            className={cn(
+              'tabular-nums',
+              timingTextColorMap[firstTokenVariant]
+            )}
+          >
             {firstTokenLabel}
           </span>
         </div>
@@ -117,12 +127,14 @@ export function TimingMetricsCell(props: TimingMetricsCellProps) {
             aria-hidden
             className={cn(
               'size-1.5 shrink-0 rounded-full',
-              dotColorMap[totalTimeVariant]
+              timingDotColorMap[totalTimeVariant]
             )}
           />
         )}
         <span className='text-muted-foreground shrink-0'>{t('Duration')}</span>
-        <span className={cn('tabular-nums', textColorMap[totalTimeVariant])}>
+        <span
+          className={cn('tabular-nums', timingTextColorMap[totalTimeVariant])}
+        >
           {totalTimeLabel}
         </span>
       </div>

@@ -793,7 +793,6 @@ export function useCommonLogsColumns(
           return (
             <TimingMetricsCell
               useTimeSec={useTime}
-              completionTokens={log.completion_tokens}
               frtMs={other?.frt}
               isStream={log.is_stream}
             />

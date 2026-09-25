@@ -193,43 +193,11 @@ export function getReasoningEffortVariant(
  */
 export function getTimeColor(
   seconds: number
-): 'success' | 'warning' | 'danger' {
-  if (seconds < 10) return 'success'
-  if (seconds < 30) return 'warning'
+): 'success' | 'warning' | 'orange' | 'danger' {
+  if (seconds <= 10) return 'success'
+  if (seconds <= 20) return 'warning'
+  if (seconds <= 30) return 'orange'
   return 'danger'
-}
-
-/**
- * Get first-response-token color based on latency (in seconds)
- */
-export function getFirstResponseTimeColor(
-  seconds: number
-): 'success' | 'warning' | 'danger' {
-  if (seconds < 5) return 'success'
-  if (seconds < 10) return 'warning'
-  return 'danger'
-}
-
-/**
- * Get throughput color based on generated tokens per second
- */
-export function getThroughputColor(
-  tokensPerSecond: number
-): 'success' | 'warning' | 'danger' {
-  if (tokensPerSecond >= 30) return 'success'
-  if (tokensPerSecond >= 15) return 'warning'
-  return 'danger'
-}
-
-/**
- * Get response color using throughput only when enough output tokens exist.
- */
-export function getResponseTimeColor(
-  seconds: number,
-  completionTokens: number
-): 'success' | 'warning' | 'danger' {
-  if (completionTokens < 100 || seconds <= 0) return getTimeColor(seconds)
-  return getThroughputColor(completionTokens / seconds)
 }
 
 /**

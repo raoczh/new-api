@@ -53,7 +53,11 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
-import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
+import {
+  StatusBadge,
+  textColorMap,
+  type StatusBadgeProps,
+} from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { DynamicPricingBreakdown } from '@/features/pricing/components/dynamic-pricing-breakdown'
@@ -76,8 +80,7 @@ import {
   getTieredBillingSummary,
   hasAnyCacheTokens,
   isViolationFeeLog,
-  getFirstResponseTimeColor,
-  getResponseTimeColor,
+  getTimeColor,
   getReasoningEffortVariant,
   renderAuditContent,
 } from '../../lib/format'
@@ -104,11 +107,10 @@ const CHANNEL_FIELD_LABELS: Record<string, string> = {
 }
 
 function timingTextColorClass(
-  variant: 'success' | 'warning' | 'danger'
+  variant: ReturnType<typeof getTimeColor>
 ): string {
-  if (variant === 'success') return 'text-emerald-600'
-  if (variant === 'warning') return 'text-amber-600'
-  return 'text-rose-600'
+  if (variant === 'orange') return 'text-orange-700 dark:text-orange-400'
+  return textColorMap[variant]
 }
 
 function formatRatio(ratio: number | undefined): string {
@@ -719,12 +721,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 <span
                   className={cn(
                     'font-medium',
-                    timingTextColorClass(
-                      getResponseTimeColor(
-                        props.log.use_time,
-                        props.log.completion_tokens
-                      )
-                    )
+                    timingTextColorClass(getTimeColor(props.log.use_time))
                   )}
                 >
                   {formatUseTime(props.log.use_time)}
@@ -734,9 +731,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
                       <span
                         className={cn(
                           'font-normal',
-                          timingTextColorClass(
-                            getFirstResponseTimeColor(other.frt / 1000)
-                          )
+                          timingTextColorClass(getTimeColor(other.frt / 1000))
                         )}
                       >
                         {' '}
