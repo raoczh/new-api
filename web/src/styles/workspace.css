@@ -376,6 +376,13 @@ For commercial licensing, please contact support@quantumnous.com
   box-shadow: none;
   border-radius: 0.3rem;
 }
+.tc-redemption-store-frame {
+  display: block;
+  width: 100%;
+  min-height: min(70vh, 44rem);
+  border: 0;
+  background: var(--background);
+}
 .tc-home-hero {
   padding: 8rem var(--tc-gutter) 0;
   overflow: hidden;
@@ -636,6 +643,9 @@ For commercial licensing, please contact support@quantumnous.com
   .tc-wallet-stat-value {
     font-size: 1.3rem;
   }
+  .tc-redemption-store-frame {
+    min-height: min(72vh, 38rem);
+  }
   .tc-features-layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 2rem;
@@ -702,6 +712,9 @@ For commercial licensing, please contact support@quantumnous.com
   }
   .tc-wallet-stat:first-child .tc-wallet-stat-value {
     font-size: 2.5rem;
+  }
+  .tc-redemption-store-frame {
+    min-height: 34rem;
   }
   .tc-home-hero {
     padding-top: 7rem;

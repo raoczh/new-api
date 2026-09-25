@@ -26,6 +26,7 @@ import type {
   ApiResponse,
   TopupInfoResponse,
   RedemptionResponse,
+  RedemptionCheckResponse,
   AmountResponse,
   PaymentResponse,
   StripePaymentResponse,
@@ -67,6 +68,17 @@ export async function redeemTopupCode(
   request: RedemptionRequest
 ): Promise<RedemptionResponse> {
   const res = await api.post('/api/user/topup', request)
+  return res.data
+}
+
+/**
+ * Validate a topup code without consuming it.
+ */
+export async function checkTopupCode(
+  request: RedemptionRequest,
+  signal?: AbortSignal
+): Promise<RedemptionCheckResponse> {
+  const res = await api.post('/api/user/topup/check', request, { signal })
   return res.data
 }
 

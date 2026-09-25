@@ -186,6 +186,30 @@ func Redeem(key string, userId int) (quota int, err error) {
 	return redemption.Quota, nil
 }
 
+// CheckRedemption validates a code without marking it as used or changing a user's quota.
+func CheckRedemption(key string) (int, error) {
+	if len(key) != 32 {
+		return 0, ErrRedeemFailed
+	}
+	for _, char := range key {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') {
+			return 0, ErrRedeemFailed
+		}
+	}
+
+	redemption := &Redemption{}
+	if err := DB.Where(map[string]any{"key": key}).First(redemption).Error; err != nil {
+		return 0, ErrRedeemFailed
+	}
+	if redemption.Status != common.RedemptionCodeStatusEnabled || redemption.Quota <= 0 {
+		return 0, ErrRedeemFailed
+	}
+	if redemption.ExpiredTime != 0 && redemption.ExpiredTime < common.GetTimestamp() {
+		return 0, ErrRedeemFailed
+	}
+	return redemption.Quota, nil
+}
+
 func (redemption *Redemption) Insert() error {
 	if redemption.Quota <= 0 {
 		return errors.New("redemption quota must be positive")

@@ -1,13 +1,20 @@
 package model
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
@@ -146,6 +153,99 @@ func TestRedeemCreditsQuotaExactlyOnce(t *testing.T) {
 	require.Error(t, err)
 	require.NoError(t, DB.First(&user, "id = ?", userId).Error)
 	assert.Equal(t, 500, user.Quota)
+}
+
+func TestCheckRedemption(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			var driver gorm.Dialector
+			switch dialect {
+			case "sqlite":
+				driver = sqlite.Open(filepath.Join(t.TempDir(), "redemption.db"))
+			case "mysql":
+				dsn := os.Getenv("TEST_MYSQL_DSN")
+				if dsn == "" {
+					t.Skip("TEST_MYSQL_DSN is not configured")
+				}
+				driver = mysql.Open(dsn)
+			case "postgres":
+				dsn := os.Getenv("TEST_POSTGRES_DSN")
+				if dsn == "" {
+					t.Skip("TEST_POSTGRES_DSN is not configured")
+				}
+				driver = postgres.Open(dsn)
+			}
+			db, err := gorm.Open(driver, &gorm.Config{
+				NamingStrategy: schema.NamingStrategy{TablePrefix: "wallet_preview_"},
+			})
+			require.NoError(t, err)
+			sqlDB, err := db.DB()
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
+			originalDB := DB
+			DB = db
+			t.Cleanup(func() { DB = originalDB })
+			require.NoError(t, db.AutoMigrate(&Redemption{}, &User{}))
+			t.Cleanup(func() { require.NoError(t, db.Migrator().DropTable(&Redemption{}, &User{})) })
+			var version string
+			versionQuery := "select version()"
+			if dialect == "sqlite" {
+				versionQuery = "select sqlite_version()"
+			}
+			require.NoError(t, db.Raw(versionQuery).Scan(&version).Error)
+			t.Logf("%s version: %s", dialect, version)
+
+			user := User{Username: "preview-user", Quota: 73}
+			require.NoError(t, db.Create(&user).Error)
+			now := common.GetTimestamp()
+			for _, tc := range []struct {
+				name    string
+				key     string
+				status  int
+				expires int64
+				deleted bool
+				valid   bool
+			}{
+				{name: "enabled", key: strings.Repeat("a1", 16), status: common.RedemptionCodeStatusEnabled, valid: true},
+				{name: "future expiry", key: strings.Repeat("b2", 16), status: common.RedemptionCodeStatusEnabled, expires: now + 3600, valid: true},
+				{name: "expired", key: strings.Repeat("c3", 16), status: common.RedemptionCodeStatusEnabled, expires: now - 60},
+				{name: "used", key: strings.Repeat("d4", 16), status: common.RedemptionCodeStatusUsed},
+				{name: "disabled", key: strings.Repeat("e5", 16), status: common.RedemptionCodeStatusDisabled},
+				{name: "deleted", key: strings.Repeat("f6", 16), status: common.RedemptionCodeStatusEnabled, deleted: true},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					code := Redemption{Name: tc.name, Key: tc.key, Quota: 500, Status: tc.status, ExpiredTime: tc.expires}
+					require.NoError(t, db.Create(&code).Error)
+					if tc.deleted {
+						require.NoError(t, db.Delete(&code).Error)
+					}
+					// Repeated previews must not reserve or consume the code.
+					for range 2 {
+						quota, err := CheckRedemption(tc.key)
+						if tc.valid {
+							require.NoError(t, err)
+							assert.Equal(t, 500, quota)
+						} else {
+							require.ErrorIs(t, err, ErrRedeemFailed)
+							assert.Zero(t, quota)
+						}
+					}
+					var saved Redemption
+					require.NoError(t, db.Unscoped().First(&saved, code.Id).Error)
+					assert.Equal(t, tc.status, saved.Status)
+					assert.Zero(t, saved.UsedUserId)
+					assert.Zero(t, saved.RedeemedTime)
+				})
+			}
+			for _, key := range []string{"", "short", strings.Repeat("A1", 16), strings.Repeat("z9", 16)} {
+				quota, err := CheckRedemption(key)
+				require.ErrorIs(t, err, ErrRedeemFailed)
+				assert.Zero(t, quota)
+			}
+			require.NoError(t, db.First(&user, user.Id).Error)
+			assert.Equal(t, 73, user.Quota, "preview must not credit a wallet")
+		})
+	}
 }
 
 func TestRedeemRejectsWalletOverflow(t *testing.T) {

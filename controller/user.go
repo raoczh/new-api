@@ -1267,6 +1267,29 @@ func TopUp(c *gin.Context) {
 	})
 }
 
+// CheckTopUpCode validates a redemption code without consuming it.
+func CheckTopUpCode(c *gin.Context) {
+	if !operation_setting.IsPaymentComplianceConfirmed() {
+		common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
+		return
+	}
+
+	req := topUpRequest{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	quota, err := model.CheckRedemption(req.Key)
+	if err != nil {
+		// Keep the preview endpoint's response generic, matching the redeem path.
+		common.ApiErrorI18n(c, i18n.MsgRedeemFailed)
+		return
+	}
+
+	common.ApiSuccess(c, quota)
+}
+
 type UpdateUserSettingRequest struct {
 	QuotaWarningType                 string  `json:"notify_type"`
 	QuotaWarningThreshold            float64 `json:"quota_warning_threshold"`
