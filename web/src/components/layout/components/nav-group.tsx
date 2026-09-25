@@ -65,7 +65,11 @@ export function NavGroup({
   title,
   items,
   orientation = 'vertical',
-}: NavGroupProps & { orientation?: 'vertical' | 'horizontal' }) {
+  onNavigate,
+}: NavGroupProps & {
+  orientation?: 'vertical' | 'horizontal'
+  onNavigate?: () => void
+}) {
   const { state, isMobile } = useSidebar()
   const href = useLocation({ select: (location) => location.href })
 
@@ -95,6 +99,7 @@ export function NavGroup({
                 key={key}
                 item={item as NavChatPresets}
                 dropdown={orientation === 'horizontal'}
+                onNavigate={onNavigate}
               />
             )
           }
@@ -102,7 +107,12 @@ export function NavGroup({
           // If no sub-items, render regular link
           if (!item.items) {
             return (
-              <SidebarMenuLink key={key} item={item as NavLink} href={href} />
+              <SidebarMenuLink
+                key={key}
+                item={item as NavLink}
+                href={href}
+                onNavigate={onNavigate}
+              />
             )
           }
 
@@ -117,6 +127,7 @@ export function NavGroup({
                 item={item as NavCollapsible}
                 href={href}
                 side={orientation === 'horizontal' ? 'bottom' : 'right'}
+                onNavigate={onNavigate}
               />
             )
           }
@@ -127,6 +138,7 @@ export function NavGroup({
               key={key}
               item={item as NavCollapsible}
               href={href}
+              onNavigate={onNavigate}
             />
           )
         })}
@@ -145,7 +157,15 @@ function NavBadge({ children }: { children: ReactNode }) {
 /**
  * Sidebar menu link item
  */
-function SidebarMenuLink({ item, href }: { item: NavLink; href: string }) {
+function SidebarMenuLink({
+  item,
+  href,
+  onNavigate,
+}: {
+  item: NavLink
+  href: string
+  onNavigate?: () => void
+}) {
   const { isMobile, setOpenMobile } = useSidebar()
   return (
     <SidebarMenuItem>
@@ -156,7 +176,10 @@ function SidebarMenuLink({ item, href }: { item: NavLink; href: string }) {
           <Link
             to={item.url}
             preload={isMobile ? false : undefined}
-            onClick={() => setOpenMobile(false)}
+            onClick={() => {
+              setOpenMobile(false)
+              onNavigate?.()
+            }}
           />
         }
       >
@@ -174,9 +197,11 @@ function SidebarMenuLink({ item, href }: { item: NavLink; href: string }) {
 function SidebarMenuCollapsible({
   item,
   href,
+  onNavigate,
 }: {
   item: NavCollapsible
   href: string
+  onNavigate?: () => void
 }) {
   const { isMobile, setOpenMobile } = useSidebar()
   // 检查当前路径是否匹配子菜单项
@@ -218,7 +243,10 @@ function SidebarMenuCollapsible({
                   <Link
                     to={subItem.url}
                     preload={isMobile ? false : undefined}
-                    onClick={() => setOpenMobile(false)}
+                    onClick={() => {
+                      setOpenMobile(false)
+                      onNavigate?.()
+                    }}
                   />
                 }
               >
@@ -241,10 +269,12 @@ function SidebarMenuCollapsedDropdown({
   item,
   href,
   side = 'right',
+  onNavigate,
 }: {
   item: NavCollapsible
   href: string
   side?: 'bottom' | 'right'
+  onNavigate?: () => void
 }) {
   return (
     <SidebarMenuItem>
@@ -282,6 +312,7 @@ function SidebarMenuCollapsedDropdown({
                 render={
                   <Link
                     to={sub.url}
+                    onClick={onNavigate}
                     className={`${checkIsActive(href, sub) ? 'bg-secondary' : ''}`}
                   />
                 }

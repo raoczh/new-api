@@ -16,12 +16,24 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Menu, MoreHorizontal } from 'lucide-react'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { ConfigDrawer } from '@/components/config-drawer'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { Button } from '@/components/ui/button'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTitle,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { useSidebar } from '@/components/ui/sidebar'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
@@ -104,12 +116,45 @@ export function AppHeader({
   showConfigDrawer = true,
   showProfileDropdown = true,
 }: AppHeaderProps) {
+  const { t } = useTranslation()
+  const { isMobile, openMobile, setOpenMobile } = useSidebar()
+  const [previousIsMobile, setPreviousIsMobile] = useState(isMobile)
   // Prioritize dynamically generated links from backend
   const dynamicLinks = useTopNavLinks()
   const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
 
   // Notifications hook
   const notifications = useNotifications()
+
+  // Close the old layout's popup before mounting its new trigger.
+  if (previousIsMobile !== isMobile) {
+    setPreviousIsMobile(isMobile)
+    notifications.setPopoverOpen(false)
+  }
+
+  const tools = (
+    <>
+      {showTopNav && <TopNav links={links} />}
+      {showSearch && (
+        <Search className='w-9! flex-none p-0! [&>kbd]:hidden [&>span]:hidden' />
+      )}
+      {showNotifications && (
+        <NotificationPopover
+          open={notifications.popoverOpen}
+          onOpenChange={notifications.setPopoverOpen}
+          unreadCount={notifications.unreadCount}
+          activeTab={notifications.activeTab}
+          onTabChange={notifications.setActiveTab}
+          notice={notifications.notice}
+          announcements={notifications.announcements}
+          loading={notifications.loading}
+        />
+      )}
+      <LanguageSwitcher />
+      <ThemeSwitch />
+      {showConfigDrawer && <ConfigDrawer />}
+    </>
+  )
 
   return (
     <Header>
@@ -121,29 +166,42 @@ export function AppHeader({
 
       {rightContent ?? (
         <div className='tc-masthead-actions'>
-          {showTopNav && (
-            <div className='sm:me-1'>
-              <TopNav links={links} />
-            </div>
+          {isMobile && (
+            <Button
+              id='workspace-menu-trigger'
+              variant='ghost'
+              size='icon'
+              aria-label={t('Toggle navigation menu')}
+              aria-expanded={openMobile}
+              aria-controls='workspace-navigation'
+              onClick={() => setOpenMobile(true)}
+            >
+              <Menu aria-hidden='true' />
+            </Button>
           )}
-          {showSearch && (
-            <Search className='w-8 flex-none [&>span]:hidden sm:[&>span]:inline' />
+          {isMobile ? (
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    aria-label={t('Actions')}
+                  />
+                }
+              >
+                <MoreHorizontal aria-hidden='true' />
+              </PopoverTrigger>
+              <PopoverContent align='end' className='w-64 p-4'>
+                <PopoverTitle>{t('Actions')}</PopoverTitle>
+                <div className='grid grid-cols-3 justify-items-center gap-3'>
+                  {tools}
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : (
+            tools
           )}
-          {showNotifications && (
-            <NotificationPopover
-              open={notifications.popoverOpen}
-              onOpenChange={notifications.setPopoverOpen}
-              unreadCount={notifications.unreadCount}
-              activeTab={notifications.activeTab}
-              onTabChange={notifications.setActiveTab}
-              notice={notifications.notice}
-              announcements={notifications.announcements}
-              loading={notifications.loading}
-            />
-          )}
-          <LanguageSwitcher />
-          <ThemeSwitch />
-          {showConfigDrawer && <ConfigDrawer />}
           {showProfileDropdown && <ProfileDropdown />}
         </div>
       )}

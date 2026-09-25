@@ -25,6 +25,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -36,25 +37,50 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { SidebarProvider } from '@/components/ui/sidebar'
 import { useAuthStore } from '@/stores/auth-store'
+import { useNotificationStore } from '@/stores/notification-store'
+import { useSystemConfigStore } from '@/stores/system-config-store'
 
+import { AppHeader } from '../app-header'
 import { AppSidebar } from '../app-sidebar'
 
 let client: QueryClient
+let mediaEvents: EventTarget
 
 beforeEach(() => {
+  vi.stubGlobal('innerWidth', 1280)
+  mediaEvents = new EventTarget()
+  const matchMedia = window.matchMedia
+  vi.spyOn(window, 'matchMedia').mockImplementation((query) => {
+    if (query !== '(max-width: 767px)') return matchMedia(query)
+    return {
+      ...matchMedia(query),
+      matches: window.innerWidth < 768,
+      addEventListener: mediaEvents.addEventListener.bind(mediaEvents),
+      removeEventListener: mediaEvents.removeEventListener.bind(mediaEvents),
+    }
+  })
   localStorage.clear()
   useAuthStore.setState(useAuthStore.getInitialState(), true)
+  useNotificationStore.setState(useNotificationStore.getInitialState(), true)
+  useSystemConfigStore.setState(
+    { ...useSystemConfigStore.getInitialState(), loading: false },
+    true
+  )
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
   client.setQueryData(['status'], {})
+  client.setQueryData(['notice'], { success: true, data: '' })
 })
 
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   client.clear()
   useAuthStore.setState(useAuthStore.getInitialState(), true)
+  useNotificationStore.setState(useNotificationStore.getInitialState(), true)
+  useSystemConfigStore.setState(useSystemConfigStore.getInitialState(), true)
   localStorage.clear()
 })
 
@@ -62,7 +88,18 @@ async function renderNavigation(path = '/keys', role = 1) {
   useAuthStore
     .getState()
     .auth.setUser({ id: 1, username: 'navigation-fixture', role })
-  const root = createRootRoute({ component: AppSidebar })
+  const root = createRootRoute({
+    component: () => (
+      <>
+        <AppHeader
+          showSearch={false}
+          showConfigDrawer={false}
+          showProfileDropdown={false}
+        />
+        <AppSidebar />
+      </>
+    ),
+  })
   const routes = [
     '/keys',
     '/wallet',
@@ -85,45 +122,48 @@ async function renderNavigation(path = '/keys', role = 1) {
   return router
 }
 
-it('selects the current section and lets users navigate across sections with the keyboard', async () => {
+it('reveals page links on demand and allows keyboard navigation between sections', async () => {
   const user = userEvent.setup()
   await renderNavigation()
-  expect(screen.getByRole('tab', { name: /General/ })).toHaveAttribute(
-    'aria-selected',
-    'true'
-  )
+  expect(
+    screen.queryByRole('link', { name: 'API Keys' })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Admin' })
+  ).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'General' }))
   expect(screen.getByRole('link', { name: 'API Keys' })).toHaveAttribute(
     'aria-current',
     'page'
   )
-  expect(screen.queryByRole('tab', { name: /Admin/ })).not.toBeInTheDocument()
-  screen.getByRole('tab', { name: /General/ }).focus()
-  await user.keyboard('[ArrowRight][Enter]')
+  await user.keyboard('[Escape]')
   await waitFor(() =>
-    expect(screen.getByRole('tab', { name: /Personal/ })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    )
+    expect(screen.getByRole('button', { name: 'General' })).toHaveFocus()
   )
+  screen.getByRole('button', { name: 'Personal' }).focus()
+  await user.keyboard('[Enter]')
   await user.click(screen.getByRole('link', { name: 'Wallet' }))
   await waitFor(() =>
-    expect(screen.getByRole('link', { name: 'Wallet' })).toHaveAttribute(
-      'aria-current',
-      'page'
-    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  )
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Personal' })).toHaveFocus()
+  )
+  await user.click(screen.getByRole('button', { name: 'Personal' }))
+  expect(screen.getByRole('link', { name: 'Wallet' })).toHaveAttribute(
+    'aria-current',
+    'page'
   )
 })
 
-it('scrolls the current section and page into view when entering a workspace route', async () => {
-  const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
+it('dismisses a section panel even when choosing the current page', async () => {
+  const user = userEvent.setup()
   await renderNavigation('/wallet')
-  const tab = screen.getByRole('tab', { name: /Personal/ })
-  const link = screen.getByRole('link', { name: 'Wallet' })
-
-  await waitFor(() => {
-    expect(scroll.mock.contexts).toContain(tab)
-    expect(scroll.mock.contexts).toContain(link)
-  })
+  await user.click(screen.getByRole('button', { name: 'Personal' }))
+  await user.click(screen.getByRole('link', { name: 'Wallet' }))
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  )
 })
 
 it('preserves administrator and user menu visibility settings', async () => {
@@ -135,20 +175,18 @@ it('preserves administrator and user menu visibility settings', async () => {
   })
   const user = userEvent.setup()
   await renderNavigation('/channels', 100)
-  expect(screen.getByRole('tab', { name: /Admin/ })).toHaveAttribute(
-    'aria-selected',
-    'true'
-  )
+  await user.click(screen.getByRole('button', { name: 'Admin' }))
   expect(screen.getByRole('link', { name: 'Channels' })).toHaveAttribute(
     'aria-current',
     'page'
   )
   expect(
-    screen.queryByRole('tab', { name: /Personal/ })
+    screen.queryByRole('button', { name: 'Personal' })
   ).not.toBeInTheDocument()
-  await user.click(screen.getByRole('tab', { name: /General/ }))
+  await user.keyboard('[Escape]')
+  await user.click(screen.getByRole('button', { name: 'General' }))
   expect(
-    within(screen.getByRole('tabpanel')).queryByRole('link', {
+    within(screen.getByRole('dialog')).queryByRole('link', {
       name: 'API Keys',
     })
   ).not.toBeInTheDocument()
@@ -157,13 +195,100 @@ it('preserves administrator and user menu visibility settings', async () => {
 it('provides contextual settings navigation with a route back to the workspace', async () => {
   const user = userEvent.setup()
   await renderNavigation('/system-settings/site', 100)
+  await user.click(screen.getByRole('button', { name: 'Site & Branding' }))
+  expect(
+    screen.getByRole('link', { name: 'System Information' })
+  ).toHaveAttribute('href', '/system-settings/site/system-info')
+  await user.keyboard('[Escape]')
   const back = screen.getByRole('link', { name: /Back to Dashboard/ })
   expect(back).toHaveAttribute('href', '/dashboard/overview')
   await user.click(back)
   await waitFor(() =>
-    expect(screen.getByRole('tab', { name: /General/ })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    )
+    expect(screen.getByRole('button', { name: 'General' })).toBeVisible()
   )
+})
+
+it('opens mobile navigation as a drawer and closes it after selecting a page', async () => {
+  vi.stubGlobal('innerWidth', 390)
+  const user = userEvent.setup()
+  const router = await renderNavigation()
+  await user.click(
+    screen.getByRole('button', { name: 'Toggle navigation menu' })
+  )
+  const drawer = await screen.findByRole('dialog', { name: 'Navigation' })
+  expect(
+    within(drawer).getByRole('link', { name: 'API Keys' })
+  ).toHaveAttribute('aria-current', 'page')
+  await user.click(within(drawer).getByRole('link', { name: 'Wallet' }))
+  await waitFor(() => expect(drawer).not.toBeInTheDocument())
+  expect(router.state.location.pathname).toBe('/wallet')
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Toggle navigation menu' })
+    ).toHaveFocus()
+  )
+})
+
+it('dismisses mobile tools and notifications on desktop and keeps them closed on return', async () => {
+  vi.stubGlobal('innerWidth', 390)
+  const user = userEvent.setup()
+  await renderNavigation()
+  await user.click(screen.getByRole('button', { name: 'Actions' }))
+  await user.click(screen.getByRole('button', { name: 'Notifications' }))
+  expect(
+    screen.getByRole('dialog', { name: 'System Announcements' })
+  ).toBeVisible()
+
+  act(() => {
+    vi.stubGlobal('innerWidth', 1280)
+    mediaEvents.dispatchEvent(new Event('change'))
+  })
+  await waitFor(() => {
+    expect(
+      screen.queryByRole('dialog', { name: 'Actions' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('dialog', { name: 'System Announcements' })
+    ).not.toBeInTheDocument()
+  })
+
+  act(() => {
+    vi.stubGlobal('innerWidth', 390)
+    mediaEvents.dispatchEvent(new Event('change'))
+  })
+  expect(screen.getByRole('button', { name: 'Actions' })).toHaveAttribute(
+    'aria-expanded',
+    'false'
+  )
+  await user.click(screen.getByRole('button', { name: 'Actions' }))
+  expect(
+    screen.queryByRole('dialog', { name: 'System Announcements' })
+  ).not.toBeInTheDocument()
+})
+
+it('keeps the mobile drawer closed after switching to desktop and back', async () => {
+  vi.stubGlobal('innerWidth', 390)
+  const user = userEvent.setup()
+  await renderNavigation()
+  await user.click(
+    screen.getByRole('button', { name: 'Toggle navigation menu' })
+  )
+  expect(screen.getByRole('dialog', { name: 'Navigation' })).toBeVisible()
+
+  act(() => {
+    vi.stubGlobal('innerWidth', 1280)
+    mediaEvents.dispatchEvent(new Event('change'))
+  })
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Navigation' })
+    ).not.toBeInTheDocument()
+  )
+  act(() => {
+    vi.stubGlobal('innerWidth', 390)
+    mediaEvents.dispatchEvent(new Event('change'))
+  })
+  expect(
+    screen.getByRole('button', { name: 'Toggle navigation menu' })
+  ).toHaveAttribute('aria-expanded', 'false')
 })

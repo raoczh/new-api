@@ -17,123 +17,193 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link, useLocation } from '@tanstack/react-router'
-import { ArrowUpLeft } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { ArrowUpLeft, Layers } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTitle,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import { useSidebar } from '@/components/ui/sidebar'
 import { useSidebarView } from '@/hooks/use-sidebar-view'
 
 import { checkIsActive } from '../lib/url-utils'
-import type { NavGroup as NavGroupData } from '../types'
+import type { NavGroup as NavGroupData, SidebarView } from '../types'
 import { NavGroup } from './nav-group'
 
-/** Reuse permission-filtered navigation and its actions in a horizontal workspace. */
+/** A quiet navigation rail; full page labels live in the section panels. */
 export function AppSidebar() {
   const { t } = useTranslation()
   const { key, view, navGroups } = useSidebarView()
+  const { isMobile, openMobile, setOpenMobile } = useSidebar()
   const pathname = useLocation({ select: (location) => location.pathname })
   const groups = navGroups.filter((group) => group.items.length > 0)
-  const active =
-    groups.find((group) =>
-      group.items.some(
-        (item) =>
-          checkIsActive(pathname, item) ||
-          (item.type === 'chat-presets' && pathname.startsWith('/chat/'))
-      )
-    ) ??
-    groups.find((group) => group.id === 'general') ??
-    groups[0]
+
+  useEffect(() => {
+    if (!isMobile) setOpenMobile(false)
+  }, [isMobile, setOpenMobile])
+
+  if (isMobile) {
+    return (
+      <Sheet open={openMobile} onOpenChange={setOpenMobile}>
+        <SheetContent
+          side='left'
+          id='workspace-navigation'
+          className='tc-navigation-drawer w-[22rem] max-w-[calc(100vw-2rem)] gap-0'
+          finalFocus={() =>
+            document.querySelector<HTMLElement>('#workspace-menu-trigger')
+          }
+        >
+          <SheetHeader className='border-b px-6 py-5'>
+            <SheetTitle>{t('Navigation')}</SheetTitle>
+            <SheetDescription>{t('AI gateway workspace')}</SheetDescription>
+          </SheetHeader>
+          <nav
+            className='tc-navigation-panel min-h-0 flex-1 overflow-y-auto p-3'
+            aria-label={t('Navigation')}
+          >
+            {view && (
+              <Button
+                role='link'
+                variant='ghost'
+                className='mb-3 w-full justify-start'
+                render={
+                  <Link
+                    to={view.parent.to}
+                    onClick={() => setOpenMobile(false)}
+                  />
+                }
+              >
+                <ArrowUpLeft aria-hidden='true' />
+                {t(view.parent.label)}
+              </Button>
+            )}
+            {groups.map((group) => (
+              <NavGroup key={group.id || group.title} {...group} />
+            ))}
+          </nav>
+          <WorkspaceAttribution />
+        </SheetContent>
+      </Sheet>
+    )
+  }
 
   return (
-    <nav className='tc-workspace-navigation' aria-label={t('Navigation')}>
-      <div className='tc-workspace-navigation-inner'>
-        {view && (
-          <Link to={view.parent.to} className='tc-workspace-back'>
-            <ArrowUpLeft className='size-4' aria-hidden='true' />
-            {t(view.parent.label)}
-          </Link>
-        )}
-        {active && (
-          <WorkspaceGroups
-            key={key + pathname}
-            groups={groups}
-            active={active.id || active.title}
-          />
-        )}
-        <a
-          href='https://github.com/QuantumNous/new-api'
-          target='_blank'
-          rel='noopener noreferrer'
-          className='tc-workspace-attribution'
-        >
-          New API · QuantumNous
-        </a>
-      </div>
-    </nav>
+    <WorkspaceRail key={key} groups={groups} view={view} pathname={pathname} />
   )
 }
 
-function WorkspaceGroups(props: { groups: NavGroupData[]; active: string }) {
-  const { t, i18n } = useTranslation()
-  const navigationRef = useRef<HTMLDivElement>(null)
-  const [selected, setSelected] = useState(props.active)
-  const value = props.groups.some(
-    (group) => (group.id || group.title) === selected
+function WorkspaceAttribution() {
+  return (
+    <a
+      href='https://github.com/QuantumNous/new-api'
+      target='_blank'
+      rel='noopener noreferrer'
+      className='tc-workspace-attribution'
+    >
+      <span>New API</span> <span>QuantumNous</span>
+    </a>
   )
-    ? selected
-    : props.active
+}
 
-  useEffect(() => {
-    const navigation = navigationRef.current
-    const activeTab = navigation?.querySelector<HTMLElement>(
-      '[role="tab"][aria-selected="true"]'
-    )
-    const activeLink = navigation?.querySelector<HTMLElement>(
-      '[data-sidebar="menu-button"][data-active]'
-    )
-    activeTab?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-    activeLink?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  }, [value, i18n.resolvedLanguage])
+function WorkspaceRail(props: {
+  groups: NavGroupData[]
+  view: SidebarView | null
+  pathname: string
+}) {
+  const { t } = useTranslation()
+  const [openGroup, setOpenGroup] = useState<string | null>(null)
+  useEffect(() => setOpenGroup(null), [props.pathname])
+  const sections = props.view
+    ? props.groups.flatMap((group) =>
+        group.items.map((item) => ({
+          title: item.title,
+          icon: item.icon,
+          items: item.items ?? [item],
+        }))
+      )
+    : props.groups.map((group) => ({
+        ...group,
+        icon:
+          group.items.find((item) => item.title === group.title)?.icon ??
+          group.items[0]?.icon,
+      }))
 
   return (
-    <Tabs
-      ref={navigationRef}
-      value={value}
-      onValueChange={(value) => setSelected(String(value))}
-      className='tc-workspace-tabs'
-    >
-      <div className='tc-workspace-sections'>
-        <span className='tc-navigation-caption'>
-          {t('AI gateway workspace')}
-        </span>
-        <TabsList
-          variant='line'
-          aria-label={t('Navigation')}
-          className='tc-workspace-group-tabs'
-        >
-          {props.groups.map((group, index) => (
-            <TabsTrigger
-              key={group.id || group.title}
-              value={group.id || group.title}
+    <aside className='tc-navigation-rail'>
+      <nav aria-label={t('Navigation')} className='tc-rail-sections'>
+        {props.view && (
+          <Button
+            role='link'
+            variant='ghost'
+            className='tc-rail-entry tc-rail-back'
+            aria-label={t(props.view.parent.label)}
+            render={<Link to={props.view.parent.to} />}
+          >
+            <ArrowUpLeft aria-hidden='true' />
+            <span>{t('Back')}</span>
+          </Button>
+        )}
+        {sections.map((section) => {
+          const Icon = section.icon ?? Layers
+          const active = section.items.some(
+            (item) =>
+              checkIsActive(props.pathname, item) ||
+              ('type' in item &&
+                item.type === 'chat-presets' &&
+                props.pathname.startsWith('/chat/'))
+          )
+          return (
+            <Popover
+              key={section.title}
+              open={openGroup === section.title}
+              onOpenChange={(open) => setOpenGroup(open ? section.title : null)}
             >
-              <span className='tc-nav-index' aria-hidden='true'>
-                {String(index + 1).padStart(2, '0')}
-              </span>
-              {group.title}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </div>
-      {props.groups.map((group) => (
-        <TabsContent
-          key={group.id || group.title}
-          value={group.id || group.title}
-          className='tc-workspace-links'
-        >
-          <NavGroup {...group} orientation='horizontal' />
-        </TabsContent>
-      ))}
-    </Tabs>
+              <PopoverTrigger
+                render={
+                  <Button
+                    variant='ghost'
+                    className='tc-rail-entry'
+                    data-current={active || undefined}
+                    aria-label={section.title}
+                  />
+                }
+              >
+                <Icon aria-hidden='true' />
+                <span>{section.title}</span>
+              </PopoverTrigger>
+              <PopoverContent
+                side='inline-end'
+                align='start'
+                sideOffset={14}
+                collisionPadding={16}
+                className='tc-navigation-panel tc-rail-panel'
+              >
+                <PopoverTitle className='tc-rail-panel-title'>
+                  {section.title}
+                </PopoverTitle>
+                <NavGroup
+                  title={section.title}
+                  items={section.items}
+                  onNavigate={() => setOpenGroup(null)}
+                />
+              </PopoverContent>
+            </Popover>
+          )
+        })}
+      </nav>
+      <WorkspaceAttribution />
+    </aside>
   )
 }

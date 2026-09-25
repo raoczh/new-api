@@ -123,15 +123,23 @@ function DropdownPresetItem({
   preset,
   loading,
   onOpen,
+  onNavigate,
 }: {
   preset: ChatPreset
   loading: boolean
   onOpen: (preset: ChatPreset) => void | Promise<void>
+  onNavigate: () => void
 }) {
   if (preset.type === 'web') {
     return (
       <DropdownMenuItem
-        render={<Link to='/chat/$chatId' params={{ chatId: preset.id }} />}
+        render={
+          <Link
+            to='/chat/$chatId'
+            params={{ chatId: preset.id }}
+            onClick={onNavigate}
+          />
+        }
       >
         {preset.name}
       </DropdownMenuItem>
@@ -161,9 +169,11 @@ function DropdownPresetItem({
 export function ChatPresetsItem({
   item,
   dropdown = false,
+  onNavigate,
 }: {
   item: NavChatPresets
   dropdown?: boolean
+  onNavigate?: () => void
 }) {
   const { t } = useTranslation()
   const { chatPresets, serverAddress } = useChatPresets()
@@ -224,8 +234,9 @@ export function ChatPresetsItem({
 
       window.open(url, '_blank', 'noopener')
       setOpenMobile(false)
+      onNavigate?.()
     },
-    [serverAddress, setOpenMobile, t]
+    [serverAddress, setOpenMobile, t, onNavigate]
   )
 
   const normalizedHref = normalizeHref(href)
@@ -259,6 +270,10 @@ export function ChatPresetsItem({
                 preset={preset}
                 loading={loadingPresetId === preset.id}
                 onOpen={handleOpenExternal}
+                onNavigate={() => {
+                  setOpenMobile(false)
+                  onNavigate?.()
+                }}
               />
             ))}
           </DropdownMenuContent>
@@ -291,7 +306,10 @@ export function ChatPresetsItem({
               active={normalizedHref === `/chat/${preset.id}`}
               loading={loadingPresetId === preset.id}
               onOpen={handleOpenExternal}
-              onNavigate={() => setOpenMobile(false)}
+              onNavigate={() => {
+                setOpenMobile(false)
+                onNavigate?.()
+              }}
               preload={isMobile ? false : undefined}
             />
           ))}

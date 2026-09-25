@@ -80,7 +80,7 @@ export function TokenComeBrand(props: TokenComeBrandProps) {
         props.compact && 'tc-brand-compact',
         props.className
       )}
-      aria-label={name}
+      aria-label={`${name} · 渡康`}
     >
       <span className='tc-site-logo'>
         {props.logo ?? (
@@ -96,8 +96,13 @@ export function TokenComeBrand(props: TokenComeBrandProps) {
       {config.loading ? (
         <Skeleton className='h-5 w-24' />
       ) : (
-        <span className='tc-brand-name truncate' title={name}>
-          {name}
+        <span className='tc-brand-lockup'>
+          <span className='tc-brand-name truncate' title={name}>
+            {name}
+          </span>
+          <span className='tc-brand-chinese' lang='zh-CN'>
+            渡康
+          </span>
         </span>
       )}
     </span>

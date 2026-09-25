@@ -106,14 +106,14 @@ afterEach(() => {
   localStorage.clear()
 })
 
-it('uses the configured site identity once without an additional wordmark', async () => {
+it('pairs the configured site identity with the fixed Chinese brand name', async () => {
   const logo = 'https://img.tokencome.org/logo.png'
   useSystemConfigStore.getState().setConfig({ systemName: 'Token Come', logo })
   useSystemConfigStore.getState().setLoadedLogoUrl(logo)
   await renderHeader()
   const header = screen.getByRole('banner')
   expect(within(header).getAllByText('Token Come')).toHaveLength(1)
-  expect(within(header).queryByText('渡康')).not.toBeInTheDocument()
+  expect(within(header).getAllByText('渡康')).toHaveLength(1)
   expect(within(header).getAllByRole('img')).toHaveLength(1)
   expect(within(header).getByRole('img')).toHaveAttribute('src', logo)
 })

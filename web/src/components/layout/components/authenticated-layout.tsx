@@ -39,9 +39,11 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
         >
           <SkipToMain />
           <AppHeader />
-          <AppSidebar />
-          <div className='tc-workspace-content @container/content flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
-            {props.children ?? <AnimatedOutlet />}
+          <div className='tc-workspace-body flex min-h-0 flex-1'>
+            <AppSidebar />
+            <div className='tc-workspace-content @container/content flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
+              {props.children ?? <AnimatedOutlet />}
+            </div>
           </div>
         </SidebarProvider>
       </SearchProvider>
