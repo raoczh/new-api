@@ -4719,11 +4719,15 @@ export function ChannelMutateDrawer({
           side={drawerSide}
           className={sideDrawerContentClassName('sm:max-w-7xl')}
         >
-          <SheetHeader className={sideDrawerHeaderClassName('pr-12 sm:pr-14')}>
-            <div className='flex flex-col gap-2'>
-              <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-                <div className='flex min-w-0 items-center gap-2 sm:gap-3'>
-                  <SheetTitle className='flex shrink-0 items-center gap-2 sm:gap-3'>
+          <SheetHeader
+            className={sideDrawerHeaderClassName(
+              'tc-channel-drawer-header pr-12 sm:pr-14'
+            )}
+          >
+            <div className='tc-channel-drawer-header-content'>
+              <div className='tc-channel-drawer-title-row'>
+                <div className='tc-channel-drawer-title-group'>
+                  <SheetTitle className='tc-channel-drawer-title'>
                     <IconBadge tone='info' size='title'>
                       <Server className='size-5' />
                     </IconBadge>
@@ -4743,7 +4747,7 @@ export function ChannelMutateDrawer({
                       }
                       aria-description={providerLabel}
                       title={providerLabel}
-                      className='min-w-0 shrink gap-2 sm:max-w-md'
+                      className='tc-channel-provider-control min-w-0 shrink gap-2 sm:max-w-md'
                       disabled={
                         isSubmitting ||
                         (!showProviderPicker &&
@@ -4786,7 +4790,7 @@ export function ChannelMutateDrawer({
                     type='button'
                     variant='outline'
                     size='sm'
-                    className='shrink-0'
+                    className='tc-channel-paste-control shrink-0'
                     onClick={pasteConnectionInfoFromClipboard}
                   >
                     <ClipboardPaste className='size-4' />
@@ -4794,7 +4798,7 @@ export function ChannelMutateDrawer({
                   </Button>
                 )}
               </div>
-              <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+              <div className='tc-channel-drawer-meta-row'>
                 <div className='flex min-w-0 flex-wrap items-center gap-2 sm:flex-1'>
                   {isEditing && channelData?.data && (
                     <Badge variant='secondary' className='shrink-0'>

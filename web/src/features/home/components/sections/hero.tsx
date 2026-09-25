@@ -21,7 +21,7 @@ import { Link } from '@tanstack/react-router'
 import { ArrowUpRight, BookOpen, Cable, MoreHorizontal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { TokenComeBridge } from '@/components/tokencome-brand'
+import { TokenComeBrand, TokenComeBridge } from '@/components/tokencome-brand'
 import { Button } from '@/components/ui/button'
 import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
@@ -42,6 +42,7 @@ export function Hero(props: HeroProps) {
       <div className='tc-hero-stage'>
         <div className='tc-hero-heading'>
           <TokenComeBridge className='tc-hero-diagram' />
+          <TokenComeBrand className='tc-home-brand' />
           <p className='tc-hero-kicker'>
             <Cable className='size-4' aria-hidden='true' />
             {t('AI Application Infrastructure Foundation')}

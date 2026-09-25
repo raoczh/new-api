@@ -27,17 +27,34 @@ For commercial licensing, please contact support@quantumnous.com
   height: 2.65rem;
   flex-shrink: 0;
 }
+.tc-brand-lockup {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.22rem;
+}
 .tc-brand .tc-brand-name {
-  font-size: 1.22rem;
-  font-weight: 750;
-  letter-spacing: -0.035em;
+  font-size: 1.1rem;
+  font-weight: 720;
+  letter-spacing: 0;
+  line-height: 1.05;
+}
+.tc-brand .tc-brand-chinese {
+  color: var(--tc-brand-accent);
+  font-size: 1rem;
+  font-weight: 680;
+  letter-spacing: 0.06em;
+  line-height: 1;
 }
 .tc-brand-compact .tc-site-logo {
   width: 2.25rem;
   height: 2.25rem;
 }
 .tc-brand-compact .tc-brand-name {
-  font-size: 1.08rem;
+  font-size: 0.98rem;
+}
+.tc-brand-compact .tc-brand-chinese {
+  font-size: 0.88rem;
 }
 .tc-workspace-shell {
   background: var(--card);
@@ -65,18 +82,6 @@ For commercial licensing, please contact support@quantumnous.com
   align-items: center;
   justify-content: flex-end;
   gap: 0.4rem;
-}
-.tc-brand-lockup {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 0.35rem;
-}
-.tc-brand-chinese {
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  color: var(--muted-foreground);
 }
 .tc-workspace-sidebar {
   display: flex;
@@ -181,20 +186,89 @@ For commercial licensing, please contact support@quantumnous.com
   background: none;
 }
 .tc-page-title {
-  font-size: clamp(1.7rem, 2.6vw, 2.6rem);
+  font-size: clamp(1.55rem, 2.2vw, 2.2rem);
   line-height: 1.1;
-  letter-spacing: -0.055em;
+  letter-spacing: 0;
   font-weight: 650;
   overflow-wrap: anywhere;
 }
 .tc-page-title::before {
   display: inline-block;
   content: '';
-  width: 0.3rem;
-  height: 0.75em;
+  width: 0.22rem;
+  height: 1em;
   background: var(--tc-brand-accent);
-  margin-inline-end: 0.65rem;
-  transform: skewY(-25deg);
+  margin-inline-end: 0.7rem;
+  border-radius: 999px;
+  vertical-align: -0.08em;
+}
+.tc-channel-title-wrap {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+.tc-channel-retry-badge {
+  align-self: center;
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+.tc-channel-drawer-header {
+  position: relative;
+  overflow: hidden;
+}
+.tc-channel-drawer-header::before {
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block: 0;
+  width: 0.2rem;
+  background: var(--tc-brand-accent);
+  content: '';
+}
+.tc-channel-drawer-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  min-width: 0;
+}
+.tc-channel-drawer-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.tc-channel-drawer-title-group {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
+}
+.tc-channel-drawer-title {
+  display: flex;
+  min-width: max-content;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 1rem;
+  line-height: 1.2;
+  font-weight: 700;
+}
+.tc-channel-provider-control {
+  min-height: 2.35rem;
+  max-width: min(100%, 32rem);
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--tc-brand-accent) 5%, var(--background));
+}
+.tc-channel-drawer-meta-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.tc-channel-paste-control {
+  min-height: 2.25rem;
 }
 .tc-page-body {
   padding: 0 var(--tc-gutter) 1.5rem;
@@ -396,6 +470,21 @@ For commercial licensing, please contact support@quantumnous.com
   position: relative;
   padding-bottom: 3rem;
 }
+.tc-home-brand {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 2rem;
+}
+.tc-home-brand .tc-site-logo {
+  width: 3.5rem;
+  height: 3.5rem;
+}
+.tc-home-brand .tc-brand-name {
+  font-size: 1.35rem;
+}
+.tc-home-brand .tc-brand-chinese {
+  font-size: 1.15rem;
+}
 .tc-hero-kicker {
   display: flex;
   align-items: center;
@@ -554,6 +643,15 @@ For commercial licensing, please contact support@quantumnous.com
   color: var(--background);
   overflow: hidden;
 }
+.tc-auth-brand {
+  margin-bottom: 2.5rem;
+}
+.tc-auth-aside .tc-brand {
+  color: var(--background);
+}
+.tc-auth-aside .tc-brand-chinese {
+  color: var(--tc-brand-accent);
+}
 .tc-auth-aside .text-muted-foreground {
   color: inherit;
   opacity: 0.7;
@@ -683,16 +781,36 @@ For commercial licensing, please contact support@quantumnous.com
     height: 2rem;
   }
   .tc-brand-compact .tc-brand-name {
-    font-size: 0.95rem;
+    font-size: 0.94rem;
+  }
+  .tc-brand-compact .tc-brand-chinese {
+    font-size: 0.84rem;
   }
   .tc-page-heading {
     padding-block: 1.1rem;
   }
   .tc-page-title {
-    font-size: 1.8rem;
+    font-size: 1.7rem;
   }
   .tc-page-heading > div {
     gap: 0.8rem;
+  }
+  .tc-channel-drawer-title-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .tc-channel-drawer-title-group {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .tc-channel-provider-control {
+    width: 100%;
+    max-width: none;
+  }
+  .tc-channel-drawer-meta-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .tc-overview-metrics,
   .tc-overview-credit {
@@ -718,6 +836,19 @@ For commercial licensing, please contact support@quantumnous.com
   }
   .tc-home-hero {
     padding-top: 7rem;
+  }
+  .tc-home-brand {
+    margin-bottom: 1.5rem;
+  }
+  .tc-home-brand .tc-site-logo {
+    width: 3rem;
+    height: 3rem;
+  }
+  .tc-home-brand .tc-brand-name {
+    font-size: 1.15rem;
+  }
+  .tc-home-brand .tc-brand-chinese {
+    font-size: 1rem;
   }
   .tc-hero-title {
     font-size: clamp(3rem, 13vw, 5rem);

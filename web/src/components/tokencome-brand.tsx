@@ -76,7 +76,7 @@ export function TokenComeBrand(props: TokenComeBrandProps) {
   return (
     <span
       className={cn(
-        'tc-brand inline-flex min-w-0 items-center gap-2',
+        'tc-brand inline-flex min-w-0 items-center gap-2.5',
         props.compact && 'tc-brand-compact',
         props.className
       )}

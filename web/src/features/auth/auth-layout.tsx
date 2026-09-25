@@ -42,6 +42,7 @@ export function AuthLayout(props: AuthLayoutProps) {
       <div className='relative grid flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
         <aside className='tc-auth-aside hidden flex-col justify-center border-e px-12 py-16 lg:flex xl:px-20'>
           <div className='mx-auto w-full max-w-lg'>
+            <TokenComeBrand className='tc-auth-brand' />
             <p className='text-brand mb-5 text-xs font-semibold tracking-widest uppercase'>
               {t('AI gateway workspace')}
             </p>

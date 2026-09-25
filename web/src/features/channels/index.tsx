@@ -60,7 +60,7 @@ export function Channels() {
           render={
             <Badge
               variant='outline'
-              className='shrink-0 cursor-pointer'
+              className='tc-channel-retry-badge shrink-0 cursor-pointer'
               aria-label={t('Retry Settings')}
               render={
                 <Link
@@ -89,7 +89,7 @@ export function Channels() {
     <ChannelsProvider>
       <SectionPageLayout fixedContent>
         <SectionPageLayout.Title>
-          <span className='flex min-w-0 items-center gap-2'>
+          <span className='tc-channel-title-wrap'>
             <span className='truncate'>{t('Channels')}</span>
             {retryBadge}
           </span>

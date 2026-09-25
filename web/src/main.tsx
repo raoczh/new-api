@@ -72,11 +72,12 @@ if (!rootElement) {
   try {
     if (typeof window === 'undefined' || typeof document === 'undefined') return
     const apply = (name: string) => {
-      document.title = name
+      const brandedTitle = `${name} · 渡康`
+      document.title = brandedTitle
       const metaTitle = document.querySelector(
         'meta[name="title"]'
       ) as HTMLMetaElement | null
-      if (metaTitle) metaTitle.setAttribute('content', name)
+      if (metaTitle) metaTitle.setAttribute('content', brandedTitle)
     }
     // Cache-first
     const cached = readCachedStatus()
