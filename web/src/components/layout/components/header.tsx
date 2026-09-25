@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { SidebarTrigger } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
 
 type HeaderProps = React.HTMLAttributes<HTMLElement>
@@ -25,15 +24,12 @@ export function Header({ className, children, ...props }: HeaderProps) {
   return (
     <header
       className={cn(
-        'tc-app-header sticky top-0 z-40 h-[var(--app-header-height,3.75rem)] w-full shrink-0 bg-background/85 backdrop-blur-xl',
+        'tc-app-header tc-masthead relative z-40 w-full shrink-0',
         className
       )}
       {...props}
     >
-      <div className='flex h-full items-center gap-1 border-b px-2 sm:gap-3 sm:px-4'>
-        <SidebarTrigger variant='ghost' className='size-8' />
-        {children}
-      </div>
+      <div className='tc-masthead-inner'>{children}</div>
     </header>
   )
 }

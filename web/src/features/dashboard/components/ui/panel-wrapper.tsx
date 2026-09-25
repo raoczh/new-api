@@ -50,7 +50,7 @@ function PanelHeader(props: {
   )
 
   return (
-    <div className='bg-muted/25 border-b px-4 py-4 sm:px-5'>
+    <div className='tc-panel-heading'>
       {props.actions != null ? (
         <div className='flex items-start justify-between gap-2'>
           {heading}
@@ -68,7 +68,7 @@ export function PanelWrapper(props: PanelWrapperProps) {
   const resolvedEmptyMessage = props.emptyMessage ?? t('No data available')
   const height = props.height ?? 'h-64'
   const frameClassName = cn(
-    'overflow-hidden rounded-lg border bg-card shadow-xs',
+    'tc-overview-panel overflow-hidden',
     props.className
   )
 

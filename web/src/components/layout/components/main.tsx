@@ -30,7 +30,7 @@ export function Main({ className, fluid = true, ...props }: MainProps) {
       className={cn(
         'tc-main flex min-h-0 flex-1 flex-col overflow-hidden bg-background',
         !fluid &&
-          '@7xl/content:mx-auto @7xl/content:w-full @7xl/content:max-w-7xl',
+          '@7xl/content:mx-auto @7xl/content:w-full @7xl/content:max-w-[1680px]',
         className
       )}
       {...props}

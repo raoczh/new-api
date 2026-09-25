@@ -35,7 +35,6 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
-import { SystemUpdateAction } from '@/features/system-update/system-update-action'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useSystemConfig } from '@/hooks/use-system-config'
@@ -216,18 +215,12 @@ export function PublicHeader(props: PublicHeaderProps) {
                 to={homeUrl}
                 className='group flex min-w-0 flex-col items-start gap-1 rounded-md'
               >
-                <TokenComeBrand compact />
-                <span className='flex min-w-0 items-center gap-1.5 ps-9'>
-                  <span className='size-3 shrink-0'>{logoContent}</span>
-                  <span
-                    className='text-muted-foreground max-w-32 truncate text-[11px]'
-                    title={displaySiteName}
-                  >
-                    {loading ? t('Loading...') : displaySiteName}
-                  </span>
-                </span>
+                <TokenComeBrand
+                  compact
+                  name={displaySiteName}
+                  logo={logoContent}
+                />
               </Link>
-              <SystemUpdateAction presentation='version' />
             </div>
 
             {/* Desktop nav */}

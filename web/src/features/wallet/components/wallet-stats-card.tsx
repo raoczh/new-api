@@ -34,9 +34,9 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
   const { t } = useTranslation()
   if (props.loading) {
     return (
-      <div className='grid grid-cols-3 divide-x rounded-lg border'>
+      <div className='tc-wallet-stats'>
         {['balance', 'usage', 'requests'].map((key) => (
-          <div key={key} className='min-w-0 px-2.5 py-2.5 sm:px-5 sm:py-4'>
+          <div key={key} className='tc-wallet-stat'>
             <Skeleton className='h-3.5 w-full' />
             <Skeleton className='mt-2 h-6 w-full sm:h-7' />
             <Skeleton className='mt-1.5 hidden h-3.5 w-24 md:block' />
@@ -77,9 +77,9 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
   ]
 
   return (
-    <div className='grid grid-cols-3 divide-x rounded-lg border'>
+    <div className='tc-wallet-stats'>
       {stats.map((item) => (
-        <div key={item.label} className='min-w-0 px-2.5 py-2.5 sm:px-5 sm:py-4'>
+        <div key={item.label} className='tc-wallet-stat'>
           <div className='flex items-center gap-1.5 sm:gap-2.5'>
             <IconBadge tone={item.tone} size='stat'>
               <item.icon />
@@ -89,7 +89,7 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
             </div>
           </div>
 
-          <div className='text-foreground mt-1.5 font-mono text-sm font-bold tracking-tight break-all tabular-nums sm:mt-2.5 sm:text-2xl'>
+          <div className='tc-wallet-stat-value text-foreground font-mono font-semibold tracking-tight break-all tabular-nums'>
             {item.value}
           </div>
           <div className='text-muted-foreground mt-1 hidden text-xs md:block'>

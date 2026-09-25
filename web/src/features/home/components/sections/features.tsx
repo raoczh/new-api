@@ -17,9 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import {
-  Zap,
   Shield,
-  Globe,
   Code,
   Gauge,
   DollarSign,
@@ -43,8 +41,6 @@ export function Features(_props: FeaturesProps) {
       num: '01',
       title: t('Unified model access'),
       desc: t('Connect multiple providers through compatible API routes.'),
-      span: 'md:col-span-1',
-      icon: <Zap className='text-brand size-4' />,
       visual: (
         <div className='mt-4 grid grid-cols-3 gap-2'>
           {['OpenAI', 'Claude', 'Gemini', 'DeepSeek', 'Qwen', 'Llama'].map(
@@ -67,8 +63,6 @@ export function Features(_props: FeaturesProps) {
       desc: t(
         'Enterprise-grade security with comprehensive permission management'
       ),
-      span: 'md:col-span-1',
-      icon: <Shield className='size-4 text-emerald-400' />,
       visual: (
         <div className='mt-4 flex items-center justify-center'>
           <div className='relative'>
@@ -102,8 +96,6 @@ export function Features(_props: FeaturesProps) {
       num: '03',
       title: t('Routing controls'),
       desc: t('Configure channels, balance requests, and inspect usage.'),
-      span: 'md:col-span-1',
-      icon: <Globe className='text-brand size-4' />,
       visual: (
         <div className='mt-4 space-y-2'>
           {[t('Load Balancing'), t('Rate Limiting'), t('Cost Tracking')].map(
@@ -131,8 +123,6 @@ export function Features(_props: FeaturesProps) {
       num: '04',
       title: t('Developer Friendly'),
       desc: t('Compatible API routes for common AI application workflows'),
-      span: 'md:col-span-1',
-      icon: <Code className='text-brand size-4' />,
       visual: (
         <div className='mt-4 flex items-center gap-3'>
           <div className='flex -space-x-2'>
@@ -178,54 +168,51 @@ export function Features(_props: FeaturesProps) {
   ]
 
   return (
-    <section className='relative px-5 py-16 sm:px-8 md:py-24'>
-      <div className='mx-auto max-w-7xl'>
-        <AnimateInView className='mb-10 max-w-2xl'>
+    <section className='tc-editorial-section'>
+      <div className='tc-features-layout'>
+        <AnimateInView className='tc-section-intro'>
           <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
             {t('Core Features')}
           </p>
-          <h2 className='text-2xl leading-tight font-bold tracking-tight md:text-3xl'>
+          <h2 className='text-3xl leading-tight font-semibold tracking-tight md:text-5xl'>
             {t('Built for developers,')}
             <br />
             {t('designed for scale')}
           </h2>
         </AnimateInView>
 
-        {/* Bento grid */}
-        <div className='grid gap-4 md:grid-cols-2'>
+        <div className='tc-feature-register'>
           {features.map((f, i) => (
             <AnimateInView
               key={f.id}
               delay={i * 100}
               animation='scale-in'
-              className={`bg-card group rounded-xl border p-6 sm:p-8 ${f.span}`}
+              className='tc-feature-row'
             >
-              <div className='mb-3 flex items-center gap-3'>
-                <span className='border-border/40 bg-muted text-muted-foreground flex size-7 items-center justify-center rounded-md border text-[10px] font-semibold tabular-nums'>
-                  {f.num}
-                </span>
-                <h3 className='text-sm font-semibold'>{f.title}</h3>
+              <span className='tc-feature-number' aria-hidden='true'>
+                {f.num}
+              </span>
+              <div>
+                <h3 className='mb-3 text-lg font-semibold'>{f.title}</h3>
+                <p className='text-muted-foreground text-sm leading-relaxed'>
+                  {f.desc}
+                </p>
               </div>
-              <p className='text-muted-foreground text-sm leading-relaxed'>
-                {f.desc}
-              </p>
-              {f.visual}
+              <div className='tc-feature-visual'>{f.visual}</div>
             </AnimateInView>
           ))}
         </div>
 
         {/* Additional features row */}
-        <div className='mt-12 grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-12'>
+        <div className='tc-feature-notes'>
           {additionalFeatures.map((f, i) => (
             <AnimateInView
               key={f.title}
               delay={i * 100}
               animation='fade-up'
-              className='flex flex-col items-center text-center'
+              className='flex flex-col items-start'
             >
-              <div className='text-muted-foreground border-border/50 bg-muted/30 group-hover:text-foreground mb-3 flex size-12 items-center justify-center rounded-xl border transition-colors'>
-                {f.icon}
-              </div>
+              <div className='text-brand mb-5'>{f.icon}</div>
               <h3 className='mb-1.5 text-sm font-semibold'>{f.title}</h3>
               <p className='text-muted-foreground max-w-[200px] text-xs leading-relaxed'>
                 {f.desc}

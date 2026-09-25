@@ -791,10 +791,10 @@ export function OverviewDashboard() {
           {showContentPanels && (
             <CardStaggerContainer
               className={cn(
-                'grid grid-cols-1 gap-4',
+                'tc-overview-panels',
                 showLeftContentPanels &&
                   showUptimePanel &&
-                  '2xl:grid-cols-[minmax(0,1fr)_18rem]'
+                  'tc-overview-panels-with-uptime'
               )}
             >
               {showLeftContentPanels && (

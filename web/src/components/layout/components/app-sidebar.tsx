@@ -16,86 +16,124 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { Link, useLocation } from '@tanstack/react-router'
+import { ArrowUpLeft } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarFooter,
-  SidebarRail,
-} from '@/components/ui/sidebar'
-import { useLayout } from '@/context/layout-provider'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useSidebarView } from '@/hooks/use-sidebar-view'
-import { MOTION_TRANSITION, MOTION_VARIANTS } from '@/lib/motion'
 
+import { checkIsActive } from '../lib/url-utils'
+import type { NavGroup as NavGroupData } from '../types'
 import { NavGroup } from './nav-group'
-import { SidebarViewHeader } from './sidebar-view-header'
-import { SystemBrand } from './system-brand'
 
-/**
- * Application sidebar.
- *
- * Adopts the Vercel / Cloudflare "drill-in" pattern: the URL drives
- * which sidebar *view* is rendered. Clicking a top-level entry like
- * `System Settings` swaps the sidebar to a contextual workspace —
- * with a `← Back to Dashboard` affordance — instead of stacking the
- * sub-navigation inside the root tree.
- *
- * Architecture:
- *   - View resolution + filtering: {@link useSidebarView}
- *   - View registry: `layout/lib/sidebar-view-registry.ts`
- *   - Per-view header: {@link SidebarViewHeader}
- *
- * Adding a new nested view only requires registering a {@link SidebarView}
- * in the registry; this component requires no changes.
- */
+/** Reuse permission-filtered navigation and its actions in a horizontal workspace. */
 export function AppSidebar() {
-  const { collapsible, variant } = useLayout()
+  const { t } = useTranslation()
   const { key, view, navGroups } = useSidebarView()
-  const shouldReduce = useReducedMotion()
+  const pathname = useLocation({ select: (location) => location.pathname })
+  const groups = navGroups.filter((group) => group.items.length > 0)
+  const active =
+    groups.find((group) =>
+      group.items.some(
+        (item) =>
+          checkIsActive(pathname, item) ||
+          (item.type === 'chat-presets' && pathname.startsWith('/chat/'))
+      )
+    ) ??
+    groups.find((group) => group.id === 'general') ??
+    groups[0]
 
   return (
-    <Sidebar
-      collapsible={collapsible}
-      variant={variant}
-      className='tc-app-sidebar'
-    >
-      <SidebarHeader className='min-h-[var(--app-header-height)] justify-center border-b px-2 py-1'>
-        <SystemBrand />
-      </SidebarHeader>
-      {view && <SidebarViewHeader view={view} />}
-
-      <SidebarContent className='py-2'>
-        <AnimatePresence mode='wait' initial={false}>
-          <motion.div
-            key={key}
-            initial={
-              shouldReduce ? false : MOTION_VARIANTS.sidebarSlide.initial
-            }
-            animate={MOTION_VARIANTS.sidebarSlide.animate}
-            exit={shouldReduce ? undefined : MOTION_VARIANTS.sidebarSlide.exit}
-            transition={MOTION_TRANSITION.fast}
-            className='flex flex-col'
-          >
-            {navGroups.map((props) => (
-              <NavGroup key={props.id || props.title} {...props} />
-            ))}
-          </motion.div>
-        </AnimatePresence>
-      </SidebarContent>
-
-      <SidebarFooter className='border-t px-4 py-4 group-data-[collapsible=icon]:hidden'>
+    <nav className='tc-workspace-navigation' aria-label={t('Navigation')}>
+      <div className='tc-workspace-navigation-inner'>
+        {view && (
+          <Link to={view.parent.to} className='tc-workspace-back'>
+            <ArrowUpLeft className='size-4' aria-hidden='true' />
+            {t(view.parent.label)}
+          </Link>
+        )}
+        {active && (
+          <WorkspaceGroups
+            key={key + pathname}
+            groups={groups}
+            active={active.id || active.title}
+          />
+        )}
         <a
           href='https://github.com/QuantumNous/new-api'
           target='_blank'
           rel='noopener noreferrer'
-          className='text-muted-foreground hover:text-foreground text-xs'
+          className='tc-workspace-attribution'
         >
           New API · QuantumNous
         </a>
-      </SidebarFooter>
-      <SidebarRail />
-    </Sidebar>
+      </div>
+    </nav>
+  )
+}
+
+function WorkspaceGroups(props: { groups: NavGroupData[]; active: string }) {
+  const { t, i18n } = useTranslation()
+  const navigationRef = useRef<HTMLDivElement>(null)
+  const [selected, setSelected] = useState(props.active)
+  const value = props.groups.some(
+    (group) => (group.id || group.title) === selected
+  )
+    ? selected
+    : props.active
+
+  useEffect(() => {
+    const navigation = navigationRef.current
+    const activeTab = navigation?.querySelector<HTMLElement>(
+      '[role="tab"][aria-selected="true"]'
+    )
+    const activeLink = navigation?.querySelector<HTMLElement>(
+      '[data-sidebar="menu-button"][data-active]'
+    )
+    activeTab?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    activeLink?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [value, i18n.resolvedLanguage])
+
+  return (
+    <Tabs
+      ref={navigationRef}
+      value={value}
+      onValueChange={(value) => setSelected(String(value))}
+      className='tc-workspace-tabs'
+    >
+      <div className='tc-workspace-sections'>
+        <span className='tc-navigation-caption'>
+          {t('AI gateway workspace')}
+        </span>
+        <TabsList
+          variant='line'
+          aria-label={t('Navigation')}
+          className='tc-workspace-group-tabs'
+        >
+          {props.groups.map((group, index) => (
+            <TabsTrigger
+              key={group.id || group.title}
+              value={group.id || group.title}
+            >
+              <span className='tc-nav-index' aria-hidden='true'>
+                {String(index + 1).padStart(2, '0')}
+              </span>
+              {group.title}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
+      {props.groups.map((group) => (
+        <TabsContent
+          key={group.id || group.title}
+          value={group.id || group.title}
+          className='tc-workspace-links'
+        >
+          <NavGroup {...group} orientation='horizontal' />
+        </TabsContent>
+      ))}
+    </Tabs>
   )
 }

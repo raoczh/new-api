@@ -16,11 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { ReactNode } from 'react'
+
+import { HeaderLogo } from '@/components/layout/components/header-logo'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useSystemConfig } from '@/hooks/use-system-config'
 import { cn } from '@/lib/utils'
 
 type TokenComeBrandProps = {
   className?: string
   compact?: boolean
+  name?: string
+  logo?: ReactNode
 }
 
 /** Decorative routing diagram, with no service status or metrics. */
@@ -42,19 +49,17 @@ export function TokenComeBridge(props: { className?: string }) {
         d='M70 142V125M110 142V77M150 142V54M210 142V46M270 142V54M310 142V77M350 142V125'
         stroke='var(--border)'
       />
-      <rect
-        x='180'
-        y='104'
-        width='60'
-        height='60'
-        rx='12'
+      <circle
+        cx='210'
+        cy='142'
+        r='13'
         fill='var(--card)'
         stroke='var(--tc-brand-accent)'
       />
       <path
-        d='M193 121h34M210 121v27M198 148h24'
-        stroke='var(--foreground)'
-        strokeWidth='3'
+        d='M204 142h12m-5-5 5 5-5 5'
+        stroke='var(--tc-brand-accent)'
+        strokeWidth='2'
         strokeLinecap='round'
       />
       <circle cx='40' cy='142' r='5' fill='var(--tc-brand-accent)' />
@@ -64,8 +69,10 @@ export function TokenComeBridge(props: { className?: string }) {
   )
 }
 
-/** The visual site identity. Configured system branding remains alongside it. */
+/** One identity, sourced from the site's existing configuration. */
 export function TokenComeBrand(props: TokenComeBrandProps) {
+  const config = useSystemConfig()
+  const name = props.name || config.systemName
   return (
     <span
       className={cn(
@@ -73,35 +80,26 @@ export function TokenComeBrand(props: TokenComeBrandProps) {
         props.compact && 'tc-brand-compact',
         props.className
       )}
-      aria-label='Token Come 渡康'
+      aria-label={name}
     >
-      <span className='tc-brand-mark' aria-hidden='true'>
-        <svg viewBox='0 0 32 32' fill='none' xmlns='http://www.w3.org/2000/svg'>
-          <path
-            d='M5 8.5h22M16 8.5v15'
-            stroke='currentColor'
-            strokeWidth='2.5'
-            strokeLinecap='round'
+      <span className='tc-site-logo'>
+        {props.logo ?? (
+          <HeaderLogo
+            src={config.logo}
+            alt={name}
+            loading={config.loading}
+            logoLoaded={config.logoLoaded}
+            className='size-full rounded-none object-contain'
           />
-          <path
-            d='M7 23.5h8.5M17 23.5h8'
-            stroke='currentColor'
-            strokeWidth='2.5'
-            strokeLinecap='round'
-          />
-          <path
-            d='M17 8.5v15'
-            stroke='var(--tc-brand-accent)'
-            strokeWidth='2.5'
-            strokeLinecap='round'
-          />
-          <circle cx='16' cy='8.5' r='2.25' fill='var(--tc-brand-accent)' />
-        </svg>
+        )}
       </span>
-      <span className='tc-brand-copy'>
-        <span className='tc-brand-name'>Token Come</span>
-        <span className='tc-brand-cn'>渡康</span>
-      </span>
+      {config.loading ? (
+        <Skeleton className='h-5 w-24' />
+      ) : (
+        <span className='tc-brand-name truncate' title={name}>
+          {name}
+        </span>
+      )}
     </span>
   )
 }

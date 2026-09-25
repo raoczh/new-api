@@ -36,29 +36,30 @@ export function CTA(props: CTAProps) {
   }
 
   return (
-    <section className='relative overflow-hidden px-5 py-16 sm:px-8 md:py-24'>
-      <AnimateInView
-        className='bg-card mx-auto max-w-7xl rounded-xl border px-6 py-12 text-center sm:px-12'
-        animation='scale-in'
-      >
-        <h2 className='text-2xl leading-tight font-bold tracking-tight md:text-4xl'>
+    <section className='tc-editorial-section tc-home-cta'>
+      <AnimateInView className='tc-home-cta-inner' animation='scale-in'>
+        <h2 className='text-3xl leading-tight font-semibold tracking-tight md:text-5xl'>
           {t('Ready to simplify')}
           <br />
-          <span className='text-brand'>{t('your AI integration?')}</span>
+          <span>{t('your AI integration?')}</span>
         </h2>
-        <p className='text-muted-foreground mx-auto mt-5 max-w-md text-sm leading-relaxed md:text-base'>
+        <p className='max-w-md text-sm leading-relaxed opacity-75 md:text-base'>
           {t(
             'Deploy your own gateway and start routing requests through your configured upstream services.'
           )}
         </p>
-        <div className='mt-8 flex flex-wrap items-center justify-center gap-3'>
-          <Button className='group rounded-lg' render={<Link to='/sign-up' />}>
+        <div className='flex flex-wrap items-center gap-3'>
+          <Button
+            variant='secondary'
+            className='group h-11 rounded-sm px-6'
+            render={<Link to='/sign-up' />}
+          >
             {t('Get Started')}
             <ArrowRight className='ml-1 size-3.5 transition-transform duration-200 group-hover:translate-x-0.5' />
           </Button>
           <Button
-            variant='outline'
-            className='border-border/50 hover:border-border hover:bg-muted/50 rounded-lg'
+            variant='ghost'
+            className='text-background hover:text-foreground h-11 rounded-sm px-6'
             render={<Link to='/pricing' />}
           >
             {t('View Pricing')}

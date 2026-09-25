@@ -17,93 +17,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { useTranslation } from 'react-i18next'
 
 import { TokenComeBrand } from '@/components/tokencome-brand'
-import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from '@/components/ui/sidebar'
-import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
-import { cn } from '@/lib/utils'
 
 type SystemBrandProps = {
   defaultName?: string
   defaultVersion?: string
-  /**
-   * Visual layout:
-   * - 'sidebar': stacked card style (used inside the sidebar header).
-   * - 'inline': compact horizontal pill (used inside the top app bar).
-   */
   variant?: 'sidebar' | 'inline'
 }
 
-/**
- * System brand component
- * Displays current system logo + name.
- * - inline: compact pill in the top app bar; clicking navigates to home (/)
- * - sidebar: stacked card in the sidebar header (display only)
- */
 export function SystemBrand(props: SystemBrandProps) {
-  const { t } = useTranslation()
-  const { status } = useStatus()
-  const { logo } = useSystemConfig()
-
-  const variant = props.variant ?? 'sidebar'
-  const name = status?.system_name || props.defaultName || 'New API'
-  const version =
-    status?.version || props.defaultVersion || t('Unknown version')
-
-  if (variant === 'inline') {
-    return (
-      <Link
-        to='/'
-        aria-label={t('Go to home')}
-        className={cn(
-          'text-foreground inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md px-1.5 text-sm font-medium transition-colors outline-none select-none',
-          'hover:bg-accent focus-visible:ring-ring/40 focus-visible:ring-2'
-        )}
-      >
-        <div className='flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-md'>
-          <img
-            src={logo}
-            alt={t('Logo')}
-            className='size-full rounded-md object-cover'
-          />
-        </div>
-        <TokenComeBrand compact className='max-w-[13rem]' />
-        <span className='text-muted-foreground max-w-20 truncate text-xs'>
-          {name}
-        </span>
-      </Link>
-    )
-  }
-
+  const { systemName } = useSystemConfig()
+  const name = systemName || props.defaultName || 'New API'
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          size='lg'
-          className='hover:text-sidebar-foreground active:text-sidebar-foreground cursor-default hover:bg-transparent active:bg-transparent'
-          render={<div />}
-        >
-          <div className='flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg'>
-            <img
-              src={logo}
-              alt={t('Logo')}
-              className='size-full rounded-lg object-cover'
-            />
-          </div>
-          <div className='grid flex-1 text-start text-sm leading-tight group-data-[collapsible=icon]:hidden'>
-            <TokenComeBrand compact className='max-w-full' />
-            <span className='text-muted-foreground truncate text-[10px]'>
-              {name} · {version}
-            </span>
-          </div>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    </SidebarMenu>
+    <Link to='/' className='tc-system-brand min-w-0 rounded-sm'>
+      <TokenComeBrand name={name} compact={props.variant === 'inline'} />
+    </Link>
   )
 }

@@ -81,7 +81,7 @@ export function SectionPageLayout(props: SectionPageLayoutProps) {
   return (
     <PageFooterProvider container={footerContainer}>
       <Main>
-        <div className='tc-page-heading shrink-0 px-3 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4'>
+        <div className='tc-page-heading shrink-0'>
           {breadcrumb != null && (
             <div className='mb-2 sm:mb-3'>{breadcrumb}</div>
           )}
@@ -93,9 +93,7 @@ export function SectionPageLayout(props: SectionPageLayoutProps) {
                   : 'min-w-0 flex-1 max-sm:min-w-[12rem]'
               }
             >
-              <h2 className='truncate text-lg font-semibold tracking-tight sm:text-xl'>
-                {title}
-              </h2>
+              <h1 className='tc-page-title'>{title}</h1>
             </div>
             {actions != null && (
               <div className='flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-x-4'>
@@ -108,8 +106,8 @@ export function SectionPageLayout(props: SectionPageLayoutProps) {
         <div
           className={
             props.fixedContent
-              ? 'min-h-0 flex-1 overflow-hidden px-3 pb-4 sm:px-6 sm:pb-6'
-              : 'min-h-0 flex-1 overflow-auto px-3 pb-4 sm:px-6 sm:pb-6'
+              ? 'tc-page-body min-h-0 flex-1 overflow-hidden'
+              : 'tc-page-body min-h-0 flex-1 overflow-auto'
           }
         >
           {content}

@@ -344,20 +344,26 @@ export function DataTablePage<TData>(props: DataTablePageProps<TData>) {
     <>
       <div
         className={cn(
-          props.fixedHeight !== false
-            ? 'flex h-full min-h-0 flex-col gap-2.5 sm:gap-3'
-            : 'space-y-2.5 sm:space-y-3',
+          'tc-data-workspace',
+          props.fixedHeight !== false && 'tc-data-fixed h-full min-h-0',
           props.className
         )}
       >
         {toolbarNode != null && (
-          <div className='bg-card shrink-0 rounded-lg border p-3'>
-            {toolbarNode}
-          </div>
+          <div className='tc-data-tools shrink-0'>{toolbarNode}</div>
         )}
-        {mobileNode}
-        {desktopNode}
-        {props.afterTable}
+        <div
+          className={cn(
+            'tc-data-results min-w-0',
+            props.fixedHeight !== false && 'flex min-h-0 flex-1 flex-col'
+          )}
+        >
+          {mobileNode}
+          {desktopNode}
+        </div>
+        {props.afterTable != null && (
+          <div className='tc-data-after'>{props.afterTable}</div>
+        )}
       </div>
 
       {/* Bulk actions are typically a fixed-position toolbar; let the consumer

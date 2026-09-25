@@ -50,8 +50,8 @@ export function HowItWorks() {
   ]
 
   return (
-    <section className='bg-card relative border-y px-5 py-16 sm:px-8 md:py-24'>
-      <div className='mx-auto max-w-7xl'>
+    <section className='tc-editorial-section bg-card border-y'>
+      <div className='mx-auto max-w-[1440px]'>
         <AnimateInView className='mb-10 text-start'>
           <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
             {t('How It Works')}
@@ -61,21 +61,19 @@ export function HowItWorks() {
           </h2>
         </AnimateInView>
 
-        <div className='grid gap-8 md:grid-cols-3 md:gap-12'>
+        <div className='tc-journey'>
           {steps.map((step, i) => (
             <AnimateInView
               key={step.num}
               delay={i * 150}
               animation='fade-up'
-              className='bg-background relative flex flex-col items-start rounded-xl border p-6 text-start'
+              className='tc-journey-step'
             >
-              <div className='relative mb-6'>
-                <div className='text-muted-foreground border-border/50 bg-muted/30 flex size-16 items-center justify-center rounded-lg border transition-colors'>
-                  {step.icon}
-                </div>
-                <div className='bg-foreground text-background absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full text-xs font-bold'>
-                  {step.num}
-                </div>
+              <div className='mb-8 flex items-start justify-between gap-4'>
+                <span className='tc-journey-number' aria-hidden='true'>
+                  0{step.num}
+                </span>
+                <span className='text-muted-foreground'>{step.icon}</span>
               </div>
               <h3 className='mb-2 text-base font-semibold'>{step.title}</h3>
               <p className='text-muted-foreground max-w-[240px] text-sm leading-relaxed'>

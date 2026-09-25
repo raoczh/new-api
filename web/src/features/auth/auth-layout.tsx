@@ -22,34 +22,17 @@ import { useTranslation } from 'react-i18next'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { TokenComeBrand, TokenComeBridge } from '@/components/tokencome-brand'
-import { Skeleton } from '@/components/ui/skeleton'
-import { useSystemConfig } from '@/hooks/use-system-config'
 
 type AuthLayoutProps = { children: React.ReactNode }
 
 export function AuthLayout(props: AuthLayoutProps) {
   const { t } = useTranslation()
-  const { systemName, logo, loading } = useSystemConfig()
 
   return (
     <div className='tc-auth-shell relative flex min-h-svh flex-col'>
       <header className='relative flex shrink-0 items-center justify-between gap-3 border-b px-4 py-4 sm:px-8'>
         <Link to='/' className='flex min-w-0 items-center gap-3 rounded-lg'>
           <TokenComeBrand compact />
-          <span className='flex min-w-0 items-center gap-1.5 border-s ps-3'>
-            {loading ? (
-              <Skeleton className='size-5' />
-            ) : (
-              <img
-                src={logo}
-                alt={t('Logo')}
-                className='size-5 rounded object-contain'
-              />
-            )}
-            <span className='text-muted-foreground max-w-24 truncate text-xs'>
-              {systemName}
-            </span>
-          </span>
         </Link>
         <div className='flex shrink-0 items-center gap-1'>
           <LanguageSwitcher />
