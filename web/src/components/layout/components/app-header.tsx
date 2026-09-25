@@ -21,6 +21,7 @@ import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
+import { ThemeSwitch } from '@/components/theme-switch'
 import { SystemUpdateAction } from '@/features/system-update/system-update-action'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
@@ -28,7 +29,6 @@ import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 import { defaultTopNavLinks } from '../config/top-nav.config'
 import type { TopNavLink } from '../types'
 import { Header } from './header'
-import { SystemBrand } from './system-brand'
 import { TopNav } from './top-nav'
 
 /**
@@ -114,7 +114,6 @@ export function AppHeader({
   return (
     <Header>
       <div className='@container/system-brand flex min-w-0 flex-1 items-center gap-1'>
-        <SystemBrand variant='inline' />
         <SystemUpdateAction presentation='version' />
       </div>
 
@@ -123,9 +122,9 @@ export function AppHeader({
       ) : null}
 
       {rightContent ?? (
-        <div className='ms-auto flex shrink-0 items-center gap-1 sm:gap-2'>
+        <div className='ms-auto flex shrink-0 items-center gap-0.5 sm:gap-2'>
           {showTopNav && (
-            <div className='me-1 hidden lg:block'>
+            <div className='me-1'>
               <TopNav links={links} />
             </div>
           )}
@@ -145,6 +144,7 @@ export function AppHeader({
             />
           )}
           <LanguageSwitcher />
+          <ThemeSwitch />
           {showConfigDrawer && <ConfigDrawer />}
           {showProfileDropdown && <ProfileDropdown />}
         </div>

@@ -24,6 +24,7 @@ import { SidebarLeftIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,9 +48,9 @@ import { cn } from '@/lib/utils'
 
 const SIDEBAR_COOKIE_NAME = 'sidebar_state'
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = '13rem'
+const SIDEBAR_WIDTH = '15.5rem'
 const SIDEBAR_WIDTH_MOBILE = '17rem'
-const SIDEBAR_WIDTH_ICON = '2.75rem'
+const SIDEBAR_WIDTH_ICON = '3.5rem'
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b'
 
 type SidebarContextProps = {
@@ -182,9 +183,10 @@ function Sidebar({
   variant?: 'sidebar' | 'floating' | 'inset'
   collapsible?: 'offcanvas' | 'icon' | 'none'
 }) {
+  const { t } = useTranslation()
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
-  if (collapsible === 'none') {
+  if (collapsible === 'none' && !isMobile) {
     return (
       <div
         data-slot='sidebar'
@@ -207,7 +209,7 @@ function Sidebar({
           data-sidebar='sidebar'
           data-slot='sidebar'
           data-mobile='true'
-          className='bg-sidebar text-sidebar-foreground pointer-events-auto z-60 w-(--sidebar-width) p-0 [&>button]:hidden'
+          className='bg-sidebar text-sidebar-foreground pointer-events-auto w-(--sidebar-width) max-w-[calc(100vw-3rem)] gap-0 p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]'
           style={
             {
               '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
@@ -216,8 +218,8 @@ function Sidebar({
           side={side}
         >
           <SheetHeader className='sr-only'>
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+            <SheetTitle>{t('Navigation')}</SheetTitle>
+            <SheetDescription>{t('Toggle navigation menu')}</SheetDescription>
           </SheetHeader>
           <div className='flex h-full w-full flex-col'>{children}</div>
         </SheetContent>
@@ -250,7 +252,7 @@ function Sidebar({
         data-slot='sidebar-container'
         data-side={side}
         className={cn(
-          'fixed top-[var(--app-header-height,0px)] bottom-0 z-10 hidden h-[calc(100svh-var(--app-header-height,0px))] w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex',
+          'fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex',
           // Adjust the padding for floating and inset variants.
           variant === 'floating' || variant === 'inset'
             ? 'p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]'
@@ -276,7 +278,8 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { t } = useTranslation()
+  const { toggleSidebar, isMobile, openMobile, open } = useSidebar()
 
   return (
     <Button
@@ -284,6 +287,7 @@ function SidebarTrigger({
       data-slot='sidebar-trigger'
       variant='ghost'
       size='icon-sm'
+      aria-expanded={isMobile ? openMobile : open}
       className={cn(className)}
       onClick={(event) => {
         onClick?.(event)
@@ -292,22 +296,23 @@ function SidebarTrigger({
       {...props}
     >
       <HugeiconsIcon icon={SidebarLeftIcon} strokeWidth={2} />
-      <span className='sr-only'>Toggle Sidebar</span>
+      <span className='sr-only'>{t('Toggle navigation menu')}</span>
     </Button>
   )
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<'button'>) {
+  const { t } = useTranslation()
   const { toggleSidebar } = useSidebar()
 
   return (
     <button
       data-sidebar='rail'
       data-slot='sidebar-rail'
-      aria-label='Toggle Sidebar'
+      aria-label={t('Toggle navigation menu')}
       tabIndex={-1}
       onClick={toggleSidebar}
-      title='Toggle Sidebar'
+      title={t('Toggle navigation menu')}
       className={cn(
         'hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2',
         'in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize',
@@ -322,9 +327,9 @@ function SidebarRail({ className, ...props }: React.ComponentProps<'button'>) {
   )
 }
 
-function SidebarInset({ className, ...props }: React.ComponentProps<'main'>) {
+function SidebarInset({ className, ...props }: React.ComponentProps<'div'>) {
   return (
-    <main
+    <div
       data-slot='sidebar-inset'
       className={cn(
         'bg-background relative flex w-full flex-1 flex-col md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2',

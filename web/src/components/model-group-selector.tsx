@@ -110,6 +110,7 @@ const ModelTriggerButton = React.forwardRef<
     ref={ref}
     variant='outline'
     role='combobox'
+    aria-label={currentLabel}
     size='sm'
     disabled={isDisabled}
     className={cn(
@@ -118,7 +119,7 @@ const ModelTriggerButton = React.forwardRef<
       'w-8',
       'bg-background text-foreground',
       'hover:bg-accent transition-colors',
-      'focus:!ring-0 focus:!outline-none',
+      'focus-visible:ring-2 focus-visible:ring-ring',
       'shadow-none',
       triggerClassName
     )}
@@ -146,6 +147,7 @@ const GroupTriggerButton = React.forwardRef<
     ref={ref}
     variant='outline'
     role='combobox'
+    aria-label={currentLabel}
     size='sm'
     disabled={isDisabled}
     className={cn(
@@ -154,7 +156,7 @@ const GroupTriggerButton = React.forwardRef<
       'w-8',
       'bg-background text-foreground',
       'hover:bg-accent transition-colors',
-      'focus:!ring-0 focus:!outline-none',
+      'focus-visible:ring-2 focus-visible:ring-ring',
       'shadow-none',
       triggerClassName
     )}
@@ -664,11 +666,12 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
       className={cn(
         'h-8 max-w-[15rem] justify-start gap-2 border px-2.5 font-medium shadow-none',
         'bg-background/80 hover:bg-accent/70 text-foreground',
-        'focus:!ring-0 focus:!outline-none',
+        'focus-visible:ring-2 focus-visible:ring-ring',
         className
       )}
       disabled={disabled}
       role='combobox'
+      aria-label={t('Select model')}
       size='sm'
       variant='outline'
     >

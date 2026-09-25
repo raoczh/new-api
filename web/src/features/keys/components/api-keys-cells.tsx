@@ -105,6 +105,7 @@ export function ApiKeyCell({ apiKey }: { apiKey: ApiKey }) {
               </div>
             ) : (
               <input
+                aria-label={t('Full API Key')}
                 readOnly
                 value={resolvedFullKey || maskedKey}
                 autoFocus
@@ -123,6 +124,7 @@ export function ApiKeyCell({ apiKey }: { apiKey: ApiKey }) {
               size='icon'
               className='size-7 shrink-0'
               onClick={handleCopy}
+              aria-label={copyTooltip}
               disabled={isLoading}
             />
           }

@@ -16,6 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useTranslation } from 'react-i18next'
+
+import { Badge } from '@/components/ui/badge'
+
 import { PlaygroundChat } from './components/chat/playground-chat'
 import { PlaygroundInput } from './components/input/playground-input'
 import {
@@ -26,6 +30,7 @@ import {
 } from './hooks'
 
 export function Playground() {
+  const { t } = useTranslation()
   const {
     config,
     parameterEnabled,
@@ -76,6 +81,12 @@ export function Playground() {
 
   return (
     <div className='relative flex size-full min-h-0 flex-col overflow-hidden'>
+      <header className='bg-card/60 flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6'>
+        <h1 className='text-base font-semibold'>{t('Playground')}</h1>
+        <Badge variant='outline' className='max-w-[60%] truncate font-mono'>
+          {config.model || t('Select model')}
+        </Badge>
+      </header>
       {/* Full-width scroll container: scrolling works even over side whitespace */}
       <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
         <PlaygroundChat
@@ -94,7 +105,7 @@ export function Playground() {
       </div>
 
       {/* Input area: center content and constrain to the same container width */}
-      <div className='mx-auto w-full max-w-4xl'>
+      <div className='bg-card/50 mx-auto w-full max-w-4xl shrink-0 border-t pb-[env(safe-area-inset-bottom)]'>
         <PlaygroundInput
           config={config}
           disabled={isGenerating}

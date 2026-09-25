@@ -47,7 +47,13 @@ export function ErrorState(props: ErrorStateProps) {
 
   return (
     <FadeIn>
-      <Empty className={cn('min-h-[300px]', props.className)}>
+      <Empty
+        role='alert'
+        className={cn(
+          'min-h-[260px] rounded-lg border border-destructive/25 bg-card',
+          props.className
+        )}
+      >
         <EmptyHeader>
           <EmptyMedia variant='icon'>
             <Icon className='text-destructive size-6' />

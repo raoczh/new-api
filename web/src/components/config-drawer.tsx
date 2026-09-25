@@ -91,7 +91,6 @@ export function ConfigDrawer() {
             variant='ghost'
             aria-label={t('Open theme settings')}
             aria-describedby='config-drawer-description'
-            className='max-md:hidden'
           />
         }
       >
@@ -135,6 +134,7 @@ function SectionTitle(props: {
   onReset?: () => void
   className?: string
 }) {
+  const { t } = useTranslation()
   return (
     <div
       className={cn(
@@ -149,7 +149,7 @@ function SectionTitle(props: {
           variant='secondary'
           className='size-4'
           onClick={props.onReset}
-          aria-label='Reset'
+          aria-label={t('Reset')}
         >
           <RotateCcw className='size-3' aria-hidden='true' />
         </Button>
@@ -171,7 +171,7 @@ function RadioGroupItem(props: {
     <Item
       value={props.item.value}
       className={cn('group outline-none', 'transition duration-200 ease-in')}
-      aria-label={`Select ${props.item.label.toLowerCase()}`}
+      aria-label={props.item.label}
       aria-describedby={`${props.item.value}-description`}
     >
       <div
@@ -181,12 +181,11 @@ function RadioGroupItem(props: {
           'group-focus-visible:ring-2'
         )}
         role='img'
-        aria-hidden='false'
-        aria-label={`${props.item.label} option preview`}
+        aria-hidden='true'
       >
         <CircleCheck
           className={cn(
-            'fill-primary size-6 stroke-white',
+            'fill-primary size-6 stroke-primary-foreground',
             'group-data-unchecked:hidden',
             'absolute top-0 right-0 translate-x-1/2 -translate-y-1/2'
           )}
@@ -278,15 +277,12 @@ function PresetConfig() {
                 aria-hidden='true'
                 className='absolute inset-0 rounded-md'
                 style={{
-                  background:
-                    preset.value === 'default'
-                      ? 'linear-gradient(135deg, oklch(0.68 0.2 25) 0%, oklch(0.8 0.17 85) 25%, oklch(0.72 0.18 155) 50%, oklch(0.66 0.19 245) 75%, oklch(0.68 0.2 315) 100%)'
-                      : `linear-gradient(135deg, ${preset.swatches[0]} 0%, ${preset.swatches[1] ?? preset.swatches[0]} 100%)`,
+                  background: `linear-gradient(135deg, ${preset.swatches[0]} 0%, ${preset.swatches[1] ?? preset.swatches[0]} 100%)`,
                 }}
               />
               <CircleCheck
                 className={cn(
-                  'fill-primary absolute top-0 right-0 z-10 size-5 translate-x-1/2 -translate-y-1/2 stroke-white',
+                  'fill-primary absolute top-0 right-0 z-10 size-5 translate-x-1/2 -translate-y-1/2 stroke-primary-foreground',
                   'group-data-unchecked:hidden'
                 )}
                 aria-hidden='true'
@@ -359,7 +355,7 @@ function FontConfig() {
             >
               <CircleCheck
                 className={cn(
-                  'fill-primary absolute top-0 right-0 z-10 size-5 translate-x-1/2 -translate-y-1/2 stroke-white',
+                  'fill-primary absolute top-0 right-0 z-10 size-5 translate-x-1/2 -translate-y-1/2 stroke-primary-foreground',
                   'group-data-unchecked:hidden'
                 )}
                 aria-hidden='true'
@@ -435,7 +431,7 @@ function RadiusConfig() {
             >
               <CircleCheck
                 className={cn(
-                  'fill-primary absolute top-0 right-0 z-10 size-5 translate-x-1/2 -translate-y-1/2 stroke-white',
+                  'fill-primary absolute top-0 right-0 z-10 size-5 translate-x-1/2 -translate-y-1/2 stroke-primary-foreground',
                   'group-data-unchecked:hidden'
                 )}
                 aria-hidden='true'
@@ -522,7 +518,7 @@ function ScaleConfig() {
             >
               <CircleCheck
                 className={cn(
-                  'fill-primary absolute top-0 right-0 z-10 size-5 translate-x-1/2 -translate-y-1/2 stroke-white',
+                  'fill-primary absolute top-0 right-0 z-10 size-5 translate-x-1/2 -translate-y-1/2 stroke-primary-foreground',
                   'group-data-unchecked:hidden'
                 )}
                 aria-hidden='true'
@@ -663,7 +659,7 @@ function ContentLayoutConfig() {
             >
               <CircleCheck
                 className={cn(
-                  'fill-primary absolute top-0 right-0 z-10 size-5 translate-x-1/2 -translate-y-1/2 stroke-white',
+                  'fill-primary absolute top-0 right-0 z-10 size-5 translate-x-1/2 -translate-y-1/2 stroke-primary-foreground',
                   'group-data-unchecked:hidden'
                 )}
                 aria-hidden='true'

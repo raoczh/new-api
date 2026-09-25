@@ -18,13 +18,20 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 
-import { Sidebar, SidebarContent, SidebarRail } from '@/components/ui/sidebar'
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarRail,
+} from '@/components/ui/sidebar'
 import { useLayout } from '@/context/layout-provider'
 import { useSidebarView } from '@/hooks/use-sidebar-view'
 import { MOTION_TRANSITION, MOTION_VARIANTS } from '@/lib/motion'
 
 import { NavGroup } from './nav-group'
 import { SidebarViewHeader } from './sidebar-view-header'
+import { SystemBrand } from './system-brand'
 
 /**
  * Application sidebar.
@@ -49,7 +56,14 @@ export function AppSidebar() {
   const shouldReduce = useReducedMotion()
 
   return (
-    <Sidebar collapsible={collapsible} variant={variant}>
+    <Sidebar
+      collapsible={collapsible}
+      variant={variant}
+      className='tc-app-sidebar'
+    >
+      <SidebarHeader className='min-h-[var(--app-header-height)] justify-center border-b px-2 py-1'>
+        <SystemBrand />
+      </SidebarHeader>
       {view && <SidebarViewHeader view={view} />}
 
       <SidebarContent className='py-2'>
@@ -71,6 +85,16 @@ export function AppSidebar() {
         </AnimatePresence>
       </SidebarContent>
 
+      <SidebarFooter className='border-t px-4 py-4 group-data-[collapsible=icon]:hidden'>
+        <a
+          href='https://github.com/QuantumNous/new-api'
+          target='_blank'
+          rel='noopener noreferrer'
+          className='text-muted-foreground hover:text-foreground text-xs'
+        >
+          New API · QuantumNous
+        </a>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )

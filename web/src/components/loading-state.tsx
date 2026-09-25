@@ -40,7 +40,11 @@ export function LoadingState(props: LoadingStateProps) {
 
   if (props.inline) {
     return (
-      <span className={cn('inline-flex items-center gap-2', props.className)}>
+      <span
+        role='status'
+        aria-label={props.message ?? t('Loading...')}
+        className={cn('inline-flex items-center gap-2', props.className)}
+      >
         <Loader2 className={cn(iconSize, 'animate-spin')} />
         {props.message != null && (
           <span className='text-muted-foreground text-sm'>{props.message}</span>
@@ -51,13 +55,17 @@ export function LoadingState(props: LoadingStateProps) {
 
   return (
     <div
+      role='status'
       className={cn(
         'flex min-h-[200px] flex-col items-center justify-center gap-3',
         props.className
       )}
     >
-      <div className='animate-spin'>
-        <Loader2 className={iconSize} />
+      <div className='bg-card text-brand rounded-xl border p-3'>
+        <Loader2
+          className={cn(iconSize, 'animate-spin motion-reduce:animate-none')}
+          aria-hidden='true'
+        />
       </div>
       <p className='text-muted-foreground text-sm'>
         {props.message ?? t('Loading...')}

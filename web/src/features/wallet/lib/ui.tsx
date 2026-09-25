@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import i18next from 'i18next'
 import { CreditCard, Landmark } from 'lucide-react'
-import { type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { SiAlipay, SiWechat, SiStripe } from 'react-icons/si'
 
 import { ReactIconByName } from '@/components/react-icon-by-name'
@@ -101,6 +101,7 @@ export function getPaymentIcon(
     case PAYMENT_TYPES.ALIPAY:
       return (
         <SiAlipay
+          aria-label={altName || 'Alipay'}
           className={className}
           style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.ALIPAY] }}
         />
@@ -108,6 +109,7 @@ export function getPaymentIcon(
     case PAYMENT_TYPES.WECHAT:
       return (
         <SiWechat
+          aria-label={altName || 'WeChat Pay'}
           className={className}
           style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.WECHAT] }}
         />
@@ -115,6 +117,7 @@ export function getPaymentIcon(
     case PAYMENT_TYPES.STRIPE:
       return (
         <SiStripe
+          aria-label={altName || 'Stripe'}
           className={className}
           style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.STRIPE] }}
         />

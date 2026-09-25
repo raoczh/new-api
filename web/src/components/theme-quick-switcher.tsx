@@ -16,115 +16,42 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Radio } from '@base-ui/react/radio'
 import { Monitor, Sun, MoonStar } from 'lucide-react'
-import { motion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
+import { RadioGroup } from '@/components/ui/radio-group'
 import { useTheme } from '@/context/theme-provider'
-import { cn } from '@/lib/utils'
 
 export function ThemeQuickSwitcher() {
   const { t } = useTranslation()
   const { theme, setTheme } = useTheme()
+  const options = [
+    { value: 'system', label: t('System'), icon: Monitor },
+    { value: 'light', label: t('Light'), icon: Sun },
+    { value: 'dark', label: t('Dark'), icon: MoonStar },
+  ] as const
 
   return (
-    <div className='px-2 pt-1.5 pb-1'>
-      <div className='flex w-full items-center justify-between gap-3'>
-        <span
-          id='theme-switcher-label'
-          className='text-muted-foreground text-sm select-none'
-        >
-          {t('Theme')}
-        </span>
-        <div
-          role='radiogroup'
-          aria-labelledby='theme-switcher-label'
-          className='border-muted/50 bg-muted/40 inline-flex w-auto items-center gap-1.5 rounded-lg border px-1.5 py-1'
-        >
-          <Button
-            variant='ghost'
-            size='icon'
-            role='radio'
-            aria-label={t('System')}
-            aria-checked={theme === 'system'}
-            onClick={() => setTheme('system')}
-            className={cn(
-              'relative size-7',
-              theme === 'system' && 'text-accent-foreground'
-            )}
+    <div className='flex items-center justify-between gap-3 px-2 py-2'>
+      <span className='text-muted-foreground text-sm'>{t('Theme')}</span>
+      <RadioGroup
+        value={theme}
+        onValueChange={setTheme}
+        aria-label={t('Theme')}
+        className='bg-muted/40 flex w-auto gap-1 rounded-lg border p-1'
+      >
+        {options.map((option) => (
+          <Radio.Root
+            key={option.value}
+            value={option.value}
+            aria-label={option.label}
+            className='text-muted-foreground hover:text-foreground focus-visible:ring-ring data-checked:bg-card data-checked:text-foreground flex size-8 items-center justify-center rounded-md outline-none focus-visible:ring-2 data-checked:shadow-xs'
           >
-            {theme === 'system' && (
-              <motion.span
-                layoutId='theme-switcher-active'
-                className='bg-accent ring-border absolute inset-0 rounded-md ring-1'
-                transition={{
-                  type: 'spring',
-                  stiffness: 500,
-                  damping: 30,
-                  mass: 0.2,
-                }}
-                animate={{ rotate: 360 }}
-              />
-            )}
-            <Monitor className='relative z-10 size-[0.95rem]' />
-          </Button>
-          <Button
-            variant='ghost'
-            size='icon'
-            role='radio'
-            aria-label={t('Light')}
-            aria-checked={theme === 'light'}
-            onClick={() => setTheme('light')}
-            className={cn(
-              'relative size-7',
-              theme === 'light' && 'text-accent-foreground'
-            )}
-          >
-            {theme === 'light' && (
-              <motion.span
-                layoutId='theme-switcher-active'
-                className='bg-accent ring-border absolute inset-0 rounded-md ring-1'
-                transition={{
-                  type: 'spring',
-                  stiffness: 500,
-                  damping: 30,
-                  mass: 0.2,
-                }}
-                animate={{ rotate: 360 }}
-              />
-            )}
-            <Sun className='relative z-10 size-[0.95rem]' />
-          </Button>
-          <Button
-            variant='ghost'
-            size='icon'
-            role='radio'
-            aria-label={t('Dark')}
-            aria-checked={theme === 'dark'}
-            onClick={() => setTheme('dark')}
-            className={cn(
-              'relative size-7',
-              theme === 'dark' && 'text-accent-foreground'
-            )}
-          >
-            {theme === 'dark' && (
-              <motion.span
-                layoutId='theme-switcher-active'
-                className='bg-accent ring-border absolute inset-0 rounded-md ring-1'
-                transition={{
-                  type: 'spring',
-                  stiffness: 500,
-                  damping: 30,
-                  mass: 0.2,
-                }}
-                animate={{ rotate: 360 }}
-              />
-            )}
-            <MoonStar className='relative z-10 size-[0.95rem]' />
-          </Button>
-        </div>
-      </div>
+            <option.icon className='size-4' aria-hidden='true' />
+          </Radio.Root>
+        ))}
+      </RadioGroup>
     </div>
   )
 }

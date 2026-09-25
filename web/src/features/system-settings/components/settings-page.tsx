@@ -84,7 +84,7 @@ function SettingsPageFrame(props: SettingsPageFrameProps) {
           />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <div className='flex h-full min-h-0 w-full flex-col gap-4'>
+          <div className='bg-card @container/settings mx-auto flex min-h-0 w-full max-w-6xl flex-col gap-6 rounded-xl border p-4 sm:p-6'>
             {props.children}
           </div>
         </SectionPageLayout.Content>

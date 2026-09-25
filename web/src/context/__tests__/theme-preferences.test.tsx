@@ -16,10 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ThemeQuickSwitcher } from '@/components/theme-quick-switcher'
+import { ThemeSwitch } from '@/components/theme-switch'
 import {
   ThemeCustomizationProvider,
   useThemeCustomization,
@@ -43,6 +45,9 @@ function ThemeControls() {
   return (
     <>
       <output aria-label='Theme mode'>{theme.theme}</output>
+      <output aria-label='Resolved theme'>{theme.resolvedTheme}</output>
+      <ThemeQuickSwitcher />
+      <ThemeSwitch />
       <button
         type='button'
         onClick={() => {
@@ -92,12 +97,105 @@ afterEach(() => {
     document.cookie = `${name}=; path=/; max-age=0`
   }
   document.documentElement.classList.remove('light', 'dark')
+  document.documentElement.style.removeProperty('color-scheme')
+  document.querySelector('meta[name="theme-color"]')?.remove()
   for (const name of document.body.getAttributeNames()) {
     if (name.startsWith('data-theme-')) document.body.removeAttribute(name)
   }
 })
 
 describe('theme preference persistence', () => {
+  it('closes the theme menu after choosing a mode and restores trigger focus', async () => {
+    const user = userEvent.setup()
+    render(<ThemeFixture />)
+    const trigger = screen.getByRole('button', { name: 'Toggle theme' })
+    trigger.focus()
+    await user.keyboard('[Enter]')
+    await user.click(screen.getByRole('menuitemradio', { name: 'Dark' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    )
+    expect(document.documentElement).toHaveClass('dark')
+    await waitFor(() => expect(trigger).toHaveFocus())
+  })
+
+  it('follows system changes until a manual choice, and follows again after reset', async () => {
+    const events = new EventTarget()
+    const originalMatchMedia = window.matchMedia
+    const media: MediaQueryList = {
+      ...originalMatchMedia('(prefers-color-scheme: dark)'),
+      matches: false,
+      addEventListener: events.addEventListener.bind(events),
+      removeEventListener: events.removeEventListener.bind(events),
+      dispatchEvent: events.dispatchEvent.bind(events),
+    }
+    vi.spyOn(window, 'matchMedia').mockImplementation((query) =>
+      query === '(prefers-color-scheme: dark)'
+        ? media
+        : originalMatchMedia(query)
+    )
+    const user = userEvent.setup()
+    render(<ThemeFixture />)
+
+    act(() => {
+      Object.defineProperty(media, 'matches', {
+        value: true,
+        configurable: true,
+      })
+      media.dispatchEvent(new Event('change'))
+    })
+    expect(screen.getByLabelText('Resolved theme')).toHaveTextContent('dark')
+    expect(document.documentElement.style.colorScheme).toBe('dark')
+
+    await user.click(screen.getByRole('radio', { name: 'Light' }))
+    act(() => {
+      media.dispatchEvent(new Event('change'))
+    })
+    expect(screen.getByLabelText('Resolved theme')).toHaveTextContent('light')
+    expect(screen.getByRole('radio', { name: 'Light' })).toBeChecked()
+
+    await user.click(screen.getByRole('button', { name: 'Reset' }))
+    expect(screen.getByLabelText('Theme mode')).toHaveTextContent('system')
+    expect(screen.getByLabelText('Resolved theme')).toHaveTextContent('dark')
+    expect(localStorage.getItem('newapi:theme:v1:mode')).toBeNull()
+  })
+
+  it('supports arrow-key theme choices and restores the checked choice after reload', async () => {
+    const user = userEvent.setup()
+    const first = render(<ThemeFixture />)
+    screen.getByRole('radio', { name: 'System' }).focus()
+    await user.keyboard('[ArrowRight][ArrowRight]')
+    expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked()
+    expect(document.documentElement).toHaveClass('dark')
+    first.unmount()
+    render(<ThemeFixture />)
+    expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked()
+  })
+
+  it('updates the browser theme color without requiring a mounted theme menu', async () => {
+    const style = document.createElement('style')
+    style.textContent =
+      'body { background-color: rgb(246,248,249) } .dark body { background-color: rgb(17,23,27) }'
+    document.head.append(style)
+    const user = userEvent.setup()
+    try {
+      render(<ThemeFixture />)
+      await waitFor(() =>
+        expect(
+          document.querySelector('meta[name="theme-color"]')
+        ).toHaveAttribute('content', 'rgb(246, 248, 249)')
+      )
+      await user.click(screen.getByRole('radio', { name: 'Dark' }))
+      await waitFor(() =>
+        expect(
+          document.querySelector('meta[name="theme-color"]')
+        ).toHaveAttribute('content', 'rgb(17, 23, 27)')
+      )
+    } finally {
+      style.remove()
+    }
+  })
+
   it('starts with defaults when only shared legacy theme cookies exist', () => {
     document.cookie = 'theme_preset=ocean-breeze; path=/'
     document.cookie = 'vite-ui-theme=dark; path=/'

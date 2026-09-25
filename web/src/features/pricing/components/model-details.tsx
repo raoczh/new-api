@@ -247,7 +247,7 @@ function OverviewMetric(props: {
 
   return (
     <div className='flex min-w-0 items-center gap-2 px-3 py-2'>
-      <Icon className='text-muted-foreground/70 size-3.5 shrink-0' />
+      <Icon className='text-muted-foreground size-3.5 shrink-0' />
       <div className='min-w-0 flex-1'>
         <div className='text-muted-foreground truncate text-[10px] font-medium tracking-wider uppercase'>
           {props.label}
@@ -397,7 +397,7 @@ function ModelBackendQuickStats(props: { model: PricingModel }) {
         <span className='inline-flex items-center gap-1'>
           <ModalityLabels items={inputModalities} />
           {inputModalities.length > 0 && outputModalities.length > 0 && (
-            <span className='text-muted-foreground/40'>→</span>
+            <span className='text-muted-foreground'>→</span>
           )}
           <ModalityLabels items={outputModalities} />
         </span>
@@ -442,7 +442,7 @@ function ModelBackendQuickStats(props: { model: PricingModel }) {
               {stat.value}
             </span>
             {stat.hint && (
-              <span className='text-muted-foreground/60 truncate text-[10px]'>
+              <span className='text-muted-foreground truncate text-[10px]'>
                 {stat.hint}
               </span>
             )}
@@ -781,7 +781,7 @@ function PriceSection(props: {
                   </div>
                   <div className='text-foreground mt-1 font-mono text-base font-semibold tabular-nums'>
                     {entry.formattedRange ?? entry.formatted}
-                    <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
+                    <span className='text-muted-foreground ml-1 text-xs font-normal'>
                       / {unitLabel}
                     </span>
                   </div>
@@ -811,12 +811,12 @@ function PriceSection(props: {
                     key={entry.key}
                     className='flex items-baseline justify-between gap-4'
                   >
-                    <span className='text-muted-foreground/70 text-sm'>
+                    <span className='text-muted-foreground text-sm'>
                       <DynamicPriceEntryLabel entry={entry} />
                     </span>
                     <span className='text-muted-foreground font-mono text-sm tabular-nums'>
                       {entry.formattedRange ?? entry.formatted}
-                      <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
+                      <span className='text-muted-foreground ml-1 text-xs font-normal'>
                         / {unitLabel}
                       </span>
                     </span>
@@ -875,7 +875,7 @@ function PriceSection(props: {
         props.usdExchangeRate,
         baseGroupRatioMap
       )}
-      <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
+      <span className='text-muted-foreground ml-1 text-xs font-normal'>
         / {tokenUnitLabel}
       </span>
     </>
@@ -902,7 +902,7 @@ function PriceSection(props: {
                 key={item.type}
                 className='flex items-baseline justify-between gap-4'
               >
-                <span className='text-muted-foreground/70 text-sm'>
+                <span className='text-muted-foreground text-sm'>
                   {item.label}
                 </span>
                 <span className='text-muted-foreground font-mono text-sm tabular-nums'>
@@ -935,12 +935,12 @@ function AutoGroupChain(props: { model: PricingModel; autoGroups: string[] }) {
   return (
     <div className='text-muted-foreground mb-3 flex flex-wrap items-center gap-1 text-xs'>
       <span className='font-medium'>{t('Auto Group Chain')}</span>
-      <span className='text-muted-foreground/40'>→</span>
+      <span className='text-muted-foreground'>→</span>
       {autoChain.map((g, idx) => (
         <span key={g} className='flex items-center gap-1'>
           <GroupBadge group={g} size='sm' />
           {idx < autoChain.length - 1 && (
-            <span className='text-muted-foreground/40'>→</span>
+            <span className='text-muted-foreground'>→</span>
           )}
         </span>
       ))}
@@ -1320,7 +1320,7 @@ function ProviderGroupPricingSection(
                         },
                       ]}
                     />
-                    <p className='text-muted-foreground/40 px-3 pb-2 text-[10px]'>
+                    <p className='text-muted-foreground px-3 pb-2 text-[10px]'>
                       {t('Approximate prices for common specs.')}
                     </p>
                   </div>
@@ -1328,7 +1328,7 @@ function ProviderGroupPricingSection(
               </div>
             )
           })}
-          <p className='text-muted-foreground/40 mt-1.5 text-[10px]'>
+          <p className='text-muted-foreground mt-1.5 text-[10px]'>
             {dynamicTiers.some(
               (tier) => 'unitPrices' in tier || tier.billingUnit === 'request'
             )
@@ -1435,7 +1435,7 @@ function ProviderGroupPricingSection(
       />
       <div className='-mx-4 sm:mx-0'>
         {isTokenBased && (
-          <p className='text-muted-foreground/40 mt-1.5 px-4 text-[10px] sm:px-0'>
+          <p className='text-muted-foreground mt-1.5 px-4 text-[10px] sm:px-0'>
             {t('Prices shown per')} {tokenUnitLabel} tokens
           </p>
         )}
@@ -1627,7 +1627,7 @@ export function ModelDetails() {
   if (isLoading) {
     return (
       <PublicLayout>
-        <div className='mx-auto max-w-5xl px-4 sm:px-6'>
+        <div className='bg-card mx-auto max-w-6xl rounded-xl border p-5 sm:p-8'>
           <Skeleton className='mb-4 h-5 w-16' />
           <div className='space-y-2'>
             <Skeleton className='h-7 w-64' />
@@ -1652,7 +1652,7 @@ export function ModelDetails() {
   if (!model) {
     return (
       <PublicLayout>
-        <div className='mx-auto max-w-2xl px-4 text-center sm:px-6'>
+        <div className='bg-card mx-auto max-w-2xl rounded-xl border px-5 py-12 text-center'>
           <h2 className='mb-1 text-base font-semibold'>
             {t('Model not found')}
           </h2>
@@ -1669,7 +1669,7 @@ export function ModelDetails() {
 
   return (
     <PublicLayout>
-      <div className='mx-auto max-w-5xl px-4 sm:px-6'>
+      <div className='bg-card mx-auto max-w-6xl rounded-xl border p-5 sm:p-8'>
         <Button
           variant='ghost'
           size='sm'

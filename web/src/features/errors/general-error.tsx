@@ -55,10 +55,15 @@ export function GeneralError({
     : t('Please try again later.')
 
   return (
-    <div className={cn('h-svh w-full', className)}>
-      <div className='m-auto flex h-full w-full flex-col items-center justify-center gap-2'>
+    <div
+      className={cn(
+        'tc-error-shell flex min-h-svh w-full flex-1 flex-col overflow-auto bg-background px-5 py-12',
+        className
+      )}
+    >
+      <div className='bg-card m-auto flex w-full max-w-2xl flex-col items-center justify-center gap-3 rounded-xl border px-5 py-12 text-center'>
         {!minimal && (
-          <h1 className='text-[7rem] leading-tight font-bold'>
+          <h1 className='text-brand font-mono text-7xl leading-tight font-medium tracking-tight'>
             {status ?? 500}
           </h1>
         )}

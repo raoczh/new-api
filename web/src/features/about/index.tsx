@@ -34,9 +34,9 @@ function EmptyAboutState() {
 
   return (
     <div className='flex min-h-[60vh] items-center justify-center p-8'>
-      <div className='max-w-2xl space-y-6 text-center'>
+      <div className='bg-card max-w-3xl space-y-6 rounded-xl border p-6 text-center sm:p-10'>
         <div className='flex justify-center'>
-          <Construction className='text-muted-foreground h-24 w-24' />
+          <Construction className='text-muted-foreground size-12' />
         </div>
         <div className='space-y-2'>
           <h2 className='text-2xl font-bold'>{t('No About Content Set')}</h2>
@@ -174,7 +174,7 @@ export function About() {
 
   return (
     <PublicLayout>
-      <div className='mx-auto max-w-6xl px-4 py-8'>
+      <div className='bg-card mx-auto max-w-4xl rounded-xl border px-5 py-8 sm:px-10'>
         <RichContent
           mode='markdown'
           content={rawContent}

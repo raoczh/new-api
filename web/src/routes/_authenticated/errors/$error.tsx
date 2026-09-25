@@ -18,11 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute } from '@tanstack/react-router'
 
-import { ConfigDrawer } from '@/components/config-drawer'
-import { Header } from '@/components/layout'
-import { ProfileDropdown } from '@/components/profile-dropdown'
-import { Search } from '@/components/search'
-import { ThemeSwitch } from '@/components/theme-switch'
+import { Main } from '@/components/layout'
 import { ForbiddenError } from '@/features/errors/forbidden'
 import { GeneralError } from '@/features/errors/general-error'
 import { MaintenanceError } from '@/features/errors/maintenance-error'
@@ -46,18 +42,8 @@ function RouteComponent() {
   const ErrorComponent = errorMap[error] || NotFoundError
 
   return (
-    <>
-      <Header>
-        <Search />
-        <div className='ms-auto flex items-center md:space-x-4'>
-          <ThemeSwitch />
-          <ConfigDrawer />
-          <ProfileDropdown />
-        </div>
-      </Header>
-      <div className='flex-1 [&>div]:h-full'>
-        <ErrorComponent />
-      </div>
-    </>
+    <Main className='overflow-y-auto [&>.tc-error-shell]:min-h-full'>
+      <ErrorComponent />
+    </Main>
   )
 }

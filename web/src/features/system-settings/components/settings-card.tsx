@@ -25,6 +25,7 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 type SettingsCardProps = {
   title: string
@@ -40,12 +41,17 @@ export const SettingsCard = memo(function SettingsCard({
   className,
 }: SettingsCardProps) {
   return (
-    <Card className={className}>
-      <CardHeader>
+    <Card
+      className={cn(
+        '@3xl/settings:grid @3xl/settings:grid-cols-[14rem_minmax(0,1fr)] @3xl/settings:gap-6',
+        className
+      )}
+    >
+      <CardHeader className='gap-2 @3xl/settings:border-e'>
         <CardTitle>{title}</CardTitle>
         {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent className='min-w-0'>{children}</CardContent>
     </Card>
   )
 })

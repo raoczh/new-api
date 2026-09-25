@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { TokenComeBrand } from '@/components/tokencome-brand'
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -72,7 +73,10 @@ export function SystemBrand(props: SystemBrandProps) {
             className='size-full rounded-md object-cover'
           />
         </div>
-        <span className='max-w-[12rem] truncate'>{name}</span>
+        <TokenComeBrand compact className='max-w-[13rem]' />
+        <span className='text-muted-foreground max-w-20 truncate text-xs'>
+          {name}
+        </span>
       </Link>
     )
   }
@@ -93,8 +97,10 @@ export function SystemBrand(props: SystemBrandProps) {
             />
           </div>
           <div className='grid flex-1 text-start text-sm leading-tight group-data-[collapsible=icon]:hidden'>
-            <span className='truncate font-semibold'>{name}</span>
-            <span className='truncate text-xs'>{version}</span>
+            <TokenComeBrand compact className='max-w-full' />
+            <span className='text-muted-foreground truncate text-[10px]'>
+              {name} · {version}
+            </span>
           </div>
         </SidebarMenuButton>
       </SidebarMenuItem>

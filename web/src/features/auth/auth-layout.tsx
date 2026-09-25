@@ -19,44 +19,67 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { LanguageSwitcher } from '@/components/language-switcher'
+import { ThemeSwitch } from '@/components/theme-switch'
+import { TokenComeBrand, TokenComeBridge } from '@/components/tokencome-brand'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSystemConfig } from '@/hooks/use-system-config'
 
-type AuthLayoutProps = {
-  children: React.ReactNode
-}
+type AuthLayoutProps = { children: React.ReactNode }
 
-export function AuthLayout({ children }: AuthLayoutProps) {
+export function AuthLayout(props: AuthLayoutProps) {
   const { t } = useTranslation()
   const { systemName, logo, loading } = useSystemConfig()
 
   return (
-    <div className='relative grid h-svh max-w-none'>
-      <Link
-        to='/'
-        className='absolute top-4 left-4 z-10 flex items-center gap-2 transition-opacity hover:opacity-80 sm:top-8 sm:left-8'
-      >
-        <div className='relative h-8 w-8'>
-          {loading ? (
-            <Skeleton className='absolute inset-0 rounded-full' />
-          ) : (
-            <img
-              src={logo}
-              alt={t('Logo')}
-              className='h-8 w-8 rounded-full object-cover'
-            />
-          )}
+    <div className='tc-auth-shell relative flex min-h-svh flex-col'>
+      <header className='relative flex shrink-0 items-center justify-between gap-3 border-b px-4 py-4 sm:px-8'>
+        <Link to='/' className='flex min-w-0 items-center gap-3 rounded-lg'>
+          <TokenComeBrand compact />
+          <span className='flex min-w-0 items-center gap-1.5 border-s ps-3'>
+            {loading ? (
+              <Skeleton className='size-5' />
+            ) : (
+              <img
+                src={logo}
+                alt={t('Logo')}
+                className='size-5 rounded object-contain'
+              />
+            )}
+            <span className='text-muted-foreground max-w-24 truncate text-xs'>
+              {systemName}
+            </span>
+          </span>
+        </Link>
+        <div className='flex shrink-0 items-center gap-1'>
+          <LanguageSwitcher />
+          <ThemeSwitch />
         </div>
-        {loading ? (
-          <Skeleton className='h-6 w-24' />
-        ) : (
-          <h1 className='text-xl font-medium'>{systemName}</h1>
-        )}
-      </Link>
-      <div className='container flex items-center pt-16 sm:pt-0'>
-        <div className='mx-auto flex w-full flex-col justify-center space-y-2 px-4 py-8 sm:w-[480px] sm:p-8'>
-          {children}
-        </div>
+      </header>
+      <div className='relative grid flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
+        <aside className='tc-auth-aside hidden flex-col justify-center border-e px-12 py-16 lg:flex xl:px-20'>
+          <div className='mx-auto w-full max-w-lg'>
+            <p className='text-brand mb-5 text-xs font-semibold tracking-widest uppercase'>
+              {t('AI gateway workspace')}
+            </p>
+            <h2 className='text-5xl leading-tight font-semibold tracking-tight'>
+              {t('One gateway.')}
+              <br />
+              {t('Every possibility.')}
+            </h2>
+            <p className='text-muted-foreground mt-6 max-w-sm text-base leading-7'>
+              {t(
+                'Connect AI models, manage access, and understand your usage in one workspace.'
+              )}
+            </p>
+            <TokenComeBridge className='mt-8 w-full' />
+          </div>
+        </aside>
+        <main className='flex min-w-0 flex-col justify-center px-5 py-10 sm:px-8 lg:py-16'>
+          <div className='mx-auto flex w-full max-w-[440px] flex-col gap-3'>
+            {props.children}
+          </div>
+        </main>
       </div>
     </div>
   )

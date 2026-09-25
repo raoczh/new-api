@@ -36,9 +36,9 @@ export function SettingsSection({
   const suppressHeader = useSuppressSettingsSectionHeader()
 
   return (
-    <section className={cn('flex flex-col gap-4', className)}>
+    <section className={cn('flex min-w-0 flex-col gap-5', className)}>
       {!suppressHeader && (
-        <div className='flex flex-col gap-1'>
+        <div className='flex flex-col gap-1 border-b pb-3'>
           <h3
             {...titleProps}
             className={cn('text-base font-semibold', titleProps?.className)}

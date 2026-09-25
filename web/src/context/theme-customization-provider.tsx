@@ -25,6 +25,7 @@ import {
   useState,
 } from 'react'
 
+import { useTheme } from '@/context/theme-provider'
 import {
   CONTENT_LAYOUT_VALUES,
   type ContentLayout,
@@ -89,6 +90,7 @@ const ThemeCustomizationContext =
 export function ThemeCustomizationProvider(props: {
   children: React.ReactNode
 }) {
+  const { resolvedTheme } = useTheme()
   const [preset, _setPreset] = useState<ThemePreset>(() =>
     readThemePreference<ThemePreset>(
       THEME_STORAGE_KEYS.preset,
@@ -161,6 +163,23 @@ export function ThemeCustomizationProvider(props: {
   useEffect(() => {
     applyAttribute('data-theme-content-layout', contentLayout)
   }, [contentLayout])
+
+  // Read after both providers have applied their attributes. This also covers
+  // the system mode and pages without a mounted theme switch.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      let meta = document.querySelector<HTMLMetaElement>(
+        'meta[name="theme-color"]'
+      )
+      if (!meta) {
+        meta = document.createElement('meta')
+        meta.name = 'theme-color'
+        document.head.append(meta)
+      }
+      meta.content = getComputedStyle(document.body).backgroundColor
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [preset, resolvedTheme])
 
   const setPreset = useCallback((value: ThemePreset) => {
     _setPreset(value)

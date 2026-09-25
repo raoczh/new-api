@@ -25,7 +25,15 @@ import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { TokenComeBrand } from '@/components/tokencome-brand'
 import { Button } from '@/components/ui/button'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SystemUpdateAction } from '@/features/system-update/system-update-action'
 import { useNotifications } from '@/hooks/use-notifications'
@@ -76,7 +84,6 @@ export function PublicHeader(props: PublicHeaderProps) {
 
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [authPromptTarget, setAuthPromptTarget] =
     useState<AuthPromptTarget | null>(null)
@@ -121,20 +128,6 @@ export function PublicHeader(props: PublicHeaderProps) {
   )
   if (isAuthenticated) authContent = <ProfileDropdown />
   if (loading) authContent = <Skeleton className='h-8 w-20 rounded-lg' />
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
-  useEffect(() => {
-    document.body.style.overflow = mobileOpen ? 'hidden' : ''
-    return () => {
-      document.body.style.overflow = ''
-    }
-  }, [mobileOpen])
 
   useEffect(() => {
     if (!authPromptTarget) return
@@ -198,40 +191,30 @@ export function PublicHeader(props: PublicHeaderProps) {
   )
 
   return (
-    <>
-      <header className='pointer-events-none fixed inset-x-0 top-0 z-50'>
-        <div
-          className={cn(
-            'pointer-events-auto mx-auto transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]',
-            scrolled ? 'max-w-[52rem] px-3 pt-3' : 'max-w-7xl px-4 pt-0 md:px-6'
-          )}
-        >
-          <nav
-            className={cn(
-              'flex items-center justify-between gap-2 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]',
-              scrolled
-                ? 'bg-background/60 ring-border/50 h-12 rounded-2xl pr-1.5 pl-4 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.08),0_0_0_0.5px_rgba(0,0,0,0.02)] ring-[0.5px] backdrop-blur-2xl dark:shadow-[0_2px_16px_-6px_rgba(0,0,0,0.4)]'
-                : 'h-16 px-2'
-            )}
-          >
+    <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+      <header
+        className={cn(
+          'tc-public-header fixed inset-x-0 top-0 z-40 border-b bg-background/95 backdrop-blur-xl',
+          props.className
+        )}
+      >
+        <div className='mx-auto max-w-[1600px] px-4 sm:px-6'>
+          <nav className='flex h-16 items-center justify-between gap-3'>
             {/* Logo */}
-            <div className='@container/system-brand flex min-w-0 flex-1 items-center gap-1 lg:min-w-36'>
+            <div className='@container/system-brand flex min-w-0 flex-1 items-center gap-2 lg:min-w-48'>
               <Link
                 to={homeUrl}
-                className='group flex min-w-0 items-center gap-2.5'
+                className='group flex min-w-0 flex-col items-start gap-1 rounded-md'
               >
-                <div className='flex size-7 shrink-0 items-center justify-center transition-all duration-300 group-hover:scale-105'>
-                  {logoContent}
-                </div>
-                <span
-                  className='max-w-48 truncate text-sm font-semibold tracking-tight'
-                  title={displaySiteName}
-                >
-                  {loading ? (
-                    <Skeleton className='h-4 w-16' />
-                  ) : (
-                    displaySiteName
-                  )}
+                <TokenComeBrand compact />
+                <span className='flex min-w-0 items-center gap-1.5 ps-9'>
+                  <span className='size-3 shrink-0'>{logoContent}</span>
+                  <span
+                    className='text-muted-foreground max-w-32 truncate text-[11px]'
+                    title={displaySiteName}
+                  >
+                    {loading ? t('Loading...') : displaySiteName}
+                  </span>
                 </span>
               </Link>
               <SystemUpdateAction presentation='version' />
@@ -271,7 +254,7 @@ export function PublicHeader(props: PublicHeaderProps) {
                     className={cn(
                       'min-w-0 truncate rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-200',
                       isActive
-                        ? 'text-foreground'
+                        ? 'bg-accent text-accent-foreground'
                         : 'text-muted-foreground hover:text-foreground',
                       link.disabled && 'pointer-events-none opacity-50'
                     )}
@@ -316,64 +299,50 @@ export function PublicHeader(props: PublicHeaderProps) {
               {showAuthButtons && !loading && isAuthenticated && (
                 <ProfileDropdown />
               )}
-              <Button
-                type='button'
-                variant='ghost'
-                size='icon'
-                className='size-9'
-                onClick={() => setMobileOpen((v) => !v)}
-                aria-label={t('Toggle navigation menu')}
+              <SheetTrigger
+                render={
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='icon'
+                    aria-label={t('Toggle navigation menu')}
+                  />
+                }
               >
-                <div className='relative size-4'>
-                  <span
-                    className={cn(
-                      'absolute inset-x-0 block h-[1.5px] origin-center rounded-full bg-current transition-all duration-300',
-                      mobileOpen ? 'top-[7px] rotate-45' : 'top-[3px]'
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      'absolute inset-x-0 top-[7px] block h-[1.5px] rounded-full bg-current transition-all duration-300',
-                      mobileOpen ? 'scale-x-0 opacity-0' : 'opacity-100'
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      'absolute inset-x-0 block h-[1.5px] origin-center rounded-full bg-current transition-all duration-300',
-                      mobileOpen ? 'top-[7px] -rotate-45' : 'top-[11px]'
-                    )}
-                  />
-                </div>
-              </Button>
+                <svg
+                  viewBox='0 0 24 24'
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth='1.5'
+                  aria-hidden='true'
+                  className='size-5'
+                >
+                  <path d='M4 7h16M4 12h16M4 17h16' />
+                </svg>
+              </SheetTrigger>
             </div>
           </nav>
         </div>
       </header>
 
-      {/* Mobile full-screen overlay */}
-      <div
-        className={cn(
-          'bg-background/98 fixed inset-0 z-40 backdrop-blur-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] lg:pointer-events-none lg:hidden',
-          mobileOpen
-            ? 'pointer-events-auto opacity-100'
-            : 'pointer-events-none opacity-0'
-        )}
+      <SheetContent
+        side='right'
+        className='w-[min(24rem,calc(100vw-1rem))] gap-0 p-0'
       >
-        <div className='flex h-full flex-col justify-between px-8 pt-20 pb-10'>
+        <SheetHeader className='border-b px-6 py-5'>
+          <SheetTitle>{t('Navigation')}</SheetTitle>
+        </SheetHeader>
+        <div className='flex min-h-0 flex-1 flex-col justify-between gap-8 overflow-y-auto px-6 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]'>
           <nav className='flex flex-col gap-1'>
-            {links.map((link, i) => {
+            {links.map((link) => {
               const isActive = pathname === link.href
               const linkClassName = cn(
-                'flex items-center gap-3 py-3 text-base font-medium tracking-tight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
-                mobileOpen
-                  ? 'translate-y-0 opacity-100'
-                  : 'translate-y-4 opacity-0',
-                isActive ? 'text-foreground' : 'text-muted-foreground',
+                'flex min-w-0 items-center rounded-lg px-3 py-3 text-sm font-medium hover:bg-accent',
+                isActive
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground',
                 link.disabled && 'pointer-events-none opacity-50'
               )
-              const transitionStyle = {
-                transitionDelay: mobileOpen ? `${100 + i * 50}ms` : '0ms',
-              }
               if (link.external) {
                 return (
                   <a
@@ -385,7 +354,6 @@ export function PublicHeader(props: PublicHeaderProps) {
                     tabIndex={link.disabled ? -1 : undefined}
                     onClick={(event) => handleNavLinkClick(event, link, true)}
                     className={linkClassName}
-                    style={transitionStyle}
                   >
                     {t(link.title)}
                   </a>
@@ -398,7 +366,6 @@ export function PublicHeader(props: PublicHeaderProps) {
                   disabled={link.disabled}
                   onClick={(event) => handleNavLinkClick(event, link, true)}
                   className={linkClassName}
-                  style={transitionStyle}
                 >
                   {t(link.title)}
                 </Link>
@@ -406,15 +373,22 @@ export function PublicHeader(props: PublicHeaderProps) {
             })}
           </nav>
 
-          <div
-            className={cn(
-              'flex flex-col gap-3 transition-all duration-500',
-              mobileOpen
-                ? 'translate-y-0 opacity-100'
-                : 'translate-y-4 opacity-0'
-            )}
-            style={{ transitionDelay: mobileOpen ? '250ms' : '0ms' }}
-          >
+          <div className='flex flex-col gap-4 border-t pt-5'>
+            <div className='flex items-center gap-2'>
+              {showLanguageSwitcher && <LanguageSwitcher />}
+              {showNotifications && (
+                <NotificationPopover
+                  open={notifications.popoverOpen}
+                  onOpenChange={notifications.setPopoverOpen}
+                  unreadCount={notifications.unreadCount}
+                  activeTab={notifications.activeTab}
+                  onTabChange={notifications.setActiveTab}
+                  notice={notifications.notice}
+                  announcements={notifications.announcements}
+                  loading={notifications.loading}
+                />
+              )}
+            </div>
             {showAuthButtons && (
               <Link
                 to={isAuthenticated ? '/dashboard' : '/sign-in'}
@@ -426,7 +400,7 @@ export function PublicHeader(props: PublicHeaderProps) {
             )}
           </div>
         </div>
-      </div>
+      </SheetContent>
 
       <Dialog
         open={!!authPromptTarget}
@@ -456,6 +430,6 @@ export function PublicHeader(props: PublicHeaderProps) {
           })}
         </div>
       </Dialog>
-    </>
+    </Sheet>
   )
 }

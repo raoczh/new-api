@@ -230,9 +230,9 @@ export function UserCharts(props: UserChartsProps) {
           return (
             <div
               key={chart.value}
-              className='overflow-hidden rounded-lg border'
+              className='bg-card overflow-hidden rounded-lg border shadow-xs'
             >
-              <div className='flex w-full items-center gap-2 border-b px-3 py-2 sm:px-5 sm:py-3'>
+              <div className='bg-muted/25 flex w-full items-center gap-2 border-b px-3 py-3 sm:px-5 sm:py-3'>
                 <IconBadge tone='info' size='sm'>
                   <Users />
                 </IconBadge>

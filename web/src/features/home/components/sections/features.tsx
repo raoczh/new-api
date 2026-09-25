@@ -41,12 +41,10 @@ export function Features(_props: FeaturesProps) {
     {
       id: 'fast',
       num: '01',
-      title: t('Lightning Fast'),
-      desc: t(
-        'Optimized network architecture ensures millisecond response times'
-      ),
-      span: 'md:col-span-2',
-      icon: <Zap className='size-4 text-blue-400' />,
+      title: t('Unified model access'),
+      desc: t('Connect multiple providers through compatible API routes.'),
+      span: 'md:col-span-1',
+      icon: <Zap className='text-brand size-4' />,
       visual: (
         <div className='mt-4 grid grid-cols-3 gap-2'>
           {['OpenAI', 'Claude', 'Gemini', 'DeepSeek', 'Qwen', 'Llama'].map(
@@ -102,10 +100,10 @@ export function Features(_props: FeaturesProps) {
     {
       id: 'global',
       num: '03',
-      title: t('Global Coverage'),
-      desc: t('Multi-region deployment for stable global access'),
+      title: t('Routing controls'),
+      desc: t('Configure channels, balance requests, and inspect usage.'),
       span: 'md:col-span-1',
-      icon: <Globe className='size-4 text-violet-400' />,
+      icon: <Globe className='text-brand size-4' />,
       visual: (
         <div className='mt-4 space-y-2'>
           {[t('Load Balancing'), t('Rate Limiting'), t('Cost Tracking')].map(
@@ -114,7 +112,7 @@ export function Features(_props: FeaturesProps) {
                 <div
                   className={`flex size-6 items-center justify-center rounded-full text-[10px] font-bold ${
                     i === 1
-                      ? 'border border-blue-500/30 bg-blue-500/20 text-blue-500'
+                      ? 'text-brand border border-blue-500/30 bg-blue-500/20'
                       : 'border-border/40 bg-muted text-muted-foreground border'
                   }`}
                 >
@@ -133,8 +131,8 @@ export function Features(_props: FeaturesProps) {
       num: '04',
       title: t('Developer Friendly'),
       desc: t('Compatible API routes for common AI application workflows'),
-      span: 'md:col-span-2',
-      icon: <Code className='size-4 text-amber-400' />,
+      span: 'md:col-span-1',
+      icon: <Code className='text-brand size-4' />,
       visual: (
         <div className='mt-4 flex items-center gap-3'>
           <div className='flex -space-x-2'>
@@ -148,7 +146,7 @@ export function Features(_props: FeaturesProps) {
             ))}
           </div>
           <div className='text-muted-foreground flex items-center gap-1.5 text-xs'>
-            <Code className='size-3.5 text-blue-500' />
+            <Code className='text-brand size-3.5' />
             {t('Multi-protocol Compatible')}
           </div>
         </div>
@@ -180,9 +178,9 @@ export function Features(_props: FeaturesProps) {
   ]
 
   return (
-    <section className='relative z-10 px-6 py-24 md:py-32'>
-      <div className='mx-auto max-w-6xl'>
-        <AnimateInView className='mb-16 max-w-lg'>
+    <section className='relative px-5 py-16 sm:px-8 md:py-24'>
+      <div className='mx-auto max-w-7xl'>
+        <AnimateInView className='mb-10 max-w-2xl'>
           <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
             {t('Core Features')}
           </p>
@@ -194,13 +192,13 @@ export function Features(_props: FeaturesProps) {
         </AnimateInView>
 
         {/* Bento grid */}
-        <div className='border-border/40 bg-border/40 grid gap-px overflow-hidden rounded-xl border md:grid-cols-3'>
+        <div className='grid gap-4 md:grid-cols-2'>
           {features.map((f, i) => (
             <AnimateInView
               key={f.id}
               delay={i * 100}
               animation='scale-in'
-              className={`bg-background group hover:bg-muted/20 p-7 transition-colors duration-300 md:p-8 ${f.span}`}
+              className={`bg-card group rounded-xl border p-6 sm:p-8 ${f.span}`}
             >
               <div className='mb-3 flex items-center gap-3'>
                 <span className='border-border/40 bg-muted text-muted-foreground flex size-7 items-center justify-center rounded-md border text-[10px] font-semibold tabular-nums'>

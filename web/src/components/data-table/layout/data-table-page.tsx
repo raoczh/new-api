@@ -350,7 +350,11 @@ export function DataTablePage<TData>(props: DataTablePageProps<TData>) {
           props.className
         )}
       >
-        {toolbarNode}
+        {toolbarNode != null && (
+          <div className='bg-card shrink-0 rounded-lg border p-3'>
+            {toolbarNode}
+          </div>
+        )}
         {mobileNode}
         {desktopNode}
         {props.afterTable}

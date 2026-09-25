@@ -93,34 +93,36 @@ export const ModelPerfBadge = memo(function ModelPerfBadge(
               {hasSuccessRate ? `${successRate.toFixed(2)}%` : '—'}
             </span>
           </dt>
-          <dd
-            role='img'
-            aria-label={t(
-              'Recent success-rate samples; gray bars indicate missing data.'
-            )}
-            title={t(
-              'Recent success-rate samples; gray bars indicate missing data.'
-            )}
-            className='mt-1 flex h-3 w-24 items-center gap-px'
-          >
-            {STATUS_SLOTS.map((slot) => {
-              const rate = statusRates[slot]
-              return (
-                <span
-                  key={slot}
-                  aria-hidden
-                  className={cn(
-                    'h-full w-[3px] shrink-0 rounded-xs',
-                    rate != null &&
-                      Number.isFinite(rate) &&
-                      rate >= 0 &&
-                      rate <= 100
-                      ? getSuccessRateDotClass(rate)
-                      : 'bg-muted-foreground/15'
-                  )}
-                />
-              )
-            })}
+          <dd>
+            <span
+              role='img'
+              aria-label={t(
+                'Recent success-rate samples; gray bars indicate missing data.'
+              )}
+              title={t(
+                'Recent success-rate samples; gray bars indicate missing data.'
+              )}
+              className='mt-1 flex h-3 w-24 items-center gap-px'
+            >
+              {STATUS_SLOTS.map((slot) => {
+                const rate = statusRates[slot]
+                return (
+                  <span
+                    key={slot}
+                    aria-hidden
+                    className={cn(
+                      'h-full w-[3px] shrink-0 rounded-xs',
+                      rate != null &&
+                        Number.isFinite(rate) &&
+                        rate >= 0 &&
+                        rate <= 100
+                        ? getSuccessRateDotClass(rate)
+                        : 'bg-muted-foreground/15'
+                    )}
+                  />
+                )
+              })}
+            </span>
           </dd>
         </div>
         <div title={t('Average latency')} className='shrink-0'>

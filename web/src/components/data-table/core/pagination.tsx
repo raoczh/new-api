@@ -110,14 +110,14 @@ export function DataTablePagination<TData>({
     >
       <div className='flex min-w-0 shrink-0 items-center gap-2 @xl/pagination:gap-3'>
         <div className='flex shrink-0 items-baseline gap-1.5 text-xs font-medium whitespace-nowrap sm:text-sm'>
-          <span className='text-muted-foreground/80'>{t('Total:')}</span>
+          <span className='text-muted-foreground'>{t('Total:')}</span>
           <span className='text-foreground tabular-nums'>
             {totalRows.toLocaleString()}
           </span>
         </div>
 
         <div className='flex shrink-0 items-center gap-1.5 @lg/pagination:gap-2'>
-          <p className='text-muted-foreground/80 hidden text-sm font-medium whitespace-nowrap @2xl/pagination:block'>
+          <p className='text-muted-foreground hidden text-sm font-medium whitespace-nowrap @2xl/pagination:block'>
             {t('Rows per page')}
           </p>
           <Select
@@ -127,7 +127,10 @@ export function DataTablePagination<TData>({
               table.setPageSize(Number(value))
             }}
           >
-            <SelectTrigger className='text-foreground h-8 w-[64px] font-medium tabular-nums sm:w-[70px]'>
+            <SelectTrigger
+              aria-label={t('Rows per page')}
+              className='text-foreground h-8 min-w-[4.25rem] shrink-0 px-2 font-medium tabular-nums [&>[data-slot=select-value]]:min-w-[3ch]'
+            >
               <SelectValue placeholder={pageSize} />
             </SelectTrigger>
             <SelectContent side='top' alignItemWithTrigger={false}>
@@ -165,7 +168,7 @@ export function DataTablePagination<TData>({
           {pageItems.map(({ page: pageNumber, key }) => (
             <div key={key} className='flex items-center'>
               {pageNumber === '...' ? (
-                <span className='text-muted-foreground/60 px-0.5 text-sm @lg/pagination:px-1'>
+                <span className='text-muted-foreground px-0.5 text-sm @lg/pagination:px-1'>
                   ...
                 </span>
               ) : (

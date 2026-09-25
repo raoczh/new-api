@@ -26,15 +26,17 @@ export function ForbiddenError() {
   const navigate = useNavigate()
   const { history } = useRouter()
   return (
-    <div className='h-svh'>
-      <div className='m-auto flex h-full w-full flex-col items-center justify-center gap-2'>
-        <h1 className='text-[7rem] leading-tight font-bold'>403</h1>
+    <div className='tc-error-shell bg-background flex min-h-svh flex-col px-5 py-12'>
+      <div className='bg-card m-auto flex w-full max-w-2xl flex-col items-center justify-center gap-3 rounded-xl border px-5 py-12 text-center'>
+        <h1 className='text-brand font-mono text-7xl leading-tight font-medium tracking-tight'>
+          403
+        </h1>
         <span className='font-medium'>{t('Access Forbidden')}</span>
         <p className='text-muted-foreground text-center'>
           {t("You don't have necessary permission")} <br />
           {t('to view this resource.')}
         </p>
-        <div className='mt-6 flex gap-4'>
+        <div className='mt-6 flex flex-wrap justify-center gap-3'>
           <Button variant='outline' onClick={() => history.go(-1)}>
             {t('Go Back')}
           </Button>
