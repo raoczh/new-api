@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SystemUpdateAction } from '@/features/system-update/system-update-action'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
@@ -84,6 +85,8 @@ export function PublicHeader(props: PublicHeaderProps) {
 
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
+  const [previousIsDesktop, setPreviousIsDesktop] = useState(isDesktop)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [authPromptTarget, setAuthPromptTarget] =
     useState<AuthPromptTarget | null>(null)
@@ -100,6 +103,13 @@ export function PublicHeader(props: PublicHeaderProps) {
   const notifications = useNotifications()
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
+
+  // Reset before mounting the other layout's notification popup.
+  if (previousIsDesktop !== isDesktop) {
+    setPreviousIsDesktop(isDesktop)
+    setMobileOpen(false)
+    notifications.setPopoverOpen(false)
+  }
 
   const user = auth.user
   const isAuthenticated = !!user
@@ -191,7 +201,7 @@ export function PublicHeader(props: PublicHeaderProps) {
   )
 
   return (
-    <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+    <Sheet open={mobileOpen && !isDesktop} onOpenChange={setMobileOpen}>
       <header
         className={cn(
           'tc-public-header fixed inset-x-0 top-0 z-40 border-b bg-background/95 backdrop-blur-xl',
@@ -272,7 +282,7 @@ export function PublicHeader(props: PublicHeaderProps) {
 
               {showLanguageSwitcher && <LanguageSwitcher />}
               {showThemeSwitch && <ThemeSwitch />}
-              {showNotifications && (
+              {showNotifications && isDesktop && (
                 <NotificationPopover
                   open={notifications.popoverOpen}
                   onOpenChange={notifications.setPopoverOpen}
@@ -376,7 +386,7 @@ export function PublicHeader(props: PublicHeaderProps) {
           <div className='flex flex-col gap-4 border-t pt-5'>
             <div className='flex items-center gap-2'>
               {showLanguageSwitcher && <LanguageSwitcher />}
-              {showNotifications && (
+              {showNotifications && !isDesktop && (
                 <NotificationPopover
                   open={notifications.popoverOpen}
                   onOpenChange={notifications.setPopoverOpen}

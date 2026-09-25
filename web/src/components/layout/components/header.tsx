@@ -30,7 +30,7 @@ export function Header({ className, children, ...props }: HeaderProps) {
       )}
       {...props}
     >
-      <div className='flex h-full items-center gap-2 border-b px-2 sm:gap-3 sm:px-4'>
+      <div className='flex h-full items-center gap-1 border-b px-2 sm:gap-3 sm:px-4'>
         <SidebarTrigger variant='ghost' className='size-8' />
         {children}
       </div>
