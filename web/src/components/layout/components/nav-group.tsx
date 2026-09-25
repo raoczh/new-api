@@ -27,15 +27,6 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
@@ -46,7 +37,6 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { cn } from '@/lib/utils'
 
 import { checkIsActive } from '../lib/url-utils'
 import type {
@@ -64,28 +54,15 @@ import { ChatPresetsItem } from './chat-presets-item'
 export function NavGroup({
   title,
   items,
-  orientation = 'vertical',
   onNavigate,
 }: NavGroupProps & {
-  orientation?: 'vertical' | 'horizontal'
   onNavigate?: () => void
 }) {
-  const { state, isMobile } = useSidebar()
   const href = useLocation({ select: (location) => location.href })
 
   return (
-    <SidebarGroup
-      className={cn(
-        'px-2 py-1',
-        orientation === 'horizontal' && 'tc-horizontal-nav'
-      )}
-    >
-      <SidebarGroupLabel
-        className={cn(
-          'text-muted-foreground px-2 text-[11px] font-medium tracking-wider uppercase',
-          orientation === 'horizontal' && 'sr-only'
-        )}
-      >
+    <SidebarGroup className='px-2 py-1'>
+      <SidebarGroupLabel className='text-muted-foreground px-2 text-[11px] font-medium tracking-wider uppercase'>
         {title}
       </SidebarGroupLabel>
       <SidebarMenu>
@@ -98,7 +75,6 @@ export function NavGroup({
               <ChatPresetsItem
                 key={key}
                 item={item as NavChatPresets}
-                dropdown={orientation === 'horizontal'}
                 onNavigate={onNavigate}
               />
             )
@@ -111,22 +87,6 @@ export function NavGroup({
                 key={key}
                 item={item as NavLink}
                 href={href}
-                onNavigate={onNavigate}
-              />
-            )
-          }
-
-          // In collapsed state on non-mobile, render dropdown menu
-          if (
-            orientation === 'horizontal' ||
-            (state === 'collapsed' && !isMobile)
-          ) {
-            return (
-              <SidebarMenuCollapsedDropdown
-                key={key}
-                item={item as NavCollapsible}
-                href={href}
-                side={orientation === 'horizontal' ? 'bottom' : 'right'}
                 onNavigate={onNavigate}
               />
             )
@@ -206,8 +166,8 @@ function SidebarMenuCollapsible({
   const { isMobile, setOpenMobile } = useSidebar()
   // 检查当前路径是否匹配子菜单项
   const isSubItemActive = checkIsActive(href, item)
-  // 使用受控状态，初始值基于当前路径是否匹配
-  const [isOpen, setIsOpen] = useState(() => isSubItemActive)
+  // Keep every category expanded initially so its pages are directly reachable.
+  const [isOpen, setIsOpen] = useState(true)
 
   // 当路径变化时，如果匹配子菜单项，自动展开父级菜单
   useEffect(() => {
@@ -259,74 +219,5 @@ function SidebarMenuCollapsible({
         </SidebarMenuSub>
       </CollapsibleContent>
     </Collapsible>
-  )
-}
-
-/**
- * Sidebar dropdown menu item when collapsed
- */
-function SidebarMenuCollapsedDropdown({
-  item,
-  href,
-  side = 'right',
-  onNavigate,
-}: {
-  item: NavCollapsible
-  href: string
-  side?: 'bottom' | 'right'
-  onNavigate?: () => void
-}) {
-  return (
-    <SidebarMenuItem>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          className='group/dropdown-trigger'
-          render={
-            <SidebarMenuButton
-              tooltip={item.title}
-              isActive={checkIsActive(href, item)}
-            />
-          }
-        >
-          {item.icon && <item.icon className='shrink-0' />}
-          <span className='min-w-0 flex-1 truncate'>{item.title}</span>
-          {item.badge && <NavBadge>{item.badge}</NavBadge>}
-          <ChevronRight
-            className={cn(
-              'ms-auto size-4 shrink-0 transition-transform duration-200',
-              side === 'bottom'
-                ? 'rotate-90 group-data-[popup-open]/dropdown-trigger:-rotate-90'
-                : 'group-data-[popup-open]/dropdown-trigger:rotate-90'
-            )}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side={side} align='start' sideOffset={4}>
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>
-              {item.title} {item.badge ? `(${item.badge})` : ''}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {item.items.map((sub) => (
-              <DropdownMenuItem
-                key={`${sub.title}-${sub.url}`}
-                render={
-                  <Link
-                    to={sub.url}
-                    onClick={onNavigate}
-                    className={`${checkIsActive(href, sub) ? 'bg-secondary' : ''}`}
-                  />
-                }
-              >
-                {sub.icon && <sub.icon />}
-                <span className='max-w-52 text-wrap'>{sub.title}</span>
-                {sub.badge && (
-                  <span className='ms-auto text-xs'>{sub.badge}</span>
-                )}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </SidebarMenuItem>
   )
 }

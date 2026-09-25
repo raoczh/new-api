@@ -17,17 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link, useLocation } from '@tanstack/react-router'
-import { ArrowUpLeft, Layers } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ArrowUpLeft } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTitle,
-  PopoverTrigger,
-} from '@/components/ui/popover'
 import {
   Sheet,
   SheetContent,
@@ -38,25 +32,63 @@ import {
 import { useSidebar } from '@/components/ui/sidebar'
 import { useSidebarView } from '@/hooks/use-sidebar-view'
 
-import { checkIsActive } from '../lib/url-utils'
-import type { NavGroup as NavGroupData, SidebarView } from '../types'
 import { NavGroup } from './nav-group'
 
-/** A quiet navigation rail; full page labels live in the section panels. */
+/** Full page navigation, shared by the desktop sidebar and mobile drawer. */
 export function AppSidebar() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { key, view, navGroups } = useSidebarView()
   const { isMobile, openMobile, setOpenMobile } = useSidebar()
   const pathname = useLocation({ select: (location) => location.pathname })
   const groups = navGroups.filter((group) => group.items.length > 0)
+  const navigationRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     if (!isMobile) setOpenMobile(false)
   }, [isMobile, setOpenMobile])
 
+  useEffect(() => {
+    if (!isMobile) scrollToCurrentPage(navigationRef.current)
+  }, [pathname, isMobile, i18n.resolvedLanguage])
+
+  const navigation = (
+    <>
+      <nav
+        key={key}
+        ref={navigationRef}
+        className='tc-navigation-panel tc-sidebar-menu'
+        aria-label={t('Navigation')}
+      >
+        {view && (
+          <Button
+            role='link'
+            variant='ghost'
+            className='tc-sidebar-back'
+            render={
+              <Link to={view.parent.to} onClick={() => setOpenMobile(false)} />
+            }
+          >
+            <ArrowUpLeft aria-hidden='true' />
+            {t(view.parent.label)}
+          </Button>
+        )}
+        {groups.map((group) => (
+          <NavGroup key={group.id || group.title} {...group} />
+        ))}
+      </nav>
+      <WorkspaceAttribution />
+    </>
+  )
+
   if (isMobile) {
     return (
-      <Sheet open={openMobile} onOpenChange={setOpenMobile}>
+      <Sheet
+        open={openMobile}
+        onOpenChange={setOpenMobile}
+        onOpenChangeComplete={(open) => {
+          if (open) scrollToCurrentPage(navigationRef.current)
+        }}
+      >
         <SheetContent
           side='left'
           id='workspace-navigation'
@@ -69,39 +101,19 @@ export function AppSidebar() {
             <SheetTitle>{t('Navigation')}</SheetTitle>
             <SheetDescription>{t('AI gateway workspace')}</SheetDescription>
           </SheetHeader>
-          <nav
-            className='tc-navigation-panel min-h-0 flex-1 overflow-y-auto p-3'
-            aria-label={t('Navigation')}
-          >
-            {view && (
-              <Button
-                role='link'
-                variant='ghost'
-                className='mb-3 w-full justify-start'
-                render={
-                  <Link
-                    to={view.parent.to}
-                    onClick={() => setOpenMobile(false)}
-                  />
-                }
-              >
-                <ArrowUpLeft aria-hidden='true' />
-                {t(view.parent.label)}
-              </Button>
-            )}
-            {groups.map((group) => (
-              <NavGroup key={group.id || group.title} {...group} />
-            ))}
-          </nav>
-          <WorkspaceAttribution />
+          {navigation}
         </SheetContent>
       </Sheet>
     )
   }
 
-  return (
-    <WorkspaceRail key={key} groups={groups} view={view} pathname={pathname} />
-  )
+  return <aside className='tc-workspace-sidebar'>{navigation}</aside>
+}
+
+function scrollToCurrentPage(navigation: HTMLElement | null) {
+  navigation
+    ?.querySelector<HTMLElement>('[aria-current="page"]')
+    ?.scrollIntoView({ block: 'nearest' })
 }
 
 function WorkspaceAttribution() {
@@ -114,96 +126,5 @@ function WorkspaceAttribution() {
     >
       <span>New API</span> <span>QuantumNous</span>
     </a>
-  )
-}
-
-function WorkspaceRail(props: {
-  groups: NavGroupData[]
-  view: SidebarView | null
-  pathname: string
-}) {
-  const { t } = useTranslation()
-  const [openGroup, setOpenGroup] = useState<string | null>(null)
-  useEffect(() => setOpenGroup(null), [props.pathname])
-  const sections = props.view
-    ? props.groups.flatMap((group) =>
-        group.items.map((item) => ({
-          title: item.title,
-          icon: item.icon,
-          items: item.items ?? [item],
-        }))
-      )
-    : props.groups.map((group) => ({
-        ...group,
-        icon:
-          group.items.find((item) => item.title === group.title)?.icon ??
-          group.items[0]?.icon,
-      }))
-
-  return (
-    <aside className='tc-navigation-rail'>
-      <nav aria-label={t('Navigation')} className='tc-rail-sections'>
-        {props.view && (
-          <Button
-            role='link'
-            variant='ghost'
-            className='tc-rail-entry tc-rail-back'
-            aria-label={t(props.view.parent.label)}
-            render={<Link to={props.view.parent.to} />}
-          >
-            <ArrowUpLeft aria-hidden='true' />
-            <span>{t('Back')}</span>
-          </Button>
-        )}
-        {sections.map((section) => {
-          const Icon = section.icon ?? Layers
-          const active = section.items.some(
-            (item) =>
-              checkIsActive(props.pathname, item) ||
-              ('type' in item &&
-                item.type === 'chat-presets' &&
-                props.pathname.startsWith('/chat/'))
-          )
-          return (
-            <Popover
-              key={section.title}
-              open={openGroup === section.title}
-              onOpenChange={(open) => setOpenGroup(open ? section.title : null)}
-            >
-              <PopoverTrigger
-                render={
-                  <Button
-                    variant='ghost'
-                    className='tc-rail-entry'
-                    data-current={active || undefined}
-                    aria-label={section.title}
-                  />
-                }
-              >
-                <Icon aria-hidden='true' />
-                <span>{section.title}</span>
-              </PopoverTrigger>
-              <PopoverContent
-                side='inline-end'
-                align='start'
-                sideOffset={14}
-                collisionPadding={16}
-                className='tc-navigation-panel tc-rail-panel'
-              >
-                <PopoverTitle className='tc-rail-panel-title'>
-                  {section.title}
-                </PopoverTitle>
-                <NavGroup
-                  title={section.title}
-                  items={section.items}
-                  onNavigate={() => setOpenGroup(null)}
-                />
-              </PopoverContent>
-            </Popover>
-          )
-        })}
-      </nav>
-      <WorkspaceAttribution />
-    </aside>
   )
 }

@@ -105,7 +105,9 @@ async function renderNavigation(path = '/keys', role = 1) {
     '/wallet',
     '/channels',
     '/system-settings/site',
+    '/system-settings/site/system-info',
     '/dashboard/overview',
+    '/chat/$chatId',
   ].map((path) => createRoute({ getParentRoute: () => root, path }))
   const router = createRouter({
     routeTree: root.addChildren(routes),
@@ -122,48 +124,58 @@ async function renderNavigation(path = '/keys', role = 1) {
   return router
 }
 
-it('reveals page links on demand and allows keyboard navigation between sections', async () => {
+it('shows all permitted page links immediately and supports direct keyboard navigation', async () => {
   const user = userEvent.setup()
   await renderNavigation()
+  const navigation = within(
+    screen.getByRole('navigation', { name: 'Navigation' })
+  )
+  expect(navigation.getByRole('link', { name: 'Playground' })).toBeVisible()
+  expect(navigation.getByRole('link', { name: 'Overview' })).toBeVisible()
+  expect(navigation.getByRole('link', { name: 'Wallet' })).toBeVisible()
   expect(
-    screen.queryByRole('link', { name: 'API Keys' })
+    navigation.queryByRole('link', { name: 'Channels' })
   ).not.toBeInTheDocument()
-  expect(
-    screen.queryByRole('button', { name: 'Admin' })
-  ).not.toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'General' }))
   expect(screen.getByRole('link', { name: 'API Keys' })).toHaveAttribute(
     'aria-current',
     'page'
   )
-  await user.keyboard('[Escape]')
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'General' })).toHaveFocus()
-  )
-  screen.getByRole('button', { name: 'Personal' }).focus()
+  navigation.getByRole('link', { name: 'Wallet' }).focus()
   await user.keyboard('[Enter]')
+  await waitFor(() =>
+    expect(screen.getByRole('link', { name: 'Wallet' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+  )
+  expect(navigation.getByRole('link', { name: 'API Keys' })).toBeVisible()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+it('keeps the full menu visible when choosing the current page', async () => {
+  const user = userEvent.setup()
+  await renderNavigation('/wallet')
   await user.click(screen.getByRole('link', { name: 'Wallet' }))
-  await waitFor(() =>
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  )
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Personal' })).toHaveFocus()
-  )
-  await user.click(screen.getByRole('button', { name: 'Personal' }))
   expect(screen.getByRole('link', { name: 'Wallet' })).toHaveAttribute(
     'aria-current',
     'page'
   )
+  expect(screen.getByRole('link', { name: 'API Keys' })).toBeVisible()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
-it('dismisses a section panel even when choosing the current page', async () => {
+it('lists configured chat pages without opening another menu', async () => {
+  client.setQueryData(['status'], {
+    chats: [{ 'Team chat': 'https://chat.example.invalid' }],
+  })
   const user = userEvent.setup()
-  await renderNavigation('/wallet')
-  await user.click(screen.getByRole('button', { name: 'Personal' }))
-  await user.click(screen.getByRole('link', { name: 'Wallet' }))
-  await waitFor(() =>
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  )
+  const router = await renderNavigation()
+  const chat = screen.getByRole('link', { name: 'Team chat' })
+  expect(chat).toBeVisible()
+  await user.click(chat)
+  await waitFor(() => expect(router.state.location.pathname).toBe('/chat/0'))
+  expect(chat).toHaveAttribute('aria-current', 'page')
+  expect(screen.getByRole('link', { name: 'API Keys' })).toBeVisible()
 })
 
 it('preserves administrator and user menu visibility settings', async () => {
@@ -173,38 +185,42 @@ it('preserves administrator and user menu visibility settings', async () => {
       personal: { enabled: false },
     }),
   })
-  const user = userEvent.setup()
   await renderNavigation('/channels', 100)
-  await user.click(screen.getByRole('button', { name: 'Admin' }))
   expect(screen.getByRole('link', { name: 'Channels' })).toHaveAttribute(
     'aria-current',
     'page'
   )
+  expect(screen.queryByRole('link', { name: 'Wallet' })).not.toBeInTheDocument()
   expect(
-    screen.queryByRole('button', { name: 'Personal' })
-  ).not.toBeInTheDocument()
-  await user.keyboard('[Escape]')
-  await user.click(screen.getByRole('button', { name: 'General' }))
-  expect(
-    within(screen.getByRole('dialog')).queryByRole('link', {
+    screen.queryByRole('link', {
       name: 'API Keys',
     })
   ).not.toBeInTheDocument()
 })
 
-it('provides contextual settings navigation with a route back to the workspace', async () => {
+it('expands settings categories so their pages can be opened directly', async () => {
   const user = userEvent.setup()
   await renderNavigation('/system-settings/site', 100)
-  await user.click(screen.getByRole('button', { name: 'Site & Branding' }))
+  expect(
+    screen.getByRole('button', { name: 'Site & Branding' })
+  ).toHaveAttribute('aria-expanded', 'true')
+  expect(
+    screen.getByRole('button', { name: 'Authentication' })
+  ).toHaveAttribute('aria-expanded', 'true')
   expect(
     screen.getByRole('link', { name: 'System Information' })
   ).toHaveAttribute('href', '/system-settings/site/system-info')
-  await user.keyboard('[Escape]')
+  await user.click(screen.getByRole('link', { name: 'System Information' }))
+  await waitFor(() =>
+    expect(
+      screen.getByRole('link', { name: 'System Information' })
+    ).toHaveAttribute('aria-current', 'page')
+  )
   const back = screen.getByRole('link', { name: /Back to Dashboard/ })
   expect(back).toHaveAttribute('href', '/dashboard/overview')
   await user.click(back)
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'General' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'API Keys' })).toBeVisible()
   )
 })
 
