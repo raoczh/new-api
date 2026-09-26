@@ -130,6 +130,7 @@ export interface SystemStatus {
     contact_email?: string
     contact_wechat_qrcode?: string
     contact_qq_group?: string
+    server_address?: string
     oauth_register_enabled?: boolean
     register_enabled?: boolean
     password_login_enabled?: boolean
@@ -178,6 +179,7 @@ export interface SystemStatus {
   contact_email?: string
   contact_wechat_qrcode?: string
   contact_qq_group?: string
+  server_address?: string
   oauth_register_enabled?: boolean
   register_enabled?: boolean
   password_login_enabled?: boolean
