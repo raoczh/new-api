@@ -118,6 +118,20 @@ it('pairs the configured site identity with the fixed Chinese brand name', async
   expect(within(header).getByRole('img')).toHaveAttribute('src', logo)
 })
 
+it('opens usage documentation in the current site despite an old external docs link', async () => {
+  queryClient.setQueryData(['status'], {
+    system_name: 'New API',
+    docs_link: 'https://old.example/docs',
+  })
+  await renderHeader()
+  const desktopNavigation = screen.getByRole('navigation')
+  const docs = within(desktopNavigation).getByRole('link', {
+    name: 'Usage Documentation',
+  })
+  expect(docs).toHaveAttribute('href', '/docs')
+  expect(docs).not.toHaveAttribute('target', '_blank')
+})
+
 it('opens one mobile notification popup and returns focus to its trigger on Escape', async () => {
   const user = userEvent.setup()
   await renderHeader()

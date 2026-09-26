@@ -127,8 +127,9 @@ export interface SystemStatus {
     custom_currency_symbol?: string
     custom_currency_exchange_rate?: number
     demo_site_enabled?: boolean
-    user_agreement_enabled?: boolean
-    privacy_policy_enabled?: boolean
+    contact_email?: string
+    contact_wechat_qrcode?: string
+    contact_qq_group?: string
     oauth_register_enabled?: boolean
     register_enabled?: boolean
     password_login_enabled?: boolean
@@ -174,8 +175,9 @@ export interface SystemStatus {
   custom_currency_symbol?: string
   custom_currency_exchange_rate?: number
   demo_site_enabled?: boolean
-  user_agreement_enabled?: boolean
-  privacy_policy_enabled?: boolean
+  contact_email?: string
+  contact_wechat_qrcode?: string
+  contact_qq_group?: string
   oauth_register_enabled?: boolean
   register_enabled?: boolean
   password_login_enabled?: boolean

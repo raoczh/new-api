@@ -23,7 +23,6 @@ import { useTranslation } from 'react-i18next'
 
 import { TokenComeBrand, TokenComeBridge } from '@/components/tokencome-brand'
 import { Button } from '@/components/ui/button'
-import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
 
 interface HeroProps {
@@ -34,9 +33,6 @@ const MoreIcon = MoreHorizontal
 
 export function Hero(props: HeroProps) {
   const { t } = useTranslation()
-  const { status } = useStatus()
-  const docsUrl =
-    (status?.docs_link as string | undefined) || 'https://docs.newapi.pro'
   return (
     <section className={cn('tc-home-hero', props.className)}>
       <div className='tc-hero-stage'>
@@ -87,20 +83,10 @@ export function Hero(props: HeroProps) {
                 size='lg'
                 variant='ghost'
                 className='h-12 rounded-sm px-4'
-                render={
-                  docsUrl.startsWith('http') ? (
-                    <a
-                      href={docsUrl}
-                      target='_blank'
-                      rel='noopener noreferrer'
-                    />
-                  ) : (
-                    <Link to={docsUrl} />
-                  )
-                }
+                render={<Link to='/docs' />}
               >
                 <BookOpen className='size-4' aria-hidden='true' />
-                {t('Docs')}
+                {t('Usage Documentation')}
               </Button>
             </div>
           </div>

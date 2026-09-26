@@ -48,7 +48,7 @@ func GetStatus(c *gin.Context) {
 	common.OptionMapRWMutex.RLock()
 	defer common.OptionMapRWMutex.RUnlock()
 
-	legalSetting := system_setting.GetLegalSettings()
+	contactSetting := system_setting.GetContactSettings()
 
 	data := gin.H{
 		"version":                     common.Version,
@@ -73,7 +73,6 @@ func GetStatus(c *gin.Context) {
 		"server_address":              system_setting.ServerAddress,
 		"turnstile_check":             common.TurnstileCheckEnabled,
 		"turnstile_site_key":          common.TurnstileSiteKey,
-		"docs_link":                   operation_setting.GetGeneralSetting().DocsLink,
 		"quota_per_unit":              common.QuotaPerUnit,
 		// 兼容旧前端：保留 display_in_currency，同时提供新的 quota_display_type
 		"display_in_currency":           operation_setting.IsCurrencyDisplay(),
@@ -123,8 +122,10 @@ func GetStatus(c *gin.Context) {
 		"passkey_user_verification":   passkeySetting.UserVerification,
 		"passkey_attachment":          passkeySetting.AttachmentPreference,
 		"setup":                       constant.Setup,
-		"user_agreement_enabled":      legalSetting.UserAgreement != "",
-		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
+		"docs_link":                   operation_setting.GetGeneralSetting().DocsLink,
+		"contact_email":               contactSetting.Email,
+		"contact_wechat_qrcode":       contactSetting.WeChatQRCode,
+		"contact_qq_group":            contactSetting.QQGroup,
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
 	}
 
@@ -187,14 +188,6 @@ func GetAbout(c *gin.Context) {
 	about := common.OptionMap["About"]
 	common.OptionMapRWMutex.RUnlock()
 	serveRevalidatedJSON(c, about)
-}
-
-func GetUserAgreement(c *gin.Context) {
-	serveRevalidatedJSON(c, system_setting.GetLegalSettings().UserAgreement)
-}
-
-func GetPrivacyPolicy(c *gin.Context) {
-	serveRevalidatedJSON(c, system_setting.GetLegalSettings().PrivacyPolicy)
 }
 
 func GetMidjourney(c *gin.Context) {

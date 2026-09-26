@@ -33,9 +33,9 @@ const defaultSiteSettings: SiteSettings = {
   HomePageContent: '',
   ServerAddress: '',
   TaskPublicAddress: '',
-  'general_setting.docs_link': '',
-  'legal.user_agreement': '',
-  'legal.privacy_policy': '',
+  'contact.email': '',
+  'contact.wechat_qrcode': '',
+  'contact.qq_group': '',
   HeaderNavModules: '',
   SidebarModulesAdmin: '',
 }

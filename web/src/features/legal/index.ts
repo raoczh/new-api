@@ -16,5 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export { UserAgreement } from './user-agreement'
+export { TermsOfService } from './terms-of-service'
 export { PrivacyPolicy } from './privacy-policy'
+export { AcceptableUse } from './acceptable-use'
+export { Disclaimer } from './disclaimer'
+export { RefundPolicy } from './refund-policy'
+export { DataProcessingAgreement } from './data-processing-agreement'
+export { Compliance } from './compliance'
+export { SupportedRegions } from './supported-regions'

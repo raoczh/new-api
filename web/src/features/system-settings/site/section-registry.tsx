@@ -28,6 +28,7 @@ import { NoticeSection } from '../maintenance/notice-section'
 import { SidebarModulesSection } from '../maintenance/sidebar-modules-section'
 import type { SiteSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { ContactSection } from './contact-section'
 
 const SITE_SECTIONS = [
   {
@@ -43,13 +44,19 @@ const SITE_SECTIONS = [
           HomePageContent: settings.HomePageContent,
           ServerAddress: settings.ServerAddress,
           TaskPublicAddress: settings.TaskPublicAddress,
-          general_setting: {
-            docs_link: settings['general_setting.docs_link'],
-          },
-          legal: {
-            user_agreement: settings['legal.user_agreement'],
-            privacy_policy: settings['legal.privacy_policy'],
-          },
+        }}
+      />
+    ),
+  },
+  {
+    id: 'contact',
+    titleKey: 'Contact Information',
+    build: (settings: SiteSettings) => (
+      <ContactSection
+        defaultValues={{
+          Email: settings['contact.email'] ?? '',
+          WeChatQRCode: settings['contact.wechat_qrcode'] ?? '',
+          QQGroup: settings['contact.qq_group'] ?? '',
         }}
       />
     ),

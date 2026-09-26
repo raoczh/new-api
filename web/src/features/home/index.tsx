@@ -27,6 +27,7 @@ import { isLikelyHtml } from '@/lib/content-format'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { CTA, Features, Hero, HowItWorks, Stats } from './components'
+import { ContactInformation } from './components/contact-information'
 import { useHomePageContent } from './hooks'
 
 export function Home() {
@@ -88,6 +89,7 @@ export function Home() {
             sandbox='allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts allow-top-navigation-by-user-activation'
             onLoad={syncIframePreferences}
           />
+          <ContactInformation />
         </PublicLayout>
       )
     }
@@ -103,6 +105,7 @@ export function Home() {
             content={content}
             className='custom-home-content'
           />
+          <ContactInformation />
         </PublicLayout>
       )
     }
@@ -116,6 +119,7 @@ export function Home() {
             className='custom-home-content'
           />
         </div>
+        <ContactInformation />
       </PublicLayout>
     )
   }
@@ -128,6 +132,7 @@ export function Home() {
         <Features />
         <HowItWorks />
         <CTA isAuthenticated={isAuthenticated} />
+        <ContactInformation />
       </main>
       <Footer />
     </PublicLayout>

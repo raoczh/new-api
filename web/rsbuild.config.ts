@@ -69,6 +69,7 @@ export default defineConfig(({ envMode }) => {
     server: {
       host: '0.0.0.0',
       strictPort: false,
+      historyApiFallback: true,
       proxy: devProxy,
     },
     output: {

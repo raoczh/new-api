@@ -149,9 +149,9 @@ export type SiteSettings = {
   HomePageContent: string
   ServerAddress: string
   TaskPublicAddress: string
-  'general_setting.docs_link': string
-  'legal.user_agreement': string
-  'legal.privacy_policy': string
+  'contact.email': string
+  'contact.wechat_qrcode': string
+  'contact.qq_group': string
   HeaderNavModules: string
   SidebarModulesAdmin: string
 }
