@@ -16,7 +16,7 @@ function renderContact(status: Record<string, string>) {
   )
 }
 
-test('shows every configured contact method on the home page', () => {
+test('shows every configured contact method', () => {
   renderContact({
     contact_email: 'help@example.com',
     contact_wechat_qrcode: 'https://example.com/qr.png',

@@ -32,7 +32,8 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { API_KEY_STATUSES } from '../constants'
 import type { ApiKey } from '../types'
-import { ApiKeyGroupCell } from './api-key-group-cell'
+import type { ApiKeyGroupOption } from './api-key-group-combobox'
+import { ApiKeyGroupEditableCell } from './api-key-group-editable-cell'
 import { ApiKeyQuotaCell } from './api-key-quota-cell'
 import {
   ApiKeyActivityCell,
@@ -46,6 +47,7 @@ import {
 import { DataTableRowActions } from './data-table-row-actions'
 
 const EMPTY_GROUP_RATIOS: Record<string, number | string> = {}
+const EMPTY_GROUP_OPTIONS: ApiKeyGroupOption[] = []
 
 function useGroupRatios(): Record<string, number | string> {
   const { data } = useQuery({
@@ -67,12 +69,32 @@ function useGroupRatios(): Record<string, number | string> {
   return data ?? EMPTY_GROUP_RATIOS
 }
 
+function useGroupOptions(): ApiKeyGroupOption[] {
+  const { data } = useQuery({
+    queryKey: ['user-groups'],
+    queryFn: async () => requireServerSuccess(await getUserGroups()),
+    staleTime: 0,
+    select: (res) => {
+      if (!res.success || !res.data) return []
+      return Object.entries(res.data).map(([key, info]) => ({
+        value: key,
+        label: key,
+        desc: info.desc || key,
+        ratio: info.ratio,
+      }))
+    },
+  })
+
+  return data ?? EMPTY_GROUP_OPTIONS
+}
+
 export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
   const { t, i18n } = useTranslation()
   useSystemConfigStore((state) => state.config.currency)
   const { meta: currency } = getCurrencyDisplay()
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
   const groupRatios = useGroupRatios()
+  const groupOptions = useGroupOptions()
   const shouldReduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const justNowLabel = t('Just now')
@@ -155,10 +177,10 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
           const apiKey = row.original
           const group = row.getValue('group') as string
           return (
-            <ApiKeyGroupCell
-              group={group}
+            <ApiKeyGroupEditableCell
+              apiKey={apiKey}
+              groupOptions={groupOptions}
               ratio={groupRatios[group]}
-              crossGroupRetry={apiKey.cross_group_retry}
               shouldReduceMotion={shouldReduceMotion}
             />
           )
@@ -233,6 +255,6 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
         meta: { pinned: 'right' as const },
       },
     ],
-    [t, quotaUnit, now, groupRatios, shouldReduceMotion, locale, justNowLabel]
+    [t, quotaUnit, now, groupRatios, groupOptions, shouldReduceMotion, locale, justNowLabel]
   )
 }

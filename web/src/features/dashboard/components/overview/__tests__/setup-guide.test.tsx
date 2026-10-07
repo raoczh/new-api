@@ -238,4 +238,29 @@ describe('overview setup guide', () => {
       screen.queryByRole('button', { name: 'Setup guide' })
     ).not.toBeInTheDocument()
   })
+
+  it('shows configured contact information on the overview page', async () => {
+    client.setQueryData(['status'], {
+      api_info_enabled: false,
+      announcements_enabled: false,
+      faq_enabled: false,
+      uptime_kuma_enabled: false,
+      contact_email: 'help@example.com',
+      contact_wechat_qrcode: 'https://example.com/qr.png',
+      contact_qq_group: '123456789',
+    })
+
+    await renderOverview()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Contact Information' })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('link', { name: 'help@example.com' })
+    ).toHaveAttribute('href', 'mailto:help@example.com')
+    expect(
+      screen.getByRole('img', { name: 'WeChat Group QR Code' })
+    ).toHaveAttribute('src', 'https://example.com/qr.png')
+    expect(screen.getByText('123456789')).toBeVisible()
+  })
 })

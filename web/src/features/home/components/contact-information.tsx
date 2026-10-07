@@ -13,9 +13,12 @@ export function ContactInformation() {
   if (!email && !wechatQR && !qqGroup) return null
 
   return (
-    <section className='border-t py-12' aria-labelledby='home-contact-title'>
+    <section
+      className='border-t py-12'
+      aria-labelledby='contact-information-title'
+    >
       <div className='mx-auto max-w-6xl px-6'>
-        <h2 id='home-contact-title' className='text-xl font-semibold'>
+        <h2 id='contact-information-title' className='text-xl font-semibold'>
           {t('Contact Information')}
         </h2>
         <div className='mt-6 flex flex-wrap items-start gap-x-12 gap-y-6'>
