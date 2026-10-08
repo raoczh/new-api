@@ -115,6 +115,36 @@ func GetPerfMetricsSummaryBucketsAll(startTs int64, endTs int64, groups []string
 	return summaries, err
 }
 
+// PerfMetricGroupRow is a (group, model, bucket) aggregate.
+type PerfMetricGroupRow struct {
+	GroupName      string `gorm:"column:group_name"`
+	ModelName      string `gorm:"column:model_name"`
+	BucketTs       int64  `gorm:"column:bucket_ts"`
+	RequestCount   int64  `gorm:"column:request_count"`
+	SuccessCount   int64  `gorm:"column:success_count"`
+	TotalLatencyMs int64  `gorm:"column:total_latency_ms"`
+	TtftSumMs      int64  `gorm:"column:ttft_sum_ms"`
+	TtftCount      int64  `gorm:"column:ttft_count"`
+	OutputTokens   int64  `gorm:"column:output_tokens"`
+	GenerationMs   int64  `gorm:"column:generation_ms"`
+}
+
+// GetPerfMetricsGroupRows returns the stored rows of the given groups in the
+// window. Rows are already unique per (model, group, bucket), so no GROUP BY
+// is needed.
+func GetPerfMetricsGroupRows(startTs int64, endTs int64, groups []string) ([]PerfMetricGroupRow, error) {
+	var rows []PerfMetricGroupRow
+	if len(groups) == 0 {
+		return rows, nil
+	}
+	err := DB.Model(&PerfMetric{}).
+		Select(commonGroupCol+" as group_name, model_name, bucket_ts, request_count, success_count, total_latency_ms, ttft_sum_ms, ttft_count, output_tokens, generation_ms").
+		Where("bucket_ts >= ? AND bucket_ts <= ? AND request_count > 0", startTs, endTs).
+		Where(commonGroupCol+" IN ?", groups).
+		Find(&rows).Error
+	return rows, err
+}
+
 func DeletePerfMetricsBefore(cutoffTs int64) error {
 	if cutoffTs <= 0 {
 		return nil

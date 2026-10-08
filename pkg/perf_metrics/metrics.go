@@ -118,6 +118,7 @@ func Record(sample Sample) {
 	}
 	actual, _ := hotBuckets.LoadOrStore(key, &atomicBucket{})
 	actual.(*atomicBucket).add(sample)
+	lastSeenByGroup.Store(sample.Group, time.Now().Unix())
 	gopool.Go(func() {
 		recordRedis(key, sample)
 	})

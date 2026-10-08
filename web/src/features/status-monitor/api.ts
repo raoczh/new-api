@@ -16,20 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 
-import { getPerfMetricsSummary } from '@/features/performance-metrics/api'
-import { requireServerSuccess } from '@/lib/server-error-message'
+import type { GroupStatusResponse } from './types'
 
-import { STATUS_MONITOR_REFETCH_INTERVAL_MS } from '../constants'
-
-export function useStatusMonitorMetrics(hours: number) {
-  return useQuery({
-    queryKey: ['status-monitor', 'summary', hours],
-    queryFn: async () =>
-      requireServerSuccess(await getPerfMetricsSummary(hours)),
-    staleTime: 60 * 1000,
-    refetchInterval: STATUS_MONITOR_REFETCH_INTERVAL_MS,
-    retry: false,
+export async function getGroupStatus(
+  hours: number
+): Promise<GroupStatusResponse> {
+  const res = await api.get<GroupStatusResponse>('/api/status-monitor/groups', {
+    params: { hours },
   })
+  return res.data
 }

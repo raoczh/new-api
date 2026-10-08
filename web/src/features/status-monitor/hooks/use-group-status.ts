@@ -16,19 +16,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-/** Window options for the status monitor page, in hours. */
-export const STATUS_MONITOR_WINDOWS = [
-  { value: 24, labelKey: 'Last 24 hours' },
-  { value: 168, labelKey: 'Last 7 days' },
-] as const
+import { useQuery } from '@tanstack/react-query'
 
-export type StatusMonitorWindow =
-  (typeof STATUS_MONITOR_WINDOWS)[number]['value']
+import { requireServerSuccess } from '@/lib/server-error-message'
 
-export const DEFAULT_STATUS_MONITOR_WINDOW: StatusMonitorWindow = 24
+import { getGroupStatus } from '../api'
+import { STATUS_MONITOR_REFETCH_INTERVAL_MS } from '../constants'
 
-/** Poll interval so the page reflects availability changes while open. */
-export const STATUS_MONITOR_REFETCH_INTERVAL_MS = 60 * 1000
-
-/** Fixed number of hourly cells per group card; the last is the current hour. */
-export const STATUS_MONITOR_HOURLY_CELLS = 24
+export function useGroupStatus(hours: number) {
+  return useQuery({
+    queryKey: ['status-monitor', 'groups', hours],
+    queryFn: async () => requireServerSuccess(await getGroupStatus(hours)),
+    staleTime: STATUS_MONITOR_REFETCH_INTERVAL_MS,
+    refetchInterval: STATUS_MONITOR_REFETCH_INTERVAL_MS,
+    retry: false,
+  })
+}

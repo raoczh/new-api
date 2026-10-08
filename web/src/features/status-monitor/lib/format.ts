@@ -16,19 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-/** Window options for the status monitor page, in hours. */
-export const STATUS_MONITOR_WINDOWS = [
-  { value: 24, labelKey: 'Last 24 hours' },
-  { value: 168, labelKey: 'Last 7 days' },
-] as const
+export function formatLatencySeconds(ms: number | undefined): string {
+  if (ms == null || ms <= 0) return '—'
+  return `${(ms / 1000).toFixed(2)}s`
+}
 
-export type StatusMonitorWindow =
-  (typeof STATUS_MONITOR_WINDOWS)[number]['value']
-
-export const DEFAULT_STATUS_MONITOR_WINDOW: StatusMonitorWindow = 24
-
-/** Poll interval so the page reflects availability changes while open. */
-export const STATUS_MONITOR_REFETCH_INTERVAL_MS = 60 * 1000
-
-/** Fixed number of hourly cells per group card; the last is the current hour. */
-export const STATUS_MONITOR_HOURLY_CELLS = 24
+export function formatHourRange(
+  startTs: number,
+  locales?: Intl.LocalesArgument
+): string {
+  const start = new Date(startTs * 1000)
+  const end = new Date((startTs + 3600) * 1000)
+  const fmt = new Intl.DateTimeFormat(locales, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+  return `${fmt.format(start)} — ${fmt.format(end)}`
+}

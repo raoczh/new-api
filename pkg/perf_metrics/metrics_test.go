@@ -169,10 +169,12 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			oldType, oldLogType := common.MainDatabaseType(), common.LogDatabaseType()
 			common.SQLitePath, common.IsMasterNode, common.RedisEnabled = filepath.Join(t.TempDir(), "perf.db"), false, false
 			hotBuckets.Clear()
+			lastSeenByGroup.Clear()
 			t.Cleanup(func() {
 				model.DB, common.SQLitePath, common.IsMasterNode, common.RedisEnabled = oldDB, oldPath, oldMaster, oldRedis
 				common.SetDatabaseTypes(oldType, oldLogType)
 				hotBuckets.Clear()
+				lastSeenByGroup.Clear()
 			})
 			require.NoError(t, model.InitDB())
 			db := model.DB
@@ -249,6 +251,29 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, 98.04, combined.Summary.SuccessRate)
 			assert.Equal(t, 99.01, combined.Models[0].SuccessRate)
+
+			// Group status: busiest group first, idle groups are kept as
+			// pending with no summary, and the inactive group stays hidden.
+			status, err := QueryGroupStatus(24, map[string]string{"a": "Group A", "b": "Group B", "idle": "Idle"})
+			require.NoError(t, err)
+			assert.Equal(t, start, status.HourlyStart)
+			require.Len(t, status.Groups, 3)
+			groupA, groupB, idle := status.Groups[0], status.Groups[1], status.Groups[2]
+			assert.Equal(t, "a", groupA.Group)
+			assert.Equal(t, "Group A", groupA.Description)
+			require.NotNil(t, groupA.Summary)
+			assert.Equal(t, GroupSummary{SuccessRate: 99.01, AvgTtftMs: 100, AvgLatencyMs: 990, AvgTps: 5}, *groupA.Summary)
+			assert.Equal(t, []GroupHourPoint{{Ts: hour, SuccessRate: 99.01, AvgTtftMs: 100, TopModel: "test-model"}}, groupA.Hourly)
+			require.Len(t, groupA.Models, 2)
+			assert.Equal(t, "test-model", groupA.Models[0].ModelName)
+			assert.Equal(t, 0.0, groupA.Models[1].SuccessRate)
+			assert.Equal(t, "b", groupB.Group)
+			require.NotNil(t, groupB.Summary)
+			assert.Equal(t, 0.0, groupB.Summary.SuccessRate)
+			assert.Equal(t, "idle", idle.Group)
+			assert.Nil(t, idle.Summary)
+			assert.Empty(t, idle.Hourly)
+			assert.Empty(t, idle.Models)
 		})
 	}
 }

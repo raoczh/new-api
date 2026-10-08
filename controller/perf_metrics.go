@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/QuantumNous/new-api/model"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -58,6 +60,38 @@ func GetPerfMetrics(c *gin.Context) {
 		Hours:         hours,
 		AllowedGroups: append(lo.Keys(ratio_setting.GetGroupRatioCopy()), "auto"),
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGroupStatus reports per-group health for the groups the user may use.
+func GetGroupStatus(c *gin.Context) {
+	hours := 24
+	if rawHours := c.Query("hours"); rawHours != "" {
+		if parsed, err := strconv.Atoi(rawHours); err == nil {
+			hours = parsed
+		}
+	}
+
+	userGroup, _ := model.GetUserGroup(c.GetInt("id"), false)
+	groupDescs := map[string]string{}
+	for groupName, desc := range service.GetUserUsableGroups(userGroup) {
+		if ratio_setting.ContainsGroupRatio(groupName) {
+			groupDescs[groupName] = desc
+		}
+	}
+
+	result, err := perfmetrics.QueryGroupStatus(hours, groupDescs)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
