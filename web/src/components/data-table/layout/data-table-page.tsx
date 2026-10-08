@@ -345,7 +345,7 @@ export function DataTablePage<TData>(props: DataTablePageProps<TData>) {
       <div
         className={cn(
           'tc-data-workspace',
-          props.fixedHeight !== false && 'tc-data-fixed h-full min-h-0',
+          props.fixedHeight !== false && 'h-full min-h-0',
           props.className
         )}
       >

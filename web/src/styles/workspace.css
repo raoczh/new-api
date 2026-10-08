@@ -278,46 +278,75 @@ For commercial licensing, please contact support@quantumnous.com
   background: var(--card);
   box-shadow: none;
 }
+/* List pages stack a filter panel above the results at every width, so the
+   table always gets the full content width. */
 .tc-data-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0;
-  border-top: 2px solid var(--foreground);
-}
-.tc-data-fixed {
-  grid-template-rows: minmax(0, 1fr);
-}
-.tc-data-fixed:has(.tc-data-tools) {
-  grid-template-rows: auto minmax(0, 1fr);
-}
-.tc-data-after {
-  grid-column: 1 / -1;
+  --tc-data-radius: 0.75rem;
+  --tc-data-shadow: 0 1px 2px
+    color-mix(in srgb, var(--foreground) 5%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
 }
 .tc-data-tools {
+  position: relative;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--tc-data-radius);
   background: var(--card);
-  padding: 1rem;
-  border-bottom: 1px solid var(--border);
+  box-shadow: var(--tc-data-shadow);
+}
+.tc-data-tools::before {
+  position: absolute;
+  inset-block: 0.875rem;
+  inset-inline-start: 0;
+  width: 0.2rem;
+  border-radius: 0 999px 999px 0;
+  background: var(--tc-brand-accent);
+  content: '';
+}
+/* Feature filter bars bring their own frame; the shared panel replaces it. */
+.tc-data-tools > .tc-log-filters,
+.tc-data-tools > [data-slot='collapsible'] {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+@media (min-width: 640px) {
+  .tc-data-tools .tc-log-filter-fields {
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  }
 }
 .tc-data-results {
-  background: var(--card);
+  min-width: 0;
 }
 .tc-data-results > div {
-  border-radius: 0;
+  border-radius: var(--tc-data-radius);
+}
+.tc-data-results > div:has([data-slot='table']) {
+  background: var(--card);
+  box-shadow: var(--tc-data-shadow);
 }
 .tc-data-results [data-slot='table-head'] {
-  background: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 500;
+  height: 2.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 .tc-data-results [data-slot='table-row'] {
-  border-color: var(--border);
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+}
+.tc-data-results [data-slot='table-body'] [data-slot='table-row']:last-child {
+  border-bottom: 0;
 }
 .tc-data-results [data-slot='table-cell'] {
-  padding-block: 0.8rem;
+  padding-block: 0.7rem;
 }
 .tc-data-results [data-slot='card'] {
-  border-radius: 0.3rem;
+  border-radius: 0.6rem;
   box-shadow: none;
 }
 .tc-overview-ledger {
@@ -730,43 +759,6 @@ For commercial licensing, please contact support@quantumnous.com
   }
 }
 @media (min-width: 1200px) {
-  .tc-data-workspace:has(.tc-data-tools) {
-    grid-template-columns: 14rem minmax(0, 1fr);
-    gap: 0;
-  }
-  .tc-data-fixed:has(.tc-data-tools) {
-    grid-template-rows: minmax(0, 1fr);
-  }
-  .tc-data-tools {
-    min-height: 0;
-    border-bottom: 0;
-    border-inline-end: 1px solid var(--border);
-    overflow-y: auto;
-  }
-  .tc-data-tools > div,
-  .tc-data-tools > div > div {
-    flex-direction: column;
-    align-items: stretch;
-    width: 100%;
-  }
-  .tc-data-tools input,
-  .tc-data-tools [role='combobox'] {
-    width: 100%;
-  }
-  .tc-data-tools button {
-    max-width: 100%;
-  }
-  .tc-data-tools .tc-log-filters {
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-  .tc-data-tools .tc-log-filter-fields {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .tc-data-tools .tc-log-filter-fields > * {
-    grid-column: auto;
-  }
   .tc-overview-panels-with-uptime {
     grid-template-columns: minmax(0, 1fr) 21rem;
   }
@@ -841,6 +833,15 @@ For commercial licensing, please contact support@quantumnous.com
   }
   .tc-page-heading {
     padding-block: 1.1rem;
+  }
+  .tc-data-workspace {
+    gap: 0.625rem;
+  }
+  .tc-data-tools {
+    padding: 0.625rem 0.75rem;
+  }
+  .tc-data-tools::before {
+    inset-block: 0.625rem;
   }
   .tc-page-title {
     font-size: 1.7rem;
