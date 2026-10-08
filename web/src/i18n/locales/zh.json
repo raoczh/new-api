@@ -6815,6 +6815,16 @@
     "Zhipu": "智谱",
     "Zhipu GLM": "智谱GLM",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Back to Wallet": "返回钱包",
+    "Choose a product and complete checkout": "选择商品并完成支付",
+    "Copy the redemption code from the order": "复制订单中的兑换码",
+    "Come back here or to the wallet to redeem it": "回到本页或钱包页即可兑换",
+    "Redemption code store": "兑换码商店",
+    "Loading store...": "正在加载商店...",
+    "The store could not be opened here": "商店无法在此页面中打开",
+    "Open it in a new tab to purchase. After checkout, copy the code and redeem it on the wallet page.": "请在新窗口中打开商店购买。购买完成后复制兑换码，再到钱包页面兑换。",
+    "Store not showing correctly?": "商店显示异常？",
+    "Open it in a new tab": "在新窗口中打开"
   }
 }

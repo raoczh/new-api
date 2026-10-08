@@ -46,46 +46,38 @@ import {
 } from './api-keys-cells'
 import { DataTableRowActions } from './data-table-row-actions'
 
-const EMPTY_GROUP_RATIOS: Record<string, number | string> = {}
-const EMPTY_GROUP_OPTIONS: ApiKeyGroupOption[] = []
+type UserGroupData = {
+  ratios: Record<string, number | string>
+  options: ApiKeyGroupOption[]
+}
 
-function useGroupRatios(): Record<string, number | string> {
+const EMPTY_GROUP_DATA: UserGroupData = { ratios: {}, options: [] }
+
+function useUserGroupData(): UserGroupData {
   const { data } = useQuery({
     queryKey: ['user-groups'],
     queryFn: async () => requireServerSuccess(await getUserGroups()),
     staleTime: 0,
-    select: (res) => {
-      if (!res.success || !res.data) return {}
+    select: (res): UserGroupData => {
+      if (!res.success || !res.data) return EMPTY_GROUP_DATA
       const ratios: Record<string, number | string> = {}
+      const options: ApiKeyGroupOption[] = []
       for (const [group, info] of Object.entries(res.data)) {
         if (typeof info.ratio === 'number' || typeof info.ratio === 'string') {
           ratios[group] = info.ratio
         }
+        options.push({
+          value: group,
+          label: group,
+          desc: info.desc || group,
+          ratio: info.ratio,
+        })
       }
-      return ratios
+      return { ratios, options }
     },
   })
 
-  return data ?? EMPTY_GROUP_RATIOS
-}
-
-function useGroupOptions(): ApiKeyGroupOption[] {
-  const { data } = useQuery({
-    queryKey: ['user-groups'],
-    queryFn: async () => requireServerSuccess(await getUserGroups()),
-    staleTime: 0,
-    select: (res) => {
-      if (!res.success || !res.data) return []
-      return Object.entries(res.data).map(([key, info]) => ({
-        value: key,
-        label: key,
-        desc: info.desc || key,
-        ratio: info.ratio,
-      }))
-    },
-  })
-
-  return data ?? EMPTY_GROUP_OPTIONS
+  return data ?? EMPTY_GROUP_DATA
 }
 
 export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
@@ -93,8 +85,7 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
   useSystemConfigStore((state) => state.config.currency)
   const { meta: currency } = getCurrencyDisplay()
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
-  const groupRatios = useGroupRatios()
-  const groupOptions = useGroupOptions()
+  const { ratios: groupRatios, options: groupOptions } = useUserGroupData()
   const shouldReduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const justNowLabel = t('Just now')

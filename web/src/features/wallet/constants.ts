@@ -64,3 +64,13 @@ export const DEFAULT_DISCOUNT_RATE = 1.0
  * Default minimum topup amount
  */
 export const DEFAULT_MIN_TOPUP = 1
+
+/**
+ * External consignment store that sells redemption codes
+ */
+export const REDEMPTION_STORE_URL = 'https://catfk.com/shop/FGIYNKJC'
+
+/**
+ * Time to wait for the embedded store before suggesting a new tab
+ */
+export const REDEMPTION_STORE_LOAD_TIMEOUT_MS = 15_000

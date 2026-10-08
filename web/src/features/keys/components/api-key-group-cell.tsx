@@ -36,6 +36,11 @@ type ApiKeyGroupCellProps = {
   group: string
   ratio?: GroupRatio
   shouldReduceMotion: boolean
+  /**
+   * Set to false when the cell is the content of another control, such as
+   * the inline group picker, so it adds no focus stop or tooltip of its own.
+   */
+  interactive?: boolean
 }
 
 export function ApiKeyGroupCell(props: ApiKeyGroupCellProps) {
@@ -43,6 +48,39 @@ export function ApiKeyGroupCell(props: ApiKeyGroupCellProps) {
   const isMobile = useMediaQuery('(max-width: 640px)')
 
   const group = props.group?.trim() || ''
+  if (props.interactive === false) {
+    if (group === 'auto') {
+      return (
+        <span className='flex min-w-0 items-center gap-3 overflow-visible text-xs'>
+          <StatusBadge
+            label={t('Cross-group')}
+            variant='info'
+            copyable={false}
+            className='px-0'
+          />
+          <GroupRatioBadge
+            ratio={props.ratio}
+            isAuto
+            shouldReduceMotion={props.shouldReduceMotion}
+          />
+        </span>
+      )
+    }
+    return (
+      <span className='block min-w-0 truncate'>
+        <GroupBadge
+          group={group}
+          ratio={
+            group && typeof props.ratio === 'number' ? props.ratio : undefined
+          }
+          ratioLabel={group ? undefined : t('Inherited')}
+          className='px-0'
+          containerClassName='gap-3'
+        />
+      </span>
+    )
+  }
+
   if (group !== 'auto') {
     const ratio =
       group && typeof props.ratio === 'number' ? props.ratio : undefined

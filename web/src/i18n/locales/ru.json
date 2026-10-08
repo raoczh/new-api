@@ -6815,6 +6815,16 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Back to Wallet": "Назад в кошелёк",
+    "Choose a product and complete checkout": "Выберите товар и оформите оплату",
+    "Copy the redemption code from the order": "Скопируйте код пополнения из заказа",
+    "Come back here or to the wallet to redeem it": "Вернитесь сюда или в кошелёк, чтобы активировать его",
+    "Redemption code store": "Магазин кодов пополнения",
+    "Loading store...": "Загрузка магазина...",
+    "The store could not be opened here": "Не удалось открыть магазин на этой странице",
+    "Open it in a new tab to purchase. After checkout, copy the code and redeem it on the wallet page.": "Откройте его в новой вкладке для покупки. После оплаты скопируйте код и активируйте его в кошельке.",
+    "Store not showing correctly?": "Магазин отображается неправильно?",
+    "Open it in a new tab": "Открыть в новой вкладке"
   }
 }

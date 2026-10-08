@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Gift, Loader2 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -33,6 +34,7 @@ interface RedemptionCodeCardProps {
   onRedeem: () => void
   redeeming: boolean
   loading?: boolean
+  action?: ReactNode
 }
 
 export function RedemptionCodeCard(props: RedemptionCodeCardProps) {
@@ -48,6 +50,7 @@ export function RedemptionCodeCard(props: RedemptionCodeCardProps) {
       description={t('Have a Code?')}
       icon={<Gift className='h-4 w-4' />}
       iconTone='warning'
+      action={props.action}
       disableHoverEffect
       contentClassName='space-y-3'
     >

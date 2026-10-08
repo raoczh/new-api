@@ -6815,6 +6815,16 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Back to Wallet": "Back to Wallet",
+    "Choose a product and complete checkout": "Choose a product and complete checkout",
+    "Copy the redemption code from the order": "Copy the redemption code from the order",
+    "Come back here or to the wallet to redeem it": "Come back here or to the wallet to redeem it",
+    "Redemption code store": "Redemption code store",
+    "Loading store...": "Loading store...",
+    "The store could not be opened here": "The store could not be opened here",
+    "Open it in a new tab to purchase. After checkout, copy the code and redeem it on the wallet page.": "Open it in a new tab to purchase. After checkout, copy the code and redeem it on the wallet page.",
+    "Store not showing correctly?": "Store not showing correctly?",
+    "Open it in a new tab": "Open it in a new tab"
   }
 }

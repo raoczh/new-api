@@ -450,10 +450,66 @@ For commercial licensing, please contact support@quantumnous.com
   box-shadow: none;
   border-radius: 0.3rem;
 }
+.tc-store-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  height: 100%;
+  min-height: 36rem;
+}
+.tc-store-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 2px solid var(--foreground);
+  background: var(--card);
+}
+.tc-store-step {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  border-inline-start: 1px solid var(--border);
+}
+.tc-store-step:first-child {
+  border-inline-start: 0;
+}
+.tc-store-step-index {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+.tc-store-frame-shell {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  background: var(--background);
+}
+.tc-store-frame-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: var(--background);
+}
 .tc-redemption-store-frame {
   display: block;
   width: 100%;
-  min-height: min(70vh, 44rem);
+  height: 100%;
   border: 0;
   background: var(--background);
 }
@@ -741,9 +797,6 @@ For commercial licensing, please contact support@quantumnous.com
   .tc-wallet-stat-value {
     font-size: 1.3rem;
   }
-  .tc-redemption-store-frame {
-    min-height: min(72vh, 38rem);
-  }
   .tc-features-layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 2rem;
@@ -831,8 +884,19 @@ For commercial licensing, please contact support@quantumnous.com
   .tc-wallet-stat:first-child .tc-wallet-stat-value {
     font-size: 2.5rem;
   }
-  .tc-redemption-store-frame {
-    min-height: 34rem;
+  .tc-store-workspace {
+    min-height: 40rem;
+  }
+  .tc-store-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tc-store-step {
+    padding: 0.55rem 0.75rem;
+    border-inline-start: 0;
+    border-top: 1px solid var(--border);
+  }
+  .tc-store-step:first-child {
+    border-top: 0;
   }
   .tc-home-hero {
     padding-top: 7rem;

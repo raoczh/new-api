@@ -16,7 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Receipt } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { Receipt, ShoppingBag } from 'lucide-react'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -35,7 +36,6 @@ import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialo
 import { TransferDialog } from './components/dialogs/transfer-dialog'
 import { RechargeFormCard } from './components/recharge-form-card'
 import { RedemptionCodeCard } from './components/redemption-code-card'
-import { RedemptionStoreCard } from './components/redemption-store-card'
 import { SubscriptionPlansCard } from './components/subscription-plans-card'
 import { WalletStatsCard } from './components/wallet-stats-card'
 import { DEFAULT_DISCOUNT_RATE, PAYMENT_TYPES } from './constants'
@@ -341,8 +341,17 @@ export function Wallet(props: WalletProps) {
                 onRedeem={() => void handleRedeem()}
                 redeeming={redeeming}
                 loading={topupLoading}
+                action={
+                  <Button
+                    size='sm'
+                    className='w-full sm:w-auto'
+                    render={<Link to='/wallet/store' />}
+                  >
+                    <ShoppingBag className='size-4' aria-hidden='true' />
+                    {t('Buy Redemption Codes')}
+                  </Button>
+                }
               />
-              <RedemptionStoreCard />
 
               <div
                 className={cn(

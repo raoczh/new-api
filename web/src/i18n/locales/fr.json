@@ -6815,6 +6815,16 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Back to Wallet": "Retour au portefeuille",
+    "Choose a product and complete checkout": "Choisissez un produit et finalisez le paiement",
+    "Copy the redemption code from the order": "Copiez le code de recharge de la commande",
+    "Come back here or to the wallet to redeem it": "Revenez ici ou au portefeuille pour l’utiliser",
+    "Redemption code store": "Boutique de codes de recharge",
+    "Loading store...": "Chargement de la boutique...",
+    "The store could not be opened here": "La boutique ne peut pas s’ouvrir ici",
+    "Open it in a new tab to purchase. After checkout, copy the code and redeem it on the wallet page.": "Ouvrez-la dans un nouvel onglet pour acheter. Après le paiement, copiez le code et utilisez-le dans le portefeuille.",
+    "Store not showing correctly?": "La boutique ne s’affiche pas correctement ?",
+    "Open it in a new tab": "Ouvrir dans un nouvel onglet"
   }
 }

@@ -6815,6 +6815,16 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "Back to Wallet": "ウォレットに戻る",
+    "Choose a product and complete checkout": "商品を選んで決済を完了",
+    "Copy the redemption code from the order": "注文の交換コードをコピー",
+    "Come back here or to the wallet to redeem it": "このページかウォレットに戻って交換",
+    "Redemption code store": "交換コードストア",
+    "Loading store...": "ストアを読み込み中...",
+    "The store could not be opened here": "ストアをこのページで開けませんでした",
+    "Open it in a new tab to purchase. After checkout, copy the code and redeem it on the wallet page.": "新しいタブで開いて購入してください。購入後にコードをコピーし、ウォレットで交換します。",
+    "Store not showing correctly?": "ストアが正しく表示されませんか？",
+    "Open it in a new tab": "新しいタブで開く"
   }
 }

@@ -6815,6 +6815,16 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Back to Wallet": "Quay lại ví",
+    "Choose a product and complete checkout": "Chọn sản phẩm và hoàn tất thanh toán",
+    "Copy the redemption code from the order": "Sao chép mã đổi trong đơn hàng",
+    "Come back here or to the wallet to redeem it": "Quay lại trang này hoặc ví để đổi mã",
+    "Redemption code store": "Cửa hàng mã đổi",
+    "Loading store...": "Đang tải cửa hàng...",
+    "The store could not be opened here": "Không thể mở cửa hàng tại đây",
+    "Open it in a new tab to purchase. After checkout, copy the code and redeem it on the wallet page.": "Hãy mở trong tab mới để mua. Sau khi thanh toán, sao chép mã và đổi tại trang ví.",
+    "Store not showing correctly?": "Cửa hàng hiển thị không đúng?",
+    "Open it in a new tab": "Mở trong tab mới"
   }
 }

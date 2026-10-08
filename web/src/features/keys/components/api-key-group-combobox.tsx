@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Check, ChevronsUpDown } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -56,6 +56,12 @@ type ApiKeyGroupComboboxProps = {
   onValueChange: (value: string) => void
   placeholder?: string
   disabled?: boolean
+  /**
+   * Replaces the default form-field trigger, e.g. with a compact table cell.
+   * The element receives the combobox role, state, and click handling.
+   */
+  trigger?: ReactElement
+  contentClassName?: string
 }
 
 export function ApiKeyGroupCombobox({
@@ -64,6 +70,8 @@ export function ApiKeyGroupCombobox({
   onValueChange,
   placeholder,
   disabled,
+  trigger,
+  contentClassName,
 }: ApiKeyGroupComboboxProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -93,9 +101,15 @@ export function ApiKeyGroupCombobox({
     setSearchValue('')
   }
 
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
+  const triggerElement = trigger ? (
+    <PopoverTrigger
+      render={trigger}
+      role='combobox'
+      aria-expanded={open}
+      disabled={disabled}
+    />
+  ) : (
+    <PopoverTrigger
         render={
           <Button
             type='button'
@@ -142,8 +156,16 @@ export function ApiKeyGroupCombobox({
           className='size-4 shrink-0 opacity-50'
         />
       </PopoverTrigger>
+  )
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      {triggerElement}
       <PopoverContent
-        className='data-closed:zoom-out-100 data-open:zoom-in-100 data-[side=bottom]:slide-in-from-top-0 data-[side=left]:slide-in-from-right-0 data-[side=right]:slide-in-from-left-0 data-[side=top]:slide-in-from-bottom-0 w-[var(--anchor-width)] overflow-hidden rounded-xl p-0 shadow-lg data-closed:duration-75 data-open:duration-100'
+        className={cn(
+          'data-closed:zoom-out-100 data-open:zoom-in-100 data-[side=bottom]:slide-in-from-top-0 data-[side=left]:slide-in-from-right-0 data-[side=right]:slide-in-from-left-0 data-[side=top]:slide-in-from-bottom-0 w-[var(--anchor-width)] overflow-hidden rounded-xl p-0 shadow-lg data-closed:duration-75 data-open:duration-100',
+          contentClassName
+        )}
         onWheel={(event) => event.stopPropagation()}
         onTouchMove={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
