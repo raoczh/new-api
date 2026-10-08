@@ -50,6 +50,7 @@ import { Button } from '@/components/ui/button'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { ContactInformation } from '@/features/home/components/contact-information'
 import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
+import { usePrimaryApiAddress } from '@/features/keys/hooks/use-api-addresses'
 import type { ApiKey } from '@/features/keys/types'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { getUserModels } from '@/lib/api'
@@ -60,16 +61,15 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
-import {
-  useApiInfo,
-  useDashboardContentVisibility,
-} from '../../hooks/use-status-data'
+import { useDashboardContentVisibility } from '../../hooks/use-status-data'
+import { useModelDistribution } from '../../hooks/use-model-distribution'
+import { useTokenUsage } from '../../hooks/use-token-usage'
 import { AnnouncementsPanel } from './announcements-panel'
-import { ApiInfoPanel } from './api-info-panel'
 import { FAQPanel } from './faq-panel'
-import { PerformanceHealthPanel } from './performance-health-panel'
+import { ModelDistributionChart } from './model-distribution-chart'
+import { QuickStartActions } from './quick-start-actions'
 import { SummaryCards } from './summary-cards'
-import { UptimePanel } from './uptime-panel'
+import { TokenUsageChart } from './token-usage-chart'
 
 const SETUP_GUIDE_VISIBILITY_STORAGE_KEY =
   'dashboard_overview_setup_guide_expanded'
@@ -146,19 +146,21 @@ function getCurrentOrigin(): string {
   return window.location.origin
 }
 
-function normalizeEndpoint(sourceUrl?: string): string {
-  const fallback = `${getCurrentOrigin()}/v1/chat/completions`
-  const trimmed = sourceUrl?.trim()
-  if (!trimmed) return fallback
+/**
+ * Turn a configured API address into the endpoint shown in the setup guide.
+ *
+ * The address comes from `api_info`, which the administrator configures as-is,
+ * so an entry already ending in `/v1` is completed rather than rewritten. Only
+ * addresses that carry no version segment get one appended.
+ */
+function resolveChatCompletionsEndpoint(address?: string): string {
+  const trimmed = address?.trim().replace(/\/+$/, '')
+  if (!trimmed) return `${getCurrentOrigin()}/v1/chat/completions`
 
-  const withoutTrailingSlash = trimmed.replace(/\/+$/, '')
-  if (withoutTrailingSlash.endsWith('/v1/chat/completions')) {
-    return withoutTrailingSlash
-  }
-  if (withoutTrailingSlash.endsWith('/v1')) {
-    return `${withoutTrailingSlash}/chat/completions`
-  }
-  return `${withoutTrailingSlash}/v1/chat/completions`
+  if (trimmed.endsWith('/chat/completions')) return trimmed
+  return trimmed.endsWith('/v1')
+    ? `${trimmed}/chat/completions`
+    : `${trimmed}/v1/chat/completions`
 }
 
 function getPreferredKey(keys: ApiKey[]): ApiKey | null {
@@ -466,16 +468,20 @@ export function OverviewDashboard() {
   const setupGuideId = useId()
   const setupGuideToggleRef = useRef<HTMLButtonElement>(null)
   const user = useAuthStore((state) => state.auth.user)
-  const { items: apiInfoItems } = useApiInfo()
-  const {
-    apiInfo: showApiInfoPanel,
-    announcements: showAnnouncementsPanel,
-    faq: showFAQPanel,
-    uptimeKuma: showUptimePanel,
-  } = useDashboardContentVisibility()
+  const { announcements: showAnnouncementsPanel, faq: showFAQPanel } =
+    useDashboardContentVisibility()
   const [manualSetupGuideExpanded, setManualSetupGuideExpanded] = useState<
     boolean | null
   >(() => getSavedSetupGuideExpanded())
+
+  const timeRange = useMemo(() => {
+    const now = Math.floor(Date.now() / 1000)
+    const start = now - 24 * 3600
+    return { start, end: now }
+  }, [])
+
+  const tokenUsageQuery = useTokenUsage(timeRange.start, timeRange.end)
+  const modelDistQuery = useModelDistribution(timeRange.start, timeRange.end)
 
   const requestCount = Number(user?.request_count ?? 0)
   const remainQuota = Number(user?.quota ?? 0)
@@ -505,6 +511,8 @@ export function OverviewDashboard() {
     [apiKeysQuery.data]
   )
 
+  const serverAddress = usePrimaryApiAddress().address
+
   const startSteps = useMemo<StartStep[]>(
     () => [
       {
@@ -532,21 +540,10 @@ export function OverviewDashboard() {
     [preferredKey, remainQuota, requestCount, t, usedQuota]
   )
 
+  // The account setup steps live in QuickStartActions; this list only holds
+  // the follow-up destinations so the two entries are not duplicated.
   const quickActions = useMemo<QuickAction[]>(
     () => [
-      {
-        title: t('API Keys'),
-        description: t('Create a key for your app or service'),
-        to: '/keys',
-        icon: KeyRound,
-      },
-      {
-        title: t('Channels'),
-        description: t('Configure upstream providers and routing.'),
-        to: '/channels',
-        icon: RadioTower,
-        adminOnly: true,
-      },
       {
         title: t('Usage Logs'),
         description: t('Inspect requests, errors, and billing details'),
@@ -572,7 +569,7 @@ export function OverviewDashboard() {
     () => [
       {
         label: t('Route active'),
-        value: apiInfoItems.length > 0 ? t('Online') : t('Current domain'),
+        value: serverAddress ? t('Online') : t('Current domain'),
         icon: RadioTower,
         tone: 'info',
       },
@@ -589,11 +586,11 @@ export function OverviewDashboard() {
         tone: 'chart-4',
       },
     ],
-    [apiInfoItems.length, modelsQuery.data, preferredKey, t]
+    [modelsQuery.data, preferredKey, serverAddress, t]
   )
 
   const requestExample = useMemo<RequestExample>(() => {
-    const endpoint = normalizeEndpoint(apiInfoItems[0]?.url)
+    const endpoint = resolveChatCompletionsEndpoint(serverAddress)
     const model = modelsQuery.data?.[0] ?? 'gpt-4o-mini'
     const keyName = preferredKey?.name ?? t('No API key yet')
     const ready = Boolean(preferredKey?.id && model)
@@ -608,16 +605,14 @@ export function OverviewDashboard() {
         : 'sk-...',
       ready,
     }
-  }, [apiInfoItems, modelsQuery.data, preferredKey, t])
+  }, [modelsQuery.data, preferredKey, serverAddress, t])
 
   const completedStepCount = startSteps.filter((step) => step.completed).length
   const setupComplete = completedStepCount === startSteps.length
   const setupStatusReady = apiKeysQuery.isFetched && Boolean(user)
   const setupGuideExpanded =
     manualSetupGuideExpanded ?? (setupStatusReady && !setupComplete)
-  const showLeftContentPanels =
-    isAdmin || showApiInfoPanel || showAnnouncementsPanel || showFAQPanel
-  const showContentPanels = showLeftContentPanels || showUptimePanel
+  const showContentPanels = showAnnouncementsPanel || showFAQPanel
 
   const handleSetupGuideToggle = () => {
     const nextExpanded = !setupGuideExpanded
@@ -648,7 +643,13 @@ export function OverviewDashboard() {
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
         <div className='flex flex-col gap-5'>
-          <SummaryCards />
+          <SummaryCards
+            tokenUsage={tokenUsageQuery.data}
+            modelDistribution={modelDistQuery.data}
+            usageLoading={
+              tokenUsageQuery.isLoading || modelDistQuery.isLoading
+            }
+          />
           <div id={setupGuideId} hidden={!setupGuideExpanded}>
             {setupGuideExpanded && (
               <CardStaggerContainer className='grid items-stretch gap-4 2xl:grid-cols-[minmax(0,1fr)_18rem]'>
@@ -789,50 +790,37 @@ export function OverviewDashboard() {
             </CardStaggerContainer>
           )}
 
+          <CardStaggerContainer className='grid gap-4 lg:grid-cols-2'>
+            <CardStaggerItem>
+              <ModelDistributionChart
+                data={modelDistQuery.data}
+                loading={modelDistQuery.isLoading}
+              />
+            </CardStaggerItem>
+            <CardStaggerItem>
+              <TokenUsageChart
+                data={tokenUsageQuery.data}
+                loading={tokenUsageQuery.isLoading}
+              />
+            </CardStaggerItem>
+          </CardStaggerContainer>
+
+          <CardStaggerContainer>
+            <CardStaggerItem>
+              <QuickStartActions />
+            </CardStaggerItem>
+          </CardStaggerContainer>
+
           {showContentPanels && (
-            <CardStaggerContainer
-              className={cn(
-                'tc-overview-panels',
-                showLeftContentPanels &&
-                  showUptimePanel &&
-                  'tc-overview-panels-with-uptime'
-              )}
-            >
-              {showLeftContentPanels && (
-                <div
-                  className={cn(
-                    'grid min-w-0 grid-cols-1 gap-4',
-                    (showApiInfoPanel ||
-                      showAnnouncementsPanel ||
-                      showFAQPanel) &&
-                      'lg:grid-cols-2'
-                  )}
-                >
-                  {isAdmin && (
-                    <CardStaggerItem className='lg:col-span-2'>
-                      <PerformanceHealthPanel />
-                    </CardStaggerItem>
-                  )}
-                  {showApiInfoPanel && (
-                    <CardStaggerItem>
-                      <ApiInfoPanel />
-                    </CardStaggerItem>
-                  )}
-                  {showAnnouncementsPanel && (
-                    <CardStaggerItem>
-                      <AnnouncementsPanel />
-                    </CardStaggerItem>
-                  )}
-                  {showFAQPanel && (
-                    <CardStaggerItem>
-                      <FAQPanel />
-                    </CardStaggerItem>
-                  )}
-                </div>
-              )}
-              {showUptimePanel && (
+            <CardStaggerContainer className='tc-overview-panels grid min-w-0 gap-4 lg:grid-cols-2'>
+              {showAnnouncementsPanel && (
                 <CardStaggerItem>
-                  <UptimePanel />
+                  <AnnouncementsPanel />
+                </CardStaggerItem>
+              )}
+              {showFAQPanel && (
+                <CardStaggerItem>
+                  <FAQPanel />
                 </CardStaggerItem>
               )}
             </CardStaggerContainer>

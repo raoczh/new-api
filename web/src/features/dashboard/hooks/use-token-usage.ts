@@ -16,27 +16,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export {
-  cleanFilters,
-  buildQueryParams,
-  getSavedGranularity,
-  saveGranularity,
-  getDefaultDays,
-  getSavedChartPreferences,
-  saveChartPreferences,
-  buildDefaultDashboardFilters,
-} from './filters'
-export {
-  getDashboardChartColors,
-  processChartData,
-  processUserChartData,
-} from './charts'
-export {
-  buildDashboardFlowData,
-  buildFlowSankeySpec,
-  flowNodeFilterFromSankeyDatum,
-  flowSankeyDatumValue,
-  getFlowStages,
-} from './flow'
-export { safeDivide, calculateDashboardStats } from './stats'
-export { getPreviewText } from './text'
+import { useQuery } from '@tanstack/react-query'
+
+import { getUserTokenUsage } from '../api'
+
+export function useTokenUsage(startTimestamp: number, endTimestamp: number) {
+  return useQuery({
+    queryKey: ['dashboard', 'overview', 'token-usage', startTimestamp, endTimestamp],
+    queryFn: async () => {
+      const result = await getUserTokenUsage({
+        start_timestamp: startTimestamp,
+        end_timestamp: endTimestamp,
+      })
+      return result.data ?? []
+    },
+    enabled: startTimestamp > 0 && endTimestamp > 0,
+    staleTime: 60 * 1000,
+  })
+}

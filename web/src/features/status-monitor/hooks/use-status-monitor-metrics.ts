@@ -16,27 +16,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export {
-  cleanFilters,
-  buildQueryParams,
-  getSavedGranularity,
-  saveGranularity,
-  getDefaultDays,
-  getSavedChartPreferences,
-  saveChartPreferences,
-  buildDefaultDashboardFilters,
-} from './filters'
-export {
-  getDashboardChartColors,
-  processChartData,
-  processUserChartData,
-} from './charts'
-export {
-  buildDashboardFlowData,
-  buildFlowSankeySpec,
-  flowNodeFilterFromSankeyDatum,
-  flowSankeyDatumValue,
-  getFlowStages,
-} from './flow'
-export { safeDivide, calculateDashboardStats } from './stats'
-export { getPreviewText } from './text'
+import { useQuery } from '@tanstack/react-query'
+
+import { getPerfMetricsSummary } from '@/features/performance-metrics/api'
+import { requireServerSuccess } from '@/lib/server-error-message'
+
+import { STATUS_MONITOR_REFETCH_INTERVAL_MS } from '../constants'
+
+export function useStatusMonitorMetrics(hours: number) {
+  return useQuery({
+    queryKey: ['status-monitor', 'summary', hours],
+    queryFn: async () =>
+      requireServerSuccess(await getPerfMetricsSummary(hours)),
+    staleTime: 60 * 1000,
+    refetchInterval: STATUS_MONITOR_REFETCH_INTERVAL_MS,
+    retry: false,
+  })
+}

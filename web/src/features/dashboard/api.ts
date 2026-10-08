@@ -20,8 +20,9 @@ import { api } from '@/lib/api'
 
 import type {
   FlowQuotaDataItem,
+  HourlyTokenUsage,
+  ModelDistributionItem,
   QuotaDataItem,
-  UptimeGroupResult,
 } from './types'
 
 // ============================================================================
@@ -48,6 +49,30 @@ export async function getUserQuotaDates(
     endpoint,
     { params }
   )
+  return res.data
+}
+
+// Get the current user's hourly token usage split by prompt cache category
+export async function getUserTokenUsage(params: {
+  start_timestamp: number
+  end_timestamp: number
+}) {
+  const res = await api.get<{ success: boolean; data: HourlyTokenUsage[] }>(
+    '/api/data/self/token_usage',
+    { params }
+  )
+  return res.data
+}
+
+// Get the current user's per-model consume totals
+export async function getUserModelDistribution(params: {
+  start_timestamp: number
+  end_timestamp: number
+}) {
+  const res = await api.get<{
+    success: boolean
+    data: ModelDistributionItem[]
+  }>('/api/data/self/model_distribution', { params })
   return res.data
 }
 
@@ -81,13 +106,5 @@ export async function getFlowQuotaDates(
     data?: FlowQuotaDataItem[]
     message?: string
   }>(endpoint, { params })
-  return res.data
-}
-
-// Get uptime monitoring status for all services
-export async function getUptimeStatus() {
-  const res = await api.get<{ success: boolean; data: UptimeGroupResult[] }>(
-    '/api/uptime/status'
-  )
   return res.data
 }

@@ -25,6 +25,7 @@ import {
   Flame,
   TrendingUp,
   Activity,
+  WalletCards,
   type LucideIcon,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -91,39 +92,62 @@ export function useModelStatCardsConfig(): StatCardConfig[] {
 }
 
 export function useSummaryCardsConfig(totals: {
-  todayUsageDisplay: string
+  remainDisplay: string
   usedDisplay: string
+  todayUsageDisplay: string
+  todayRequestDisplay: string
+  todayTokenDisplay: string
   requestCountDisplay: string
   currencyLabel: string
   currencyEnabled: boolean
 }) {
   const { t } = useTranslation()
+  const currencySuffix = totals.currencyEnabled
+    ? ` (${totals.currencyLabel})`
+    : ''
 
   return [
     {
-      key: 'todayUsage',
-      title: t('Last 24h usage'),
-      value: totals.todayUsageDisplay,
-      description: totals.currencyEnabled
-        ? `${t('Consumed in the last 24 hours')} (${totals.currencyLabel})`
-        : t('Consumed in the last 24 hours'),
-      icon: Flame,
+      key: 'remain',
+      title: t('Credit remaining'),
+      value: totals.remainDisplay,
+      description: `${t('Available balance')}${currencySuffix}`,
+      icon: WalletCards,
     },
     {
       key: 'usage',
       title: t('Historical Usage'),
       value: totals.usedDisplay,
-      description: totals.currencyEnabled
-        ? `${t('Total consumed')} (${totals.currencyLabel})`
-        : t('Total consumed quota'),
+      description: `${t('Total consumed')}${currencySuffix}`,
       icon: TrendingUp,
+    },
+    {
+      key: 'todayUsage',
+      title: t('Last 24h usage'),
+      value: totals.todayUsageDisplay,
+      description: `${t('Consumed in the last 24 hours')}${currencySuffix}`,
+      icon: Flame,
+    },
+    {
+      key: 'todayRequests',
+      title: t('Requests in the last 24h'),
+      value: totals.todayRequestDisplay,
+      description: t('Requests made in the last 24 hours'),
+      icon: Activity,
+    },
+    {
+      key: 'todayTokens',
+      title: t('Tokens in the last 24h'),
+      value: totals.todayTokenDisplay,
+      description: t('Tokens processed in the last 24 hours'),
+      icon: Layers,
     },
     {
       key: 'requests',
       title: t('Request Count'),
       value: totals.requestCountDisplay,
       description: t('Total requests made'),
-      icon: Activity,
+      icon: Hash,
     },
   ]
 }

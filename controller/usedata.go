@@ -129,3 +129,51 @@ func GetUserFlowQuotaDates(c *gin.Context) {
 	})
 	return
 }
+
+// GetUserTokenUsage returns the caller's hourly token usage split into input,
+// output, cache creation and cache read for the dashboard overview chart.
+func GetUserTokenUsage(c *gin.Context) {
+	startTimestamp, endTimestamp, ok := parseFlowQuotaTimeRange(c)
+	if !ok {
+		return
+	}
+	// Raw consume logs are scanned row by row, so keep the window short.
+	if endTimestamp-startTimestamp > 7*24*3600 {
+		common.ApiErrorMsg(c, "时间跨度不能超过 7 天")
+		return
+	}
+	usage, err := model.GetUserHourlyTokenUsage(c.GetInt("id"), startTimestamp, endTimestamp)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    usage,
+	})
+}
+
+// GetUserModelDistribution returns the caller's per-model consume totals
+// (requests, tokens, quota) for the dashboard model distribution chart.
+func GetUserModelDistribution(c *gin.Context) {
+	startTimestamp, endTimestamp, ok := parseFlowQuotaTimeRange(c)
+	if !ok {
+		return
+	}
+	// Raw consume logs are scanned row by row, so keep the window short.
+	if endTimestamp-startTimestamp > 7*24*3600 {
+		common.ApiErrorMsg(c, "时间跨度不能超过 7 天")
+		return
+	}
+	distribution, err := model.GetUserModelDistribution(c.GetInt("id"), startTimestamp, endTimestamp)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    distribution,
+	})
+}

@@ -33,6 +33,22 @@ export interface QuotaDataItem {
   quota?: number
 }
 
+export interface HourlyTokenUsage {
+  created_at: number
+  request_count: number
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+}
+
+export interface ModelDistributionItem {
+  model_name: string
+  request_count: number
+  total_tokens: number
+  actual_cost: number
+}
+
 export interface FlowQuotaDataItem {
   user_id?: number
   username?: string
@@ -165,22 +181,6 @@ export interface ProcessedFlowData {
 }
 
 // ============================================================================
-// Uptime Monitoring Types
-// ============================================================================
-
-export interface UptimeMonitor {
-  name: string
-  uptime: number
-  status: number
-  group?: string
-}
-
-export interface UptimeGroupResult {
-  categoryName: string
-  monitors: UptimeMonitor[]
-}
-
-// ============================================================================
 // Dashboard Filter Types
 // ============================================================================
 
@@ -220,14 +220,6 @@ export interface ApiInfoItem {
   description: string
   color: string
 }
-
-export interface PingStatus {
-  latency: number | null
-  testing: boolean
-  error: boolean
-}
-
-export type PingStatusMap = Record<string, PingStatus>
 
 // ============================================================================
 // Chart Types

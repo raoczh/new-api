@@ -16,27 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export {
-  cleanFilters,
-  buildQueryParams,
-  getSavedGranularity,
-  saveGranularity,
-  getDefaultDays,
-  getSavedChartPreferences,
-  saveChartPreferences,
-  buildDefaultDashboardFilters,
-} from './filters'
-export {
-  getDashboardChartColors,
-  processChartData,
-  processUserChartData,
-} from './charts'
-export {
-  buildDashboardFlowData,
-  buildFlowSankeySpec,
-  flowNodeFilterFromSankeyDatum,
-  flowSankeyDatumValue,
-  getFlowStages,
-} from './flow'
-export { safeDivide, calculateDashboardStats } from './stats'
-export { getPreviewText } from './text'
+/** Window options for the status monitor page, in hours. */
+export const STATUS_MONITOR_WINDOWS = [
+  { value: 24, labelKey: 'Last 24 hours' },
+  { value: 168, labelKey: 'Last 7 days' },
+] as const
+
+export type StatusMonitorWindow =
+  (typeof STATUS_MONITOR_WINDOWS)[number]['value']
+
+export const DEFAULT_STATUS_MONITOR_WINDOW: StatusMonitorWindow = 24
+
+/** Poll interval so the page reflects availability changes while open. */
+export const STATUS_MONITOR_REFETCH_INTERVAL_MS = 60 * 1000

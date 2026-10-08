@@ -56,21 +56,9 @@ import { handleServerError } from '@/lib/handle-server-error'
 
 import { updateApiKeyStatus } from '../api'
 import { API_KEY_STATUS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
+import { usePrimaryApiAddress } from '../hooks/use-api-addresses'
 import { apiKeySchema } from '../types'
 import { useApiKeys } from './api-keys-provider'
-
-function getServerAddress(): string {
-  try {
-    const raw = localStorage.getItem('status')
-    if (raw) {
-      const status = JSON.parse(raw)
-      if (status.server_address) return status.server_address as string
-    }
-  } catch {
-    /* empty */
-  }
-  return window.location.origin
-}
 
 type DataTableRowActionsProps<TData> = {
   row: Row<TData>
@@ -90,7 +78,10 @@ export function DataTableRowActions<TData>({
     loadingKeys,
   } = useApiKeys()
   const isEnabled = apiKey.status === API_KEY_STATUS.ENABLED
-  const { chatPresets, serverAddress } = useChatPresets()
+  const { chatPresets } = useChatPresets()
+  // Same resolution the API address list uses, so a preset never points at a
+  // different address than the one shown next to the key.
+  const { address: serverAddress } = usePrimaryApiAddress()
   const [isTogglingStatus, setIsTogglingStatus] = useState(false)
   const isRealKeyLoading = Boolean(loadingKeys[apiKey.id])
 
@@ -241,7 +232,7 @@ export function DataTableRowActions<TData>({
             if (!realKey) return
             const connStr = encodeChannelConnectionInfo(
               realKey,
-              getServerAddress()
+              getCachedServerAddress()
             )
             const ok = await copyToClipboard(connStr)
             if (ok) toast.success(t('Copied'))

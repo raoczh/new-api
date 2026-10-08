@@ -36,86 +36,88 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { useApiInfo } from '@/features/dashboard/hooks/use-status-data'
-import { useStatus } from '@/hooks/use-status'
 
+import { useApiAddresses } from '../hooks/use-api-addresses'
 import { useApiKeys } from './api-keys-provider'
 
 export function ApiKeysPrimaryButtons() {
   const { t } = useTranslation()
   const { setOpen } = useApiKeys()
-  const { status, loading } = useStatus()
-  const { items } = useApiInfo()
-  const serverAddress =
-    (typeof status?.server_address === 'string' &&
-      status.server_address.trim()) ||
-    ''
-  const addresses = items.length
-    ? items
-    : [
-        {
-          url: serverAddress || window.location.origin,
-          route: serverAddress ? t('Default API address') : t('Current domain'),
-          description: '',
-        },
-      ]
+  const { addresses, loading } = useApiAddresses()
+  const baseUrl = addresses[0]?.url ?? ''
 
   return (
-    <div className='flex flex-wrap gap-2'>
-      <Popover>
-        <PopoverTrigger render={<Button variant='outline' size='sm' />}>
-          <Globe aria-hidden='true' />
-          {t('API Addresses')}
-          <ChevronDown aria-hidden='true' />
-        </PopoverTrigger>
-        <PopoverContent
-          align='end'
-          className='max-h-[min(28rem,var(--available-height))] w-96 max-w-[calc(100vw-2rem)] overflow-y-auto'
-        >
-          <PopoverTitle>{t('API Addresses')}</PopoverTitle>
-          {loading ? (
-            <LoadingState inline size='sm' message={t('Loading...')} />
-          ) : (
-            <ItemGroup>
-              {addresses.map((address) => (
-                <Item
-                  key={address.url}
-                  role='listitem'
-                  variant='muted'
-                  size='xs'
-                  className='flex-nowrap items-start'
-                >
-                  <ItemContent className='min-w-0 gap-1'>
-                    <ItemTitle className='line-clamp-none break-all'>
-                      {address.route}
-                    </ItemTitle>
-                    <code className='text-xs break-all select-text'>
-                      {address.url}
-                    </code>
-                    {address.description && (
-                      <ItemDescription className='line-clamp-none break-words'>
-                        {address.description}
-                      </ItemDescription>
-                    )}
-                  </ItemContent>
-                  <ItemActions>
-                    <CopyButton
-                      value={address.url}
-                      size='sm'
-                      tooltip={t('Copy API URL')}
-                      aria-label={`${t('Copy API URL')}: ${address.url}`}
-                    />
-                  </ItemActions>
-                </Item>
-              ))}
-            </ItemGroup>
-          )}
-        </PopoverContent>
-      </Popover>
-      <Button size='sm' onClick={() => setOpen('create')}>
-        <Plus className='h-4 w-4' />
-        {t('Create API Key')}
-      </Button>
+    <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+      <div className='bg-muted/40 flex min-w-0 flex-wrap items-center gap-2 rounded-lg border px-3 py-2'>
+        <span className='text-muted-foreground shrink-0 text-xs font-medium'>
+          {t('Base URL')}
+        </span>
+        <code className='min-w-0 flex-1 text-xs break-all select-text'>
+          {baseUrl}
+        </code>
+        <CopyButton
+          value={baseUrl}
+          size='sm'
+          tooltip={t('Copy API URL')}
+          aria-label={`${t('Copy API URL')}: ${baseUrl}`}
+        />
+      </div>
+      <div className='flex shrink-0 flex-wrap gap-2'>
+        <Popover>
+          <PopoverTrigger render={<Button variant='outline' size='sm' />}>
+            <Globe aria-hidden='true' />
+            {t('API Addresses')}
+            <ChevronDown aria-hidden='true' />
+          </PopoverTrigger>
+          <PopoverContent
+            align='end'
+            className='max-h-[min(28rem,var(--available-height))] w-96 max-w-[calc(100vw-2rem)] overflow-y-auto'
+          >
+            <PopoverTitle>{t('API Addresses')}</PopoverTitle>
+            {loading ? (
+              <LoadingState inline size='sm' message={t('Loading...')} />
+            ) : (
+              <ItemGroup>
+                {addresses.map((address) => (
+                  <Item
+                    key={address.url}
+                    role='listitem'
+                    variant='muted'
+                    size='xs'
+                    className='flex-nowrap items-start'
+                  >
+                    <ItemContent className='min-w-0 gap-1'>
+                      <ItemTitle className='line-clamp-none break-all'>
+                        {address.route}
+                      </ItemTitle>
+                      <code className='text-xs break-all select-text'>
+                        {address.url}
+                      </code>
+                      {address.description && (
+                        <ItemDescription className='line-clamp-none break-words'>
+                          {address.description}
+                        </ItemDescription>
+                      )}
+                    </ItemContent>
+                    <ItemActions>
+                      <CopyButton
+                        value={address.url}
+                        size='sm'
+                        tooltip={t('Copy API URL')}
+                        aria-label={`${t('Copy API URL')}: ${address.url}`}
+                      />
+                    </ItemActions>
+                  </Item>
+                ))}
+              </ItemGroup>
+            )}
+          </PopoverContent>
+        </Popover>
+        <Button size='sm' onClick={() => setOpen('create')}>
+          <Plus className='h-4 w-4' />
+          {t('Create API Key')}
+        </Button>
+      </div>
     </div>
   )
 }
