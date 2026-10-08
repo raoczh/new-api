@@ -66,6 +66,10 @@ redemption.expired: "該兌換碼已過期"
 redemption.failed: "兌換失敗，請稍後重試"
 redemption.not_provided: "未提供兌換碼"
 redemption.expire_time_invalid: "過期時間不能早於當前時間"
+ticket.title_length: "工單標題長度必須在1-100之間"
+ticket.content_length: "工單內容長度必須在1-5000之間"
+ticket.not_found: "工單不存在"
+ticket.closed: "工單已關閉"
 
 # User messages
 user.password_login_disabled: "管理員關閉了密碼登錄"

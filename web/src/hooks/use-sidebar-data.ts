@@ -26,7 +26,9 @@ import {
   Key,
   LayoutDashboard,
   ListTodo,
+  LifeBuoy,
   MessageSquare,
+  MessagesSquare,
   PlugZap,
   Radio,
   ServerCog,
@@ -133,6 +135,11 @@ export function useSidebarData(): SidebarData {
             url: '/security',
             icon: ShieldCheck,
           },
+          {
+            title: t('My Tickets'),
+            url: '/tickets',
+            icon: LifeBuoy,
+          },
         ],
       },
       {
@@ -163,6 +170,11 @@ export function useSidebarData(): SidebarData {
             title: t('Subscriptions'),
             url: '/subscriptions',
             icon: CreditCard,
+          },
+          {
+            title: t('Ticket Management'),
+            url: '/ticket-management',
+            icon: MessagesSquare,
           },
           {
             title: t('System Info'),

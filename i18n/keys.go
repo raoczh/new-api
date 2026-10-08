@@ -76,6 +76,14 @@ const (
 	MsgRedemptionExpireTimeInvalid = "redemption.expire_time_invalid"
 )
 
+// Ticket related messages
+const (
+	MsgTicketTitleLength   = "ticket.title_length"
+	MsgTicketContentLength = "ticket.content_length"
+	MsgTicketNotFound      = "ticket.not_found"
+	MsgTicketClosed        = "ticket.closed"
+)
+
 // User related messages
 const (
 	MsgUserPasswordLoginDisabled     = "user.password_login_disabled"

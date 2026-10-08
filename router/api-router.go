@@ -295,6 +295,25 @@ func SetApiRouter(router *gin.Engine) {
 			}
 		}
 
+		ticketRoute := apiRouter.Group("/ticket")
+		ticketRoute.Use(middleware.UserAuth())
+		{
+			ticketRoute.GET("/self", controller.GetSelfTickets)
+			ticketRoute.POST("/self", middleware.UserCriticalRateLimit("ticket-create"), controller.CreateTicket)
+			ticketRoute.GET("/self/:id", controller.GetSelfTicket)
+			ticketRoute.POST("/self/:id/reply", controller.ReplySelfTicket)
+			ticketRoute.POST("/self/:id/close", controller.CloseSelfTicket)
+
+			ticketAdminRoute := ticketRoute.Group("/admin")
+			ticketAdminRoute.Use(middleware.AdminAuth())
+			{
+				ticketAdminRoute.GET("", controller.GetAllTickets)
+				ticketAdminRoute.GET("/:id", controller.GetTicketByAdmin)
+				ticketAdminRoute.POST("/:id/reply", controller.ReplyTicketByAdmin)
+				ticketAdminRoute.POST("/:id/close", controller.CloseTicketByAdmin)
+			}
+		}
+
 		redemptionRoute := apiRouter.Group("/redemption")
 		redemptionRoute.Use(middleware.AdminAuth())
 		{
