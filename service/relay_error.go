@@ -48,7 +48,13 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 	if code < 100 || code > 599 {
 		return PolicyDecision{Action: "retry", Reason: "unrecognized_status", Source: "system"}
 	}
-	if operation_setting.IsAlwaysSkipRetryCode(err.GetErrorCode()) || operation_setting.IsAlwaysSkipRetryStatusCode(code) {
+	if operation_setting.IsAlwaysSkipRetryCode(err.GetErrorCode()) {
+		return PolicyDecision{Action: "stop", Reason: "system_retry_exclusion", Source: "system"}
+	}
+	if operation_setting.IsAlwaysSkipRetryStatusCode(code) {
+		if operation_setting.AutomaticRetryTimeoutEnabled {
+			return PolicyDecision{Action: "retry", Reason: "timeout_retry_enabled", Source: "global"}
+		}
 		return PolicyDecision{Action: "stop", Reason: "system_retry_exclusion", Source: "system"}
 	}
 	if operation_setting.ShouldRetryByStatusCode(code) {

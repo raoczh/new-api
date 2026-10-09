@@ -1,5 +1,6 @@
 {
   "translation": {
+    "2xx is always excluded. 504 and 524 follow the timeout switch below.": "2xx 一律排除。504 與 524 由下方的逾時重試開關控制。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
@@ -147,7 +148,6 @@
     "24 Hours": "24 小時",
     "24 hours ago": "24 小時前",
     "29 Days": "29 日",
-    "2xx, 504 and 524 are always excluded.": "2xx、504、524 一律排除。",
     "3. Enter your Gotify server URL and token above": "3. 在上方輸入您的 Gotify 伺服器 URL 和令牌",
     "3. Review mappings": "3. 確認對應結果",
     "30 Days": "30 日",
@@ -792,6 +792,8 @@
     "Model Distribution": "模型分布",
     "No model usage data": "暫無模型用量資料",
     "No token usage data": "暫無 Token 用量資料",
+    "Retry upstream timeouts (504/524) on another channel": "上游逾時（504/524）時切換其他渠道重試",
+    "The timed-out upstream may still finish and bill the request, so upstream cost and latency can increase.": "逾時的上游可能仍會完成並計費該請求，因此上游成本與耗時可能增加。",
     "Which models you use the most": "你最常使用的模型",
     "Input, output, and prompt cache tokens by hour": "依小時顯示輸入、輸出與提示快取 Token",
     "Status Monitor": "狀態監控",

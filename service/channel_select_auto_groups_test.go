@@ -89,6 +89,37 @@ func createChannelSelectAutoGroupsChannel(t *testing.T, db *gorm.DB, id int, gro
 	}).Error)
 }
 
+func TestCacheGetRandomSatisfiedChannelRetrySkipsTriedChannel(t *testing.T) {
+	db := setupChannelSelectAutoGroupsTest(t)
+	const modelName = "retry-untried-model"
+	createChannelSelectAutoGroupsChannel(t, db, 2201, "default", modelName)
+	createChannelSelectAutoGroupsChannel(t, db, 2202, "default", modelName)
+	model.InitChannelCache()
+
+	gin.SetMode(gin.TestMode)
+	for _, failed := range []int{2201, 2202} {
+		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+		AppendUsedChannel(ctx, failed)
+		param := &RetryParam{Ctx: ctx, TokenGroup: "default", ModelName: modelName, Retry: common.GetPointer(1)}
+
+		// Same-priority channels: the retry must not pick the failed one again.
+		for range 20 {
+			channel, _, err := CacheGetRandomSatisfiedChannel(param)
+			require.NoError(t, err)
+			require.NotNil(t, channel)
+			assert.NotEqual(t, failed, channel.Id)
+		}
+	}
+
+	// Once every channel has been tried, selection falls back instead of failing.
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	AppendUsedChannel(ctx, 2201)
+	AppendUsedChannel(ctx, 2202)
+	channel, _, err := CacheGetRandomSatisfiedChannel(&RetryParam{Ctx: ctx, TokenGroup: "default", ModelName: modelName, Retry: common.GetPointer(2)})
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+}
+
 func TestCacheGetRandomSatisfiedChannelUsesTokenAutoGroupsWhenGlobalAutoIsEmpty(t *testing.T) {
 	db := setupChannelSelectAutoGroupsTest(t)
 	const modelName = "auto-groups-runtime-model"

@@ -30,6 +30,7 @@ import {
 import { Input } from '@/components/ui/input'
 
 import { SettingsCard } from '../components/settings-card'
+import { SettingsSwitchField } from '../components/settings-form-layout'
 import { safeNumberFieldProps } from '../utils/numeric-field'
 import type { RoutingPolicyFormValues } from './routing-form'
 
@@ -74,10 +75,27 @@ export function RetrySection() {
                 />
               </FormControl>
               <FormDescription>
-                {t('2xx, 504 and 524 are always excluded.')}
+                {t(
+                  '2xx is always excluded. 504 and 524 follow the timeout switch below.'
+                )}
               </FormDescription>
               <FormMessage />
             </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name='AutomaticRetryTimeoutEnabled'
+          render={({ field }) => (
+            <SettingsSwitchField
+              controlId='AutomaticRetryTimeoutEnabled'
+              checked={field.value}
+              onCheckedChange={field.onChange}
+              label={t('Retry upstream timeouts (504/524) on another channel')}
+              description={t(
+                'The timed-out upstream may still finish and bill the request, so upstream cost and latency can increase.'
+              )}
+            />
           )}
         />
       </div>

@@ -1,5 +1,6 @@
 {
   "translation": {
+    "2xx is always excluded. 504 and 524 follow the timeout switch below.": "2xx всегда исключены. 504 и 524 зависят от переключателя повтора по тайм-ауту ниже.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
@@ -147,7 +148,6 @@
     "24 Hours": "24 часа",
     "24 hours ago": "24 часа назад",
     "29 Days": "29 дней",
-    "2xx, 504 and 524 are always excluded.": "2xx, 504 и 524 всегда исключены.",
     "3. Enter your Gotify server URL and token above": "3. Введите URL вашего сервера Gotify и токен выше",
     "3. Review mappings": "3. Проверьте сопоставления",
     "30 Days": "30 дней",
@@ -792,6 +792,8 @@
     "Model Distribution": "Распределение по моделям",
     "No model usage data": "Нет данных об использовании моделей",
     "No token usage data": "Нет данных об использовании токенов",
+    "Retry upstream timeouts (504/524) on another channel": "Повторять тайм-ауты upstream (504/524) на другом канале",
+    "The timed-out upstream may still finish and bill the request, so upstream cost and latency can increase.": "Upstream после тайм-аута может всё равно выполнить запрос и выставить за него счёт, поэтому стоимость и задержка могут вырасти.",
     "Which models you use the most": "Модели, которые вы используете чаще всего",
     "Input, output, and prompt cache tokens by hour": "Входные, выходные токены и токены кэша по часам",
     "Status Monitor": "Мониторинг состояния",

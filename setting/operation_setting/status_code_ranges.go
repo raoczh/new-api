@@ -28,10 +28,15 @@ var AutomaticRetryStatusCodeRanges = []StatusCodeRange{
 	{Start: 525, End: 599},
 }
 
+// alwaysSkipRetryStatusCodes are upstream timeouts. The upstream may still be
+// processing (and billing) the request, so relay retries them only when
+// AutomaticRetryTimeoutEnabled is set; task submissions never retry them.
 var alwaysSkipRetryStatusCodes = map[int]struct{}{
 	504: {},
 	524: {},
 }
+
+var AutomaticRetryTimeoutEnabled = false
 
 var alwaysSkipRetryCodes = map[types.ErrorCode]struct{}{
 	types.ErrorCodeBadResponseBody: {},

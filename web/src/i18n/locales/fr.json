@@ -1,5 +1,6 @@
 {
   "translation": {
+    "2xx is always excluded. 504 and 524 follow the timeout switch below.": "Les 2xx sont toujours exclus. 504 et 524 suivent l’option de relance sur délai dépassé ci-dessous.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
@@ -147,7 +148,6 @@
     "24 Hours": "24 heures",
     "24 hours ago": "Il y a 24 heures",
     "29 Days": "29 jours",
-    "2xx, 504 and 524 are always excluded.": "2xx, 504 et 524 sont toujours exclus.",
     "3. Enter your Gotify server URL and token above": "3. Saisissez l'URL de votre serveur Gotify et le jeton ci-dessus",
     "3. Review mappings": "3. Vérifier les correspondances",
     "30 Days": "30 jours",
@@ -792,6 +792,8 @@
     "Model Distribution": "Répartition des modèles",
     "No model usage data": "Aucune donnée d'utilisation de modèle",
     "No token usage data": "Aucune donnée d'utilisation de tokens",
+    "Retry upstream timeouts (504/524) on another channel": "Relancer les délais dépassés en amont (504/524) sur un autre canal",
+    "The timed-out upstream may still finish and bill the request, so upstream cost and latency can increase.": "L’amont ayant expiré peut quand même terminer et facturer la requête : le coût amont et la latence peuvent augmenter.",
     "Which models you use the most": "Les modèles que vous utilisez le plus",
     "Input, output, and prompt cache tokens by hour": "Tokens d'entrée, de sortie et de cache par heure",
     "Status Monitor": "Suivi des statuts",

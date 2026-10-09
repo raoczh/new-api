@@ -1,5 +1,6 @@
 {
   "translation": {
+    "2xx is always excluded. 504 and 524 follow the timeout switch below.": "2xx は常に除外されます。504 と 524 は下のタイムアウト再試行スイッチに従います。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
@@ -147,7 +148,6 @@
     "24 Hours": "24時間",
     "24 hours ago": "24時間前",
     "29 Days": "29日",
-    "2xx, 504 and 524 are always excluded.": "2xx・504・524 は常に除外されます。",
     "3. Enter your Gotify server URL and token above": "3. 上記にGotifyサーバーのURLとトークンを入力します",
     "3. Review mappings": "3. マッピングを確認",
     "30 Days": "30日",
@@ -792,6 +792,8 @@
     "Model Distribution": "モデル分布",
     "No model usage data": "モデル使用量のデータがありません",
     "No token usage data": "Token使用量のデータがありません",
+    "Retry upstream timeouts (504/524) on another channel": "上流タイムアウト（504/524）時に別のチャネルで再試行",
+    "The timed-out upstream may still finish and bill the request, so upstream cost and latency can increase.": "タイムアウトした上流がリクエストを完了して課金する場合があるため、上流コストと待ち時間が増える可能性があります。",
     "Which models you use the most": "よく使うモデル",
     "Input, output, and prompt cache tokens by hour": "入力・出力・プロンプトキャッシュのTokenを1時間ごとに表示",
     "Status Monitor": "ステータス監視",

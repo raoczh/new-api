@@ -49,6 +49,7 @@ const options = {
     },
   ]),
   AutomaticRetryStatusCodes: '429,500-503',
+  AutomaticRetryTimeoutEnabled: 'false',
 }
 let currentOptions: Record<string, string>
 let client: QueryClient
@@ -291,6 +292,21 @@ it('keeps binding options available for rule overrides regardless of the global 
       'channel_affinity_setting.switch_on_success': 'true',
       'channel_affinity_setting.keep_on_channel_disabled': 'true',
     },
+  })
+})
+
+it('enabling timeout retries saves only the timeout retry option', async () => {
+  show()
+  const timeoutRetry = await screen.findByRole('switch', {
+    name: 'Retry upstream timeouts (504/524) on another channel',
+  })
+  expect(timeoutRetry).not.toBeChecked()
+  await userEvent.click(timeoutRetry)
+  expect(timeoutRetry).toBeChecked()
+  await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+  await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(1))
+  expect(vi.mocked(api.patch).mock.calls[0][1]).toEqual({
+    options: { AutomaticRetryTimeoutEnabled: 'true' },
   })
 })
 

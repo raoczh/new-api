@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -147,12 +149,15 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			}
 			logger.LogDebug(param.Ctx, "Auto selecting group: %s, priorityRetry: %d", autoGroup, priorityRetry)
 
-			channel, _ = model.GetRandomSatisfiedChannel(
-				autoGroup,
-				param.ModelName,
-				priorityRetry,
-				filters,
-			)
+			channel = getUntriedChannel(param.Ctx, autoGroup, param.ModelName, filters)
+			if channel == nil {
+				channel, _ = model.GetRandomSatisfiedChannel(
+					autoGroup,
+					param.ModelName,
+					priorityRetry,
+					filters,
+				)
+			}
 			if channel == nil {
 				// Current group has no available channel for this model, try next group
 				// 当前分组没有该模型的可用渠道，尝试下一个分组
@@ -190,6 +195,10 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			break
 		}
 	} else {
+		channel = getUntriedChannel(param.Ctx, param.TokenGroup, param.ModelName, filters)
+		if channel != nil {
+			return channel, selectGroup, nil
+		}
 		channel, err = model.GetRandomSatisfiedChannel(
 			param.TokenGroup,
 			param.ModelName,
@@ -201,6 +210,29 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		}
 	}
 	return channel, selectGroup, nil
+}
+
+// getUntriedChannel picks a retry channel from the highest priority that still
+// has channels this request has not attempted, so a failed channel is not
+// selected again while a same-priority or lower-priority alternative exists.
+// It returns nil on the first attempt or once every candidate has been tried;
+// callers then fall back to the priority-by-retry-index selection.
+func getUntriedChannel(c *gin.Context, group string, modelName string, filters []dto.ChannelFilter) *model.Channel {
+	var tried []int
+	for _, value := range c.GetStringSlice("use_channel") {
+		if id, err := strconv.Atoi(value); err == nil {
+			tried = append(tried, id)
+		}
+	}
+	if len(tried) == 0 {
+		return nil
+	}
+	untriedFilters := append(slices.Clone(filters), dto.ChannelFilter{Kind: dto.FilterExcludeChannels, ExcludeChannelIds: tried})
+	channel, err := model.GetRandomSatisfiedChannel(group, modelName, 0, untriedFilters)
+	if err != nil {
+		return nil
+	}
+	return channel
 }
 
 func pinnedTaskPluginIdentities(c *gin.Context, expected string) ([]int, []string) {

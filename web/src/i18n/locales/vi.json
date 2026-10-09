@@ -1,5 +1,6 @@
 {
   "translation": {
+    "2xx is always excluded. 504 and 524 follow the timeout switch below.": "2xx luôn bị loại trừ. 504 và 524 tuân theo công tắc thử lại khi hết thời gian bên dưới.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
@@ -147,7 +148,6 @@
     "24 Hours": "24 giờ",
     "24 hours ago": "24 giờ trước",
     "29 Days": "29 ngày",
-    "2xx, 504 and 524 are always excluded.": "2xx, 504 và 524 luôn bị loại trừ.",
     "3. Enter your Gotify server URL and token above": "3. Nhập URL máy chủ Gotify và mã thông báo của bạn ở trên",
     "3. Review mappings": "3. Kiểm tra ánh xạ",
     "30 Days": "30 ngày",
@@ -792,6 +792,8 @@
     "Model Distribution": "Phân bổ theo mô hình",
     "No model usage data": "Chưa có dữ liệu dùng mô hình",
     "No token usage data": "Chưa có dữ liệu dùng Token",
+    "Retry upstream timeouts (504/524) on another channel": "Thử lại trên kênh khác khi upstream hết thời gian chờ (504/524)",
+    "The timed-out upstream may still finish and bill the request, so upstream cost and latency can increase.": "Upstream đã hết thời gian chờ vẫn có thể hoàn tất và tính phí yêu cầu, nên chi phí upstream và độ trễ có thể tăng.",
     "Which models you use the most": "Những mô hình bạn dùng nhiều nhất",
     "Input, output, and prompt cache tokens by hour": "Token đầu vào, đầu ra và bộ đệm theo từng giờ",
     "Status Monitor": "Giám sát trạng thái",

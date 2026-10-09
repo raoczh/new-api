@@ -213,6 +213,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}
 
+	// A binding whose channel just failed upstream would route the next
+	// request of the session back to it; drop it so the next request reselects.
+	if newAPIError != nil && newAPIError.StatusCode >= http.StatusInternalServerError && service.RequestPolicy(c).SessionMode != "strict" {
+		service.ClearCurrentChannelAffinityCache(c)
+	}
+
 	useChannel := c.GetStringSlice("use_channel")
 	if len(useChannel) > 1 {
 		retryLogStr := fmt.Sprintf("重试：%s", strings.Trim(strings.Join(strings.Fields(fmt.Sprint(useChannel)), "->"), "[]"))

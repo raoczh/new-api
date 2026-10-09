@@ -1,5 +1,6 @@
 {
   "translation": {
+    "2xx is always excluded. 504 and 524 follow the timeout switch below.": "2xx is always excluded. 504 and 524 follow the timeout switch below.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
@@ -147,7 +148,6 @@
     "24 Hours": "24 Hours",
     "24 hours ago": "24 hours ago",
     "29 Days": "29 Days",
-    "2xx, 504 and 524 are always excluded.": "2xx, 504 and 524 are always excluded.",
     "3. Enter your Gotify server URL and token above": "3. Enter your Gotify server URL and token above",
     "3. Review mappings": "3. Review mappings",
     "30 Days": "30 Days",
@@ -788,6 +788,8 @@
     "Model Distribution": "Model Distribution",
     "No model usage data": "No model usage data",
     "No token usage data": "No token usage data",
+    "Retry upstream timeouts (504/524) on another channel": "Retry upstream timeouts (504/524) on another channel",
+    "The timed-out upstream may still finish and bill the request, so upstream cost and latency can increase.": "The timed-out upstream may still finish and bill the request, so upstream cost and latency can increase.",
     "Which models you use the most": "Which models you use the most",
     "Input, output, and prompt cache tokens by hour": "Input, output, and prompt cache tokens by hour",
     "Status Monitor": "Status Monitor",
