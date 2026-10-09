@@ -6910,6 +6910,18 @@
     "Title must be at most {{count}} characters": "标题最多 {{count}} 个字符",
     "Type your reply...": "输入回复内容...",
     "We could not load this ticket.": "无法加载该工单。",
-    "We could not load tickets.": "无法加载工单列表。"
+    "We could not load tickets.": "无法加载工单列表。",
+    "CC Switch does not support link import for this app yet. Add the provider manually in CC Switch.": "CC Switch 暂不支持通过链接导入该应用，请在 CC Switch 中手动添加供应商。",
+    "CC Switch is a desktop app that imports your API key into Claude Code, Gemini CLI and other tools in one click.": "CC Switch 是桌面应用，可一键把 API 密钥导入 Claude Code、Gemini CLI 等编程工具。",
+    "Click the button at the top right to create an API key and set its group and quota.": "点击右上方按钮创建一个 API 密钥，并选择分组和额度。",
+    "Click the import button in a key row to send it to CC Switch, then pick the tool you want to configure.": "点击密钥所在行的导入按钮发送到 CC Switch，再选择要配置的工具。",
+    "Detailed tutorial": "详细教程",
+    "Download CC Switch": "下载 CC Switch",
+    "Follow these steps to start using AI coding tools": "按以下步骤开始使用 AI 编程工具",
+    "Hide quick tutorial": "隐藏快速教程",
+    "Install CC Switch": "安装 CC Switch",
+    "Pie chart metric": "饼图指标",
+    "Quick Tutorial": "快速教程",
+    "Use the key": "使用密钥"
   }
 }

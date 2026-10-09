@@ -800,6 +800,8 @@ export function OverviewDashboard() {
             <CardStaggerItem>
               <TokenUsageChart
                 data={tokenUsageQuery.data}
+                startTimestamp={timeRange.start}
+                endTimestamp={timeRange.end}
                 loading={tokenUsageQuery.isLoading}
               />
             </CardStaggerItem>

@@ -72,6 +72,8 @@ export const API_KEY_STATUS_OPTIONS = Object.values(API_KEY_STATUSES).map(
 
 export const DEFAULT_GROUP = '' as const
 
+export const CC_SWITCH_DOWNLOAD_URL = 'https://ccswitch.io/zh/download'
+
 // ============================================================================
 // Error Messages (i18n keys: use t(ERROR_MESSAGES.xxx) when displaying)
 // ============================================================================

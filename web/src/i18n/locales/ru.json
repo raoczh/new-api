@@ -6910,6 +6910,18 @@
     "Title must be at most {{count}} characters": "Заголовок не должен превышать {{count}} символов",
     "Type your reply...": "Введите ответ...",
     "We could not load this ticket.": "Не удалось загрузить обращение.",
-    "We could not load tickets.": "Не удалось загрузить обращения."
+    "We could not load tickets.": "Не удалось загрузить обращения.",
+    "CC Switch does not support link import for this app yet. Add the provider manually in CC Switch.": "CC Switch пока не поддерживает импорт по ссылке для этого приложения. Добавьте провайдера в CC Switch вручную.",
+    "CC Switch is a desktop app that imports your API key into Claude Code, Gemini CLI and other tools in one click.": "CC Switch — настольное приложение, которое в один клик импортирует API-ключ в Claude Code, Gemini CLI и другие инструменты.",
+    "Click the button at the top right to create an API key and set its group and quota.": "Нажмите кнопку в правом верхнем углу, чтобы создать API-ключ и задать его группу и квоту.",
+    "Click the import button in a key row to send it to CC Switch, then pick the tool you want to configure.": "Нажмите кнопку импорта в строке ключа, чтобы отправить его в CC Switch, затем выберите нужный инструмент.",
+    "Detailed tutorial": "Подробное руководство",
+    "Download CC Switch": "Скачать CC Switch",
+    "Follow these steps to start using AI coding tools": "Выполните эти шаги, чтобы начать работу с ИИ-инструментами для программирования",
+    "Hide quick tutorial": "Скрыть краткое руководство",
+    "Install CC Switch": "Установить CC Switch",
+    "Pie chart metric": "Показатель диаграммы",
+    "Quick Tutorial": "Краткое руководство",
+    "Use the key": "Использовать ключ"
   }
 }

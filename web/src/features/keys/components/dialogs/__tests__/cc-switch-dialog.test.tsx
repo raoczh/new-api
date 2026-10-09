@@ -48,7 +48,7 @@ function renderDialog(models = ['gpt-5.4', 'claude-sonnet-4-6']) {
 }
 
 describe('CC Switch model selection', () => {
-  it.each(['Claude', 'Codex', 'Gemini'])(
+  it.each(['Claude Code', 'Codex', 'Gemini'])(
     'opens %s models outside the clipping dialog and keeps the dialog open after selection',
     async (app) => {
       renderDialog()
@@ -123,5 +123,45 @@ describe('CC Switch model selection', () => {
 
     expect(input).toHaveValue('Development')
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+})
+
+describe('CC Switch app import', () => {
+  it('imports an OpenAI-compatible app through the /v1 endpoint with the app name', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    renderDialog()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('radio', { name: 'OpenCode' }))
+    const input = screen.getByRole('combobox', { name: 'Primary Model' })
+    await user.click(input)
+    await user.click(await screen.findByRole('option', { name: 'gpt-5.4' }))
+
+    await user.click(screen.getByRole('button', { name: 'Open CC Switch' }))
+
+    const url = new URL(String(open.mock.calls[0][0]))
+    expect(url.searchParams.get('app')).toBe('opencode')
+    expect(url.searchParams.get('name')).toBe('My OpenCode')
+    expect(url.searchParams.get('endpoint')).toMatch(/\/v1$/)
+    expect(url.searchParams.get('model')).toBe('gpt-5.4')
+    open.mockRestore()
+  })
+
+  it('disables import for an app CC Switch cannot import by link', async () => {
+    renderDialog()
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('radio', { name: 'Pi' }))
+
+    expect(screen.getByRole('button', { name: 'Open CC Switch' })).toBeDisabled()
+    expect(screen.getByRole('status')).toBeVisible()
+  })
+
+  it('links the download button to the CC Switch download page in a new tab', () => {
+    renderDialog()
+
+    const link = screen.getByRole('link', { name: 'Download CC Switch' })
+
+    expect(link).toHaveAttribute('href', 'https://ccswitch.io/zh/download')
+    expect(link).toHaveAttribute('target', '_blank')
   })
 })

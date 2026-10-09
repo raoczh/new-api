@@ -6910,6 +6910,18 @@
     "Title must be at most {{count}} characters": "タイトルは {{count}} 文字以内で入力してください",
     "Type your reply...": "返信を入力...",
     "We could not load this ticket.": "このチケットを読み込めませんでした。",
-    "We could not load tickets.": "チケットを読み込めませんでした。"
+    "We could not load tickets.": "チケットを読み込めませんでした。",
+    "CC Switch does not support link import for this app yet. Add the provider manually in CC Switch.": "CC Switch はこのアプリのリンクインポートにまだ対応していません。CC Switch でプロバイダーを手動で追加してください。",
+    "CC Switch is a desktop app that imports your API key into Claude Code, Gemini CLI and other tools in one click.": "CC Switch は、API キーを Claude Code や Gemini CLI などのツールにワンクリックでインポートできるデスクトップアプリです。",
+    "Click the button at the top right to create an API key and set its group and quota.": "右上のボタンをクリックして API キーを作成し、グループとクォータを設定します。",
+    "Click the import button in a key row to send it to CC Switch, then pick the tool you want to configure.": "キーの行にあるインポートボタンをクリックして CC Switch に送り、設定するツールを選択します。",
+    "Detailed tutorial": "詳しいチュートリアル",
+    "Download CC Switch": "CC Switch をダウンロード",
+    "Follow these steps to start using AI coding tools": "以下の手順で AI コーディングツールを使い始めましょう",
+    "Hide quick tutorial": "クイックチュートリアルを非表示",
+    "Install CC Switch": "CC Switch をインストール",
+    "Pie chart metric": "円グラフの指標",
+    "Quick Tutorial": "クイックチュートリアル",
+    "Use the key": "キーを使う"
   }
 }

@@ -6910,6 +6910,18 @@
     "Title must be at most {{count}} characters": "Tiêu đề tối đa {{count}} ký tự",
     "Type your reply...": "Nhập nội dung phản hồi...",
     "We could not load this ticket.": "Không thể tải phiếu này.",
-    "We could not load tickets.": "Không thể tải danh sách phiếu."
+    "We could not load tickets.": "Không thể tải danh sách phiếu.",
+    "CC Switch does not support link import for this app yet. Add the provider manually in CC Switch.": "CC Switch chưa hỗ trợ nhập bằng liên kết cho ứng dụng này. Hãy thêm nhà cung cấp thủ công trong CC Switch.",
+    "CC Switch is a desktop app that imports your API key into Claude Code, Gemini CLI and other tools in one click.": "CC Switch là ứng dụng máy tính giúp nhập API key vào Claude Code, Gemini CLI và các công cụ khác chỉ với một cú nhấp.",
+    "Click the button at the top right to create an API key and set its group and quota.": "Nhấp nút ở góc trên bên phải để tạo API key và chọn nhóm cùng hạn mức.",
+    "Click the import button in a key row to send it to CC Switch, then pick the tool you want to configure.": "Nhấp nút nhập ở hàng của key để gửi sang CC Switch, sau đó chọn công cụ cần cấu hình.",
+    "Detailed tutorial": "Hướng dẫn chi tiết",
+    "Download CC Switch": "Tải CC Switch",
+    "Follow these steps to start using AI coding tools": "Làm theo các bước sau để bắt đầu dùng công cụ lập trình AI",
+    "Hide quick tutorial": "Ẩn hướng dẫn nhanh",
+    "Install CC Switch": "Cài đặt CC Switch",
+    "Pie chart metric": "Chỉ số biểu đồ tròn",
+    "Quick Tutorial": "Hướng dẫn nhanh",
+    "Use the key": "Sử dụng key"
   }
 }

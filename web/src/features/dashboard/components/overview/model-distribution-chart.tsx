@@ -22,10 +22,19 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { IconBadge } from '@/components/ui/icon-badge'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { getDashboardChartColors } from '@/features/dashboard/lib'
 import type { ModelDistributionItem } from '@/features/dashboard/types'
-import { useChartTheme } from '@/lib/use-chart-theme'
+import { toIntlLocale } from '@/i18n/languages'
 import { formatCompactNumber, formatQuota } from '@/lib/format'
+import { useChartTheme } from '@/lib/use-chart-theme'
 import { VCHART_OPTION } from '@/lib/vchart'
 
 import { PanelWrapper } from '../ui/panel-wrapper'
@@ -51,10 +60,19 @@ function getMetricValue(item: ModelDistributionItem, metric: MetricType): number
   return item.request_count
 }
 
+
 export function ModelDistributionChart(props: ModelDistributionChartProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const { resolvedTheme, themeReady } = useChartTheme()
   const [metric, setMetric] = useState<MetricType>('requests')
+
+  // One color per pie slice: the top models plus the shared "Other" slice.
+  // Table rows reuse the slice color so they double as the pie legend.
+  const sliceColors = useMemo(
+    () => getDashboardChartColors(MAX_VISIBLE_MODELS + 1),
+    []
+  )
 
   const chartData = useMemo(() => {
     const source = props.data ?? []
@@ -85,23 +103,14 @@ export function ModelDistributionChart(props: ModelDistributionChartProps) {
       data: [{ id: 'data', values: chartData }],
       valueField: 'value',
       categoryField: 'name',
-      radius: 0.8,
-      innerRadius: 0.5,
+      radius: 0.85,
+      innerRadius: 0.55,
       padAngle: 0.02,
       label: {
         visible: false,
       },
       legends: {
-        visible: true,
-        orient: 'right',
-        maxRow: 10,
-        item: {
-          shape: {
-            style: {
-              symbolType: 'circle',
-            },
-          },
-        },
+        visible: false,
       },
       tooltip: {
         mark: {
@@ -111,17 +120,19 @@ export function ModelDistributionChart(props: ModelDistributionChartProps) {
               value: (datum: { value?: number }) => {
                 const value = datum?.value ?? 0
                 if (metric === 'cost') return formatQuota(value)
-                return formatCompactNumber(value)
+                return formatCompactNumber(value, locale)
               },
             },
           ],
         },
       },
-      color: getDashboardChartColors(
-        Math.max(chartData.length, MAX_VISIBLE_MODELS)
-      ),
+      color: {
+        type: 'ordinal',
+        domain: chartData.map((item) => item.name),
+        range: sliceColors.slice(0, chartData.length),
+      },
     }),
-    [chartData, metric]
+    [chartData, metric, locale, sliceColors]
   )
 
   const chartKey = [
@@ -132,6 +143,7 @@ export function ModelDistributionChart(props: ModelDistributionChartProps) {
   ].join('-')
 
   const isEmpty = !props.data || props.data.length === 0
+  const rows = props.data ?? []
 
   return (
     <PanelWrapper
@@ -150,7 +162,11 @@ export function ModelDistributionChart(props: ModelDistributionChartProps) {
       height='h-[300px]'
       contentClassName='p-1.5 sm:p-2'
       headerActions={
-        <div className='bg-muted/60 inline-flex h-7 overflow-x-auto rounded-lg border p-0.5 sm:h-8'>
+        <div
+          role='group'
+          aria-label={t('Pie chart metric')}
+          className='bg-muted/60 inline-flex h-7 overflow-x-auto rounded-lg border p-0.5 sm:h-8'
+        >
           {METRIC_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -169,18 +185,73 @@ export function ModelDistributionChart(props: ModelDistributionChartProps) {
         </div>
       }
     >
-      <div className='h-[300px]'>
-        {themeReady && (
-          <VChart
-            key={chartKey}
-            spec={{
-              ...spec,
-              theme: resolvedTheme === 'dark' ? 'dark' : 'light',
-              background: 'transparent',
-            }}
-            option={VCHART_OPTION}
-          />
-        )}
+      <div className='grid gap-2 sm:h-[300px] sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]'>
+        <div className='h-[220px] min-w-0 sm:h-full'>
+          {themeReady && (
+            <VChart
+              key={chartKey}
+              spec={{
+                ...spec,
+                theme: resolvedTheme === 'dark' ? 'dark' : 'light',
+                background: 'transparent',
+              }}
+              option={VCHART_OPTION}
+            />
+          )}
+        </div>
+        <div className='max-h-[300px] min-w-0 overflow-y-auto sm:max-h-none'>
+          <Table className='bg-transparent [&_td]:text-xs [&_th]:text-xs'>
+            <TableHeader className='bg-transparent'>
+              <TableRow className='hover:bg-transparent'>
+                <TableHead className='text-muted-foreground h-8'>
+                  {t('Model')}
+                </TableHead>
+                <TableHead className='text-muted-foreground h-8 text-right'>
+                  {t('Requests')}
+                </TableHead>
+                <TableHead className='text-muted-foreground h-8 text-right'>
+                  {t('Tokens')}
+                </TableHead>
+                <TableHead className='text-muted-foreground h-8 text-right'>
+                  {t('Cost')}
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className='[&>tr]:h-8'>
+              {rows.map((item, index) => (
+                <TableRow
+                  key={item.model_name}
+                  className='border-border/40 hover:bg-transparent'
+                >
+                  <TableCell className='max-w-[10rem] py-1'>
+                    <span className='flex min-w-0 items-center gap-2'>
+                      <span
+                        className='size-2 shrink-0 rounded-full'
+                        style={{
+                          backgroundColor:
+                            sliceColors[Math.min(index, MAX_VISIBLE_MODELS)],
+                        }}
+                        aria-hidden='true'
+                      />
+                      <span className='truncate' title={item.model_name}>
+                        {item.model_name}
+                      </span>
+                    </span>
+                  </TableCell>
+                  <TableCell className='py-1 text-right'>
+                    {formatCompactNumber(item.request_count, locale)}
+                  </TableCell>
+                  <TableCell className='py-1 text-right'>
+                    {formatCompactNumber(item.total_tokens, locale)}
+                  </TableCell>
+                  <TableCell className='py-1 text-right'>
+                    {formatQuota(item.actual_cost)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </PanelWrapper>
   )

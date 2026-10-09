@@ -6902,6 +6902,18 @@
     "Title must be at most {{count}} characters": "Title must be at most {{count}} characters",
     "Type your reply...": "Type your reply...",
     "We could not load this ticket.": "We could not load this ticket.",
-    "We could not load tickets.": "We could not load tickets."
+    "We could not load tickets.": "We could not load tickets.",
+    "CC Switch does not support link import for this app yet. Add the provider manually in CC Switch.": "CC Switch does not support link import for this app yet. Add the provider manually in CC Switch.",
+    "CC Switch is a desktop app that imports your API key into Claude Code, Gemini CLI and other tools in one click.": "CC Switch is a desktop app that imports your API key into Claude Code, Gemini CLI and other tools in one click.",
+    "Click the button at the top right to create an API key and set its group and quota.": "Click the button at the top right to create an API key and set its group and quota.",
+    "Click the import button in a key row to send it to CC Switch, then pick the tool you want to configure.": "Click the import button in a key row to send it to CC Switch, then pick the tool you want to configure.",
+    "Detailed tutorial": "Detailed tutorial",
+    "Download CC Switch": "Download CC Switch",
+    "Follow these steps to start using AI coding tools": "Follow these steps to start using AI coding tools",
+    "Hide quick tutorial": "Hide quick tutorial",
+    "Install CC Switch": "Install CC Switch",
+    "Pie chart metric": "Pie chart metric",
+    "Quick Tutorial": "Quick Tutorial",
+    "Use the key": "Use the key"
   }
 }

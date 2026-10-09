@@ -24,8 +24,9 @@ import { useTranslation } from 'react-i18next'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { getDashboardChartColors } from '@/features/dashboard/lib'
 import type { HourlyTokenUsage } from '@/features/dashboard/types'
+import { toIntlLocale } from '@/i18n/languages'
+import dayjs from '@/lib/dayjs'
 import { formatCompactNumber } from '@/lib/format'
-import { formatChartTime } from '@/lib/time'
 import { useChartTheme } from '@/lib/use-chart-theme'
 import { VCHART_OPTION } from '@/lib/vchart'
 
@@ -33,102 +34,199 @@ import { PanelWrapper } from '../ui/panel-wrapper'
 
 interface TokenUsageChartProps {
   data: HourlyTokenUsage[] | undefined
+  /** Query window in Unix seconds, used to draw every hour on the x-axis. */
+  startTimestamp: number
+  endTimestamp: number
   loading?: boolean
 }
 
-const TOKEN_SERIES_KEYS = [
-  'Input Tokens',
-  'Output Tokens',
-  'Cache Creation',
-  'Cache Read',
-] as const
+type TokenDatum = { hour: string; type: string; value: number }
+type RateDatum = { hour: string; type: string; rate: number | null }
+type TooltipDatum = Partial<TokenDatum & RateDatum>
+
+const HOUR_SECONDS = 3600
+
+function toTokenCount(value: number | undefined): number {
+  return Math.max(Number(value) || 0, 0)
+}
+
+// Cache reads over all cache tokens: the share of cache traffic that was
+// served from cache instead of being written to it. `null` means the hour had
+// no cache traffic, which is different from a 0% hit rate.
+function getCacheHitRate(cacheRead: number, cacheCreation: number) {
+  const total = cacheRead + cacheCreation
+  if (total === 0) return null
+  return (cacheRead / total) * 100
+}
 
 export function TokenUsageChart(props: TokenUsageChartProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const { resolvedTheme, themeReady } = useChartTheme()
 
-  const chartData = useMemo(() => {
-    const source = props.data ?? []
-    if (source.length === 0) return []
+  // The API only returns hours that had traffic. Fill the whole window so the
+  // x-axis always shows a continuous 24-hour timeline.
+  const hourly = useMemo(() => {
+    const byHour = new Map<number, HourlyTokenUsage>()
+    for (const item of props.data ?? []) byHour.set(item.created_at, item)
 
-    return source.flatMap((item) => [
-      {
-        time: item.created_at * 1000,
-        type: t('Input Tokens'),
-        value: Math.max(Number(item.input_tokens) || 0, 0),
-      },
-      {
-        time: item.created_at * 1000,
-        type: t('Output Tokens'),
-        value: Math.max(Number(item.output_tokens) || 0, 0),
-      },
-      {
-        time: item.created_at * 1000,
-        type: t('Cache Creation'),
-        value: Math.max(Number(item.cache_creation_tokens) || 0, 0),
-      },
-      {
-        time: item.created_at * 1000,
-        type: t('Cache Read'),
-        value: Math.max(Number(item.cache_read_tokens) || 0, 0),
-      },
-    ])
-  }, [props.data, t])
+    const firstHour =
+      props.startTimestamp - (props.startTimestamp % HOUR_SECONDS)
+    const lastHour = props.endTimestamp - (props.endTimestamp % HOUR_SECONDS)
+    const rows: Array<{
+      hour: string
+      input: number
+      output: number
+      cacheCreation: number
+      cacheRead: number
+    }> = []
+    for (let hour = firstHour; hour <= lastHour; hour += HOUR_SECONDS) {
+      const item = byHour.get(hour)
+      rows.push({
+        hour: String(hour),
+        input: toTokenCount(item?.input_tokens),
+        output: toTokenCount(item?.output_tokens),
+        cacheCreation: toTokenCount(item?.cache_creation_tokens),
+        cacheRead: toTokenCount(item?.cache_read_tokens),
+      })
+    }
+    return rows
+  }, [props.data, props.startTimestamp, props.endTimestamp])
 
-  // Cache reads over all cache tokens: the share of cache traffic that was
-  // served from cache instead of being written to it.
-  const cacheHitRate = useMemo(() => {
-    const source = props.data ?? []
-    if (source.length === 0) return null
-
-    const totalCacheRead = source.reduce(
-      (sum, item) => sum + (Number(item.cache_read_tokens) || 0),
-      0
-    )
-    const totalCacheCreation = source.reduce(
-      (sum, item) => sum + (Number(item.cache_creation_tokens) || 0),
-      0
-    )
-    const totalCacheTokens = totalCacheRead + totalCacheCreation
-    if (totalCacheTokens === 0) return null
-
-    return ((totalCacheRead / totalCacheTokens) * 100).toFixed(1)
-  }, [props.data])
-
-  const spec = useMemo(
+  const seriesLabels = useMemo(
     () => ({
-      type: 'line',
-      data: [{ id: 'data', values: chartData }],
-      xField: 'time',
-      yField: 'value',
-      seriesField: 'type',
-      line: {
-        style: {
-          lineWidth: 2,
-          lineCap: 'round',
+      input: t('Input Tokens'),
+      output: t('Output Tokens'),
+      cacheCreation: t('Cache Creation'),
+      cacheRead: t('Cache Read'),
+      hitRate: t('Cache Hit Rate'),
+    }),
+    [t]
+  )
+
+  const tokenValues = useMemo<TokenDatum[]>(
+    () =>
+      hourly.flatMap((row) => [
+        { hour: row.hour, type: seriesLabels.input, value: row.input },
+        { hour: row.hour, type: seriesLabels.output, value: row.output },
+        {
+          hour: row.hour,
+          type: seriesLabels.cacheCreation,
+          value: row.cacheCreation,
         },
-      },
-      point: {
-        visible: chartData.length <= 48,
-        style: {
-          size: 4,
+        { hour: row.hour, type: seriesLabels.cacheRead, value: row.cacheRead },
+      ]),
+    [hourly, seriesLabels]
+  )
+
+  const rateValues = useMemo<RateDatum[]>(
+    () =>
+      hourly.map((row) => ({
+        hour: row.hour,
+        type: seriesLabels.hitRate,
+        rate: getCacheHitRate(row.cacheRead, row.cacheCreation),
+      })),
+    [hourly, seriesLabels]
+  )
+
+  const cacheHitRate = useMemo(() => {
+    const totalRead = hourly.reduce((sum, row) => sum + row.cacheRead, 0)
+    const totalCreation = hourly.reduce(
+      (sum, row) => sum + row.cacheCreation,
+      0
+    )
+    const rate = getCacheHitRate(totalRead, totalCreation)
+    return rate === null ? null : rate.toFixed(1)
+  }, [hourly])
+
+  const spec = useMemo(() => {
+    const formatHourLabel = (hour: unknown) =>
+      dayjs.unix(Number(hour)).format('HH:mm')
+    const formatHourTitle = (hour: unknown) =>
+      dayjs.unix(Number(hour)).format('YYYY-MM-DD HH:mm')
+    const formatTooltipValue = (datum?: TooltipDatum) => {
+      if (datum?.type !== seriesLabels.hitRate) {
+        return formatCompactNumber(datum?.value ?? 0, locale)
+      }
+      if (datum.rate == null) return '-'
+      return `${datum.rate.toFixed(1)}%`
+    }
+    const typeDomain = [
+      seriesLabels.input,
+      seriesLabels.output,
+      seriesLabels.cacheCreation,
+      seriesLabels.cacheRead,
+      seriesLabels.hitRate,
+    ]
+
+    return {
+      type: 'common',
+      data: [
+        { id: 'tokens', values: tokenValues },
+        { id: 'hitRate', values: rateValues },
+      ],
+      series: [
+        {
+          type: 'line',
+          id: 'tokens',
+          dataId: 'tokens',
+          xField: 'hour',
+          yField: 'value',
+          seriesField: 'type',
+          activePoint: true,
+          line: { style: { lineWidth: 2, lineCap: 'round' } },
+          point: { visible: false },
         },
-      },
+        {
+          type: 'line',
+          id: 'hitRate',
+          dataId: 'hitRate',
+          xField: 'hour',
+          yField: 'rate',
+          seriesField: 'type',
+          activePoint: true,
+          // Hours without cache traffic have no rate; bridge them instead of
+          // plotting a misleading 0%.
+          invalidType: 'link',
+          line: {
+            style: { lineWidth: 2, lineCap: 'round', lineDash: [4, 3] },
+          },
+          point: { visible: false },
+        },
+      ],
       axes: [
         {
           orient: 'bottom',
-          type: 'time',
-          label: {
-            formatMethod: (value: number) => formatChartTime(value, 3600),
-          },
+          type: 'band',
+          seriesId: ['tokens', 'hitRate'],
+          label: { formatMethod: formatHourLabel },
         },
         {
           orient: 'left',
+          type: 'linear',
+          seriesId: ['tokens'],
           label: {
-            formatMethod: (value: number) => formatCompactNumber(value),
+            formatMethod: (value: unknown) =>
+              formatCompactNumber(Number(value), locale),
           },
         },
+        {
+          orient: 'right',
+          type: 'linear',
+          seriesId: ['hitRate'],
+          min: 0,
+          max: 100,
+          grid: { visible: false },
+          label: { formatMethod: (value: unknown) => `${Number(value)}%` },
+        },
       ],
+      crosshair: {
+        xField: {
+          visible: true,
+          line: { type: 'line', width: 1 },
+          label: { visible: true, formatMethod: formatHourLabel },
+        },
+      },
       legends: {
         visible: true,
         orient: 'top',
@@ -136,28 +234,30 @@ export function TokenUsageChart(props: TokenUsageChartProps) {
         padding: { bottom: 12 },
       },
       tooltip: {
-        mark: {
+        mark: { visible: false },
+        dimension: {
           title: {
-            value: (datum: { time?: number }) =>
-              formatChartTime(datum?.time ?? 0, 3600),
+            value: (datum?: TooltipDatum) => formatHourTitle(datum?.hour),
           },
           content: [
             {
-              key: (datum: { type?: string }) => datum?.type ?? '',
-              value: (datum: { value?: number }) =>
-                formatCompactNumber(datum?.value ?? 0),
+              key: (datum?: TooltipDatum) => datum?.type ?? '',
+              value: formatTooltipValue,
             },
           ],
         },
       },
-      color: getDashboardChartColors(TOKEN_SERIES_KEYS.length),
-    }),
-    [chartData]
-  )
+      color: {
+        type: 'ordinal',
+        domain: typeDomain,
+        range: getDashboardChartColors(typeDomain.length),
+      },
+    }
+  }, [tokenValues, rateValues, seriesLabels, locale])
 
   const chartKey = [
     'token-usage',
-    String(chartData.length),
+    String(hourly.length),
     resolvedTheme,
   ].join('-')
 
