@@ -33,7 +33,6 @@ import {
   Radio,
   ServerCog,
   Settings,
-  ShieldCheck,
   ShoppingBag,
   Ticket,
   User,
@@ -134,11 +133,6 @@ export function useSidebarData(): SidebarData {
             title: t('Profile'),
             url: '/profile',
             icon: User,
-          },
-          {
-            title: t('Security & Access'),
-            url: '/security',
-            icon: ShieldCheck,
           },
           {
             title: t('My Tickets'),
