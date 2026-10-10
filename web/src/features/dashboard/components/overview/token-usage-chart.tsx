@@ -22,7 +22,10 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { IconBadge } from '@/components/ui/icon-badge'
-import { getDashboardChartColors } from '@/features/dashboard/lib'
+import {
+  getCacheHitRate,
+  getDashboardChartColors,
+} from '@/features/dashboard/lib'
 import type { HourlyTokenUsage } from '@/features/dashboard/types'
 import { toIntlLocale } from '@/i18n/languages'
 import dayjs from '@/lib/dayjs'
@@ -48,15 +51,6 @@ const HOUR_SECONDS = 3600
 
 function toTokenCount(value: number | undefined): number {
   return Math.max(Number(value) || 0, 0)
-}
-
-// Cache reads over all cache tokens: the share of cache traffic that was
-// served from cache instead of being written to it. `null` means the hour had
-// no cache traffic, which is different from a 0% hit rate.
-function getCacheHitRate(cacheRead: number, cacheCreation: number) {
-  const total = cacheRead + cacheCreation
-  if (total === 0) return null
-  return (cacheRead / total) * 100
 }
 
 export function TokenUsageChart(props: TokenUsageChartProps) {
@@ -97,7 +91,7 @@ export function TokenUsageChart(props: TokenUsageChartProps) {
     () => ({
       input: t('Input Tokens'),
       output: t('Output Tokens'),
-      cacheCreation: t('Cache Creation'),
+      cacheCreation: t('Cache Write'),
       cacheRead: t('Cache Read'),
       hitRate: t('Cache Hit Rate'),
     }),
@@ -124,18 +118,23 @@ export function TokenUsageChart(props: TokenUsageChartProps) {
       hourly.map((row) => ({
         hour: row.hour,
         type: seriesLabels.hitRate,
-        rate: getCacheHitRate(row.cacheRead, row.cacheCreation),
+        rate: getCacheHitRate(row),
       })),
     [hourly, seriesLabels]
   )
 
   const cacheHitRate = useMemo(() => {
-    const totalRead = hourly.reduce((sum, row) => sum + row.cacheRead, 0)
-    const totalCreation = hourly.reduce(
-      (sum, row) => sum + row.cacheCreation,
-      0
+    const totals = hourly.reduce(
+      (sum, row) => ({
+        input: sum.input + row.input,
+        cacheCreation: sum.cacheCreation + row.cacheCreation,
+        cacheRead: sum.cacheRead + row.cacheRead,
+      }),
+      { input: 0, cacheCreation: 0, cacheRead: 0 }
     )
-    const rate = getCacheHitRate(totalRead, totalCreation)
+    // Without any cache read the rate is noise (always 0%), so hide it.
+    if (totals.cacheRead === 0) return null
+    const rate = getCacheHitRate(totals)
     return rate === null ? null : rate.toFixed(1)
   }, [hourly])
 
@@ -255,11 +254,9 @@ export function TokenUsageChart(props: TokenUsageChartProps) {
     }
   }, [tokenValues, rateValues, seriesLabels, locale])
 
-  const chartKey = [
-    'token-usage',
-    String(hourly.length),
-    resolvedTheme,
-  ].join('-')
+  const chartKey = ['token-usage', String(hourly.length), resolvedTheme].join(
+    '-'
+  )
 
   const isEmpty = !props.data || props.data.length === 0
 

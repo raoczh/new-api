@@ -77,6 +77,7 @@ import {
   getParamOverrideActionLabel,
   parseAuditLine,
   decodeBillingExprB64,
+  getLogTokenUsage,
   getTieredBillingSummary,
   hasAnyCacheTokens,
   isViolationFeeLog,
@@ -378,7 +379,7 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
 
   const promptTokens = log.prompt_tokens || 0
   const completionTokens = log.completion_tokens || 0
-  const cacheRead = other.cache_tokens || 0
+  const usage = getLogTokenUsage(log, other)
   const cacheWrite = other.cache_creation_tokens || 0
   const cacheWrite5m = other.cache_creation_tokens_5m || 0
   const cacheWrite1h = other.cache_creation_tokens_1h || 0
@@ -388,16 +389,19 @@ function TokenBreakdown(props: { log: UsageLog; other: LogOtherData }) {
 
   const rows: Array<{ label: string; value: string }> = []
 
-  rows.push({ label: t('Input Tokens'), value: promptTokens.toLocaleString() })
+  rows.push({
+    label: t('Input Tokens'),
+    value: usage.uncachedInput.toLocaleString(),
+  })
   rows.push({
     label: t('Output Tokens'),
     value: completionTokens.toLocaleString(),
   })
 
-  if (cacheRead > 0) {
+  if (usage.cacheRead > 0) {
     rows.push({
       label: t('Cache Read'),
-      value: cacheRead.toLocaleString(),
+      value: usage.cacheRead.toLocaleString(),
     })
   }
 

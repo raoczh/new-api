@@ -16,27 +16,27 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export {
-  cleanFilters,
-  buildQueryParams,
-  getSavedGranularity,
-  saveGranularity,
-  getDefaultDays,
-  getSavedChartPreferences,
-  saveChartPreferences,
-  buildDefaultDashboardFilters,
-} from './filters'
-export {
-  getDashboardChartColors,
-  processChartData,
-  processUserChartData,
-} from './charts'
-export {
-  buildDashboardFlowData,
-  buildFlowSankeySpec,
-  flowNodeFilterFromSankeyDatum,
-  flowSankeyDatumValue,
-  getFlowStages,
-} from './flow'
-export { safeDivide, calculateDashboardStats, getCacheHitRate } from './stats'
-export { getPreviewText } from './text'
+import { describe, expect, test } from 'vitest'
+
+import { getCacheHitRate } from '../stats'
+
+describe('getCacheHitRate', () => {
+  test('usage without cache writes divides reads by all prompt tokens', () => {
+    // Codex/OpenAI never reports cache writes; the rate must not be 100%.
+    expect(
+      getCacheHitRate({ input: 300, cacheCreation: 0, cacheRead: 700 })
+    ).toBe(70)
+  })
+
+  test('usage with cache writes counts them as prompt tokens', () => {
+    expect(
+      getCacheHitRate({ input: 100, cacheCreation: 100, cacheRead: 800 })
+    ).toBe(80)
+  })
+
+  test('no prompt tokens returns null instead of 0%', () => {
+    expect(
+      getCacheHitRate({ input: 0, cacheCreation: 0, cacheRead: 0 })
+    ).toBeNull()
+  })
+})

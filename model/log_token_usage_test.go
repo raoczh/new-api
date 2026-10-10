@@ -20,6 +20,9 @@ func TestGetUserHourlyTokenUsageSplitsCacheTokensBySemantic(t *testing.T) {
 		// Split 5m/1h cache creation without the total field.
 		{UserId: 1, Type: LogTypeConsume, CreatedAt: 3600 + 5, PromptTokens: 10, CompletionTokens: 5,
 			Other: `{"usage_semantic":"anthropic","cache_creation_tokens_5m":20,"cache_creation_tokens_1h":30}`},
+		// Claude upstream converted to OpenAI semantic: usage_semantic wins over claude.
+		{UserId: 1, Type: LogTypeConsume, CreatedAt: 3600 + 7, PromptTokens: 1000, CompletionTokens: 2,
+			Other: `{"claude":true,"usage_semantic":"openai","cache_tokens":600,"cache_creation_tokens":100}`},
 		// Malformed metadata keeps raw token counts.
 		{UserId: 1, Type: LogTypeConsume, CreatedAt: 3600 + 6, PromptTokens: 7, CompletionTokens: 3, Other: `not-json`},
 		// Excluded: other user, error log, outside window.
@@ -36,8 +39,8 @@ func TestGetUserHourlyTokenUsageSplitsCacheTokensBySemantic(t *testing.T) {
 	require.Len(t, usage, 2)
 
 	assert.Equal(t, HourlyTokenUsage{
-		CreatedAt: 3600, RequestCount: 2,
-		InputTokens: 17, OutputTokens: 8, CacheCreationTokens: 50, CacheReadTokens: 0,
+		CreatedAt: 3600, RequestCount: 3,
+		InputTokens: 17 + 300, OutputTokens: 10, CacheCreationTokens: 150, CacheReadTokens: 600,
 	}, usage[0])
 	assert.Equal(t, HourlyTokenUsage{
 		CreatedAt: 7200, RequestCount: 2,

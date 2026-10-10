@@ -61,8 +61,8 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { useDashboardContentVisibility } from '../../hooks/use-status-data'
 import { useModelDistribution } from '../../hooks/use-model-distribution'
+import { useDashboardContentVisibility } from '../../hooks/use-status-data'
 import { useTokenUsage } from '../../hooks/use-token-usage'
 import { AnnouncementsPanel } from './announcements-panel'
 import { FAQPanel } from './faq-panel'
@@ -646,9 +646,7 @@ export function OverviewDashboard() {
           <SummaryCards
             tokenUsage={tokenUsageQuery.data}
             modelDistribution={modelDistQuery.data}
-            usageLoading={
-              tokenUsageQuery.isLoading || modelDistQuery.isLoading
-            }
+            usageLoading={tokenUsageQuery.isLoading || modelDistQuery.isLoading}
           />
           <div id={setupGuideId} hidden={!setupGuideExpanded}>
             {setupGuideExpanded && (

@@ -157,7 +157,7 @@ describe('usage facts billing details', () => {
     )
     expect(
       screen.getByText('Input Tokens').nextElementSibling
-    ).toHaveTextContent('1,000')
+    ).toHaveTextContent('700')
     expect(
       screen
         .getAllByText('Cache Read')

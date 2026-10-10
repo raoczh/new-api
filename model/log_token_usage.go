@@ -51,7 +51,10 @@ func (s tokenUsageSplit) total() int64 {
 // splitLogTokenUsage separates a consume log's prompt cache tokens from its
 // input tokens. Anthropic-semantic logs already store prompt_tokens without
 // cache tokens; OpenAI-semantic logs include them, so they are subtracted for
-// those rows. Malformed metadata only loses the cache split for that row.
+// those rows. An explicit usage_semantic wins over the claude flag, which only
+// marks the upstream request format and is also set on OpenAI-semantic logs
+// converted from Claude. Malformed metadata only loses the cache split for
+// that row.
 func splitLogTokenUsage(row tokenUsageLogRow) tokenUsageSplit {
 	var other tokenUsageLogOther
 	if row.Other != "" {
@@ -60,7 +63,11 @@ func splitLogTokenUsage(row tokenUsageLogRow) tokenUsageSplit {
 	cacheRead := int64(max(other.CacheTokens, 0))
 	cacheCreation := int64(max(other.CacheCreationTokens, other.CacheCreation5m+other.CacheCreation1h, 0))
 	input := int64(max(row.PromptTokens, 0))
-	if !other.Claude && other.UsageSemantic != "anthropic" {
+	anthropicSemantic := other.Claude
+	if other.UsageSemantic != "" {
+		anthropicSemantic = other.UsageSemantic == "anthropic"
+	}
+	if !anthropicSemantic {
 		input = max(input-cacheRead-cacheCreation, 0)
 	}
 	return tokenUsageSplit{

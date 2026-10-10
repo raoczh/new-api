@@ -54,12 +54,14 @@ const METRIC_OPTIONS: Array<{ value: MetricType; labelKey: string }> = [
 
 const MAX_VISIBLE_MODELS = 8
 
-function getMetricValue(item: ModelDistributionItem, metric: MetricType): number {
+function getMetricValue(
+  item: ModelDistributionItem,
+  metric: MetricType
+): number {
   if (metric === 'tokens') return item.total_tokens
   if (metric === 'cost') return item.actual_cost
   return item.request_count
 }
-
 
 export function ModelDistributionChart(props: ModelDistributionChartProps) {
   const { t, i18n } = useTranslation()
@@ -175,7 +177,7 @@ export function ModelDistributionChart(props: ModelDistributionChartProps) {
               aria-pressed={metric === option.value}
               className={
                 metric === option.value
-                  ? 'text-foreground shrink-0 rounded-md bg-background px-3 text-xs font-medium shadow-sm'
+                  ? 'text-foreground bg-background shrink-0 rounded-md px-3 text-xs font-medium shadow-sm'
                   : 'text-muted-foreground hover:text-foreground shrink-0 rounded-md px-3 text-xs font-medium'
               }
             >

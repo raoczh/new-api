@@ -33,6 +33,22 @@ export function safeDivide(
 }
 
 /**
+ * Cache reads over all prompt tokens (uncached input + cache writes + cache
+ * reads). Dividing by cache traffic alone would pin providers that never
+ * report cache writes, such as OpenAI/Codex, at 100%. `null` means there were
+ * no prompt tokens, which is different from a 0% hit rate.
+ */
+export function getCacheHitRate(usage: {
+  input: number
+  cacheCreation: number
+  cacheRead: number
+}): number | null {
+  const total = usage.input + usage.cacheCreation + usage.cacheRead
+  if (total === 0) return null
+  return (usage.cacheRead / total) * 100
+}
+
+/**
  * Calculate aggregated statistics from quota data
  */
 export function calculateDashboardStats(data: QuotaDataItem[]) {

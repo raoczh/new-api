@@ -290,6 +290,46 @@ export interface TieredBillingSummary {
   }>
 }
 
+export interface LogTokenUsage {
+  /** Prompt tokens that were neither read from nor written to the cache. */
+  uncachedInput: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+}
+
+/**
+ * Split a consume log's prompt tokens into uncached input, cache reads, and
+ * cache writes. Anthropic-semantic logs store prompt_tokens without cache
+ * tokens; OpenAI-semantic logs include them, so they are subtracted. An
+ * explicit usage_semantic wins over the claude flag, which only marks the
+ * upstream request format. Mirrors splitLogTokenUsage in the backend.
+ */
+export function getLogTokenUsage(
+  log: Pick<UsageLog, 'prompt_tokens' | 'completion_tokens'>,
+  other: LogOtherData | null | undefined
+): LogTokenUsage {
+  const promptTokens = Math.max(log.prompt_tokens || 0, 0)
+  const cacheRead = Math.max(other?.cache_tokens || 0, 0)
+  const cacheWrite = Math.max(
+    other?.cache_creation_tokens || 0,
+    (other?.cache_creation_tokens_5m || 0) +
+      (other?.cache_creation_tokens_1h || 0),
+    0
+  )
+  const anthropicSemantic = other?.usage_semantic
+    ? other.usage_semantic === 'anthropic'
+    : other?.claude === true
+  return {
+    uncachedInput: anthropicSemantic
+      ? promptTokens
+      : Math.max(promptTokens - cacheRead - cacheWrite, 0),
+    output: Math.max(log.completion_tokens || 0, 0),
+    cacheRead,
+    cacheWrite,
+  }
+}
+
 /**
  * Whether the request payload reports any cache-related token usage. Used to
  * suppress cache pricing rows from the tiered breakdown when the request did

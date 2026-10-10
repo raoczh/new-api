@@ -224,8 +224,10 @@ it('keeps input, output and cache quantities readable without empty metric cells
   renderLogs()
   expect(screen.getByText('Input')).toBeVisible()
   expect(screen.getByText('Output')).toBeVisible()
-  expect(screen.getByText(/300/)).toBeVisible()
-  expect(screen.getByText('Cache ↑ 200')).toBeVisible()
+  // OpenAI semantic: 1200 prompt tokens - 300 cache read - 200 cache write.
+  expect(screen.getByText('700')).toBeVisible()
+  expect(screen.getByText('Cache Read ↓ 300')).toBeVisible()
+  expect(screen.getByText('Cache Write ↑ 200')).toBeVisible()
 })
 
 it('shows the established empty state when no logs exist', () => {

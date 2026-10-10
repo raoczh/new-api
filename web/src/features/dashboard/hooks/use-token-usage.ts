@@ -22,7 +22,13 @@ import { getUserTokenUsage } from '../api'
 
 export function useTokenUsage(startTimestamp: number, endTimestamp: number) {
   return useQuery({
-    queryKey: ['dashboard', 'overview', 'token-usage', startTimestamp, endTimestamp],
+    queryKey: [
+      'dashboard',
+      'overview',
+      'token-usage',
+      startTimestamp,
+      endTimestamp,
+    ],
     queryFn: async () => {
       const result = await getUserTokenUsage({
         start_timestamp: startTimestamp,

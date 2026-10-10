@@ -58,6 +58,7 @@ import type { UsageLog } from '../../data/schema'
 import {
   formatModelName,
   decodeBillingExprB64,
+  getLogTokenUsage,
   getTieredBillingSummary,
   hasAnyCacheTokens,
   parseLogOther,
@@ -723,36 +724,32 @@ export function useCommonLogsColumns(
 
           const other = parseLogOther(log.other)
 
-          const promptTokens = log.prompt_tokens || 0
-          const completionTokens = log.completion_tokens || 0
-          if (promptTokens === 0 && completionTokens === 0) {
+          const usage = getLogTokenUsage(log, other)
+          if (
+            (log.prompt_tokens || 0) === 0 &&
+            usage.output === 0 &&
+            usage.cacheRead === 0 &&
+            usage.cacheWrite === 0
+          ) {
             return <span className='text-muted-foreground text-xs'>-</span>
           }
-
-          const cacheReadTokens = other?.cache_tokens || 0
-          const cacheWrite5m = other?.cache_creation_tokens_5m || 0
-          const cacheWrite1h = other?.cache_creation_tokens_1h || 0
-          const hasSplitCache = cacheWrite5m > 0 || cacheWrite1h > 0
-          const cacheWriteTokens = hasSplitCache
-            ? cacheWrite5m + cacheWrite1h
-            : other?.cache_creation_tokens || 0
 
           return (
             <div className='flex flex-col gap-0.5'>
               <span className='font-mono text-xs font-medium tabular-nums'>
-                {promptTokens.toLocaleString()} /{' '}
-                {completionTokens.toLocaleString()}
+                {usage.uncachedInput.toLocaleString()} /{' '}
+                {usage.output.toLocaleString()}
               </span>
-              {(cacheReadTokens > 0 || cacheWriteTokens > 0) && (
-                <div className='flex items-center gap-1 text-[11px]'>
-                  {cacheReadTokens > 0 && (
+              {(usage.cacheRead > 0 || usage.cacheWrite > 0) && (
+                <div className='flex flex-wrap items-center gap-x-1.5 text-[11px] tabular-nums'>
+                  {usage.cacheRead > 0 && (
                     <span className='text-muted-foreground/60'>
-                      {t('Cache')}↓ {cacheReadTokens.toLocaleString()}
+                      {t('Cache Read')}↓ {usage.cacheRead.toLocaleString()}
                     </span>
                   )}
-                  {cacheWriteTokens > 0 && (
+                  {usage.cacheWrite > 0 && (
                     <span className='text-muted-foreground/60'>
-                      ↑ {cacheWriteTokens.toLocaleString()}
+                      {t('Cache Write')}↑ {usage.cacheWrite.toLocaleString()}
                     </span>
                   )}
                 </div>
