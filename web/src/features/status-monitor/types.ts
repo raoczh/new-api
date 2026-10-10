@@ -21,6 +21,9 @@ export type GroupHourPoint = {
   success_rate: number
   avg_ttft_ms: number
   top_model: string
+  source?: 'request' | 'auto_probe' | 'manual_test' | 'mixed_tests'
+  sample_count?: number
+  avg_latency_ms?: number
 }
 
 export type GroupModelStat = {
@@ -42,6 +45,8 @@ export type GroupStatus = {
   group: string
   description: string
   vendor_id: number
+  group_ratio?: number
+  summary_source?: string
   /** Window totals; null when the group has no samples in the window. */
   summary: GroupSummary | null
   last_seen_ts: number

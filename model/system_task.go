@@ -21,6 +21,7 @@ const (
 	SystemTaskTypeModelUpdate    = "model_update"
 	SystemTaskTypeMidjourneyPoll = "midjourney_poll"
 	SystemTaskTypeAsyncTaskPoll  = "async_task_poll"
+	SystemTaskTypeGroupProbe     = "group_probe"
 )
 
 var ErrSystemTaskLockLost = errors.New("system task lock lost")
@@ -245,6 +246,17 @@ func GetLatestSystemTask(taskType string) (*SystemTask, error) {
 		return nil, err
 	}
 	return &task, nil
+}
+
+// GetPreviousSystemTask preserves a scheduled handler's state across nodes and
+// restarts, without accidentally reading the current running task.
+func GetPreviousSystemTask(taskType string, beforeID int64) (*SystemTask, error) {
+	var task SystemTask
+	err := DB.Where("type = ? AND id < ? AND state <> ?", taskType, beforeID, "").Order("id desc").First(&task).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &task, err
 }
 
 func GetLatestSystemTasks(taskTypes []string) (map[string]*SystemTask, error) {

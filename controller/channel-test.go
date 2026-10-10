@@ -27,6 +27,8 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/perf_metrics_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	hosttypes "github.com/QuantumNous/new-api/types"
 
 	"github.com/samber/lo"
@@ -39,6 +41,13 @@ type testResult struct {
 	context     *gin.Context
 	localErr    error
 	newAPIError *types.NewAPIError
+}
+
+// channelTestOptions distinguishes synthetic probes from administrator tests.
+type channelTestOptions struct {
+	group  string
+	probe  bool
+	manual bool
 }
 
 func normalizeChannelTestEndpoint(channel *model.Channel, endpointType string) string {
@@ -70,6 +79,10 @@ func resolveChannelTestUserID(c *gin.Context) (int, error) {
 }
 
 func testChannel(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool) testResult {
+	return runChannelTest(ctx, channel, testUserID, testModel, endpointType, isStream, channelTestOptions{})
+}
+
+func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, options channelTestOptions) (result testResult) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -166,7 +179,11 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	c.Set("channel", channel.Type)
 	c.Set("base_url", channel.GetBaseURL())
 	group, _ := model.GetUserGroup(testUserID, false)
+	if options.group != "" {
+		group = options.group
+	}
 	c.Set("group", group)
+	common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
 
 	newAPIError := middleware.SetupContextForSelectedChannel(c, channel, testModel)
 	if newAPIError != nil {
@@ -228,6 +245,24 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	}
 
 	request := buildTestRequest(testModel, endpointType, channel, isStream)
+	if options.probe {
+		// Bound synthetic calls without weakening any client request limits.
+		switch req := request.(type) {
+		case *dto.GeneralOpenAIRequest:
+			if dto.IsOpenAIReasoningOModel(testModel) || req.MaxCompletionTokens != nil {
+				req.MaxTokens = nil
+				req.MaxCompletionTokens = common.GetPointer(uint(128))
+			} else {
+				req.MaxTokens = common.GetPointer(uint(128))
+			}
+		case *dto.OpenAIResponsesRequest:
+			req.MaxOutputTokens = common.GetPointer(uint(128))
+		case *dto.ClaudeRequest:
+			req.MaxTokens = common.GetPointer(uint(128))
+		case *dto.GeminiChatRequest:
+			req.GenerationConfig.MaxOutputTokens = common.GetPointer(uint(128))
+		}
+	}
 
 	info, err := relaycommon.GenRelayInfo(c, relayFormat, request, nil)
 
@@ -240,6 +275,26 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	}
 
 	info.IsChannelTest = true
+	upstreamAttempted := false
+	if options.probe {
+		defer func() {
+			if !upstreamAttempted || errors.Is(ctx.Err(), context.Canceled) {
+				return
+			}
+			probe := model.StatusProbe{
+				GroupName: group, ModelName: info.OriginModelName, Source: "auto_probe",
+				ObservedAt: time.Now().Unix(), Success: result.localErr == nil && result.newAPIError == nil,
+				LatencyMs: time.Since(tik).Milliseconds(),
+				HasTtft:   info.IsStream && info.HasSendResponse(),
+			}
+			if probe.HasTtft {
+				probe.TtftMs = max(0, info.FirstResponseTime.Sub(info.StartTime).Milliseconds())
+			}
+			if err := model.RecordStatusProbe(&probe); err != nil {
+				result.localErr = fmt.Errorf("failed to save group probe: %w", err)
+			}
+		}()
+	}
 	info.InitChannelMeta(c)
 
 	err = attachTestBillingRequestInput(info, request)
@@ -433,6 +488,7 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 
 	requestBody := bytes.NewBuffer(jsonData)
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(jsonData))
+	upstreamAttempted = true
 	resp, err := adaptor.DoRequest(c, info, requestBody)
 	if err != nil {
 		return testResult{
@@ -479,8 +535,8 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			newAPIError: types.NewOpenAIError(usageErr, types.ErrorCodeBadResponseBody, http.StatusInternalServerError),
 		}
 	}
-	result := w.Result()
-	respBody, err := readTestResponseBody(result.Body, isStream)
+	httpResult := w.Result()
+	respBody, err := readTestResponseBody(httpResult.Body, isStream)
 	if err != nil {
 		return testResult{
 			context:     c,
@@ -496,6 +552,9 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		}
 	}
 	info.SetEstimatePromptTokens(usage.PromptTokens)
+	if options.probe {
+		return testResult{context: c}
+	}
 
 	quota, tieredResult := settleTestQuota(info, priceData, usage)
 	tok := time.Now()
@@ -516,11 +575,46 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		Other:            other,
 	})
 	common.SysLog(fmt.Sprintf("testing channel #%d, response: \n%s", channel.Id, string(respBody)))
+	// Only successful administrator-initiated model tests reach this path.
+	// Preserve the requested model and record every enabled channel group,
+	// rather than incorrectly assigning the test to the administrator's group.
+	if options.manual {
+		err = recordManualChannelTest(channel, info, milliseconds)
+		if err != nil {
+			common.SysError("failed to save manual model test: " + err.Error())
+		}
+	}
 	return testResult{
 		context:     c,
 		localErr:    nil,
 		newAPIError: nil,
 	}
+}
+
+func recordManualChannelTest(channel *model.Channel, info *relaycommon.RelayInfo, latencyMs int64) error {
+	if !perf_metrics_setting.GetSetting().Enabled {
+		return nil
+	}
+	probe := model.StatusProbe{
+		ModelName: info.OriginModelName, Source: "manual_test", ObservedAt: time.Now().Unix(),
+		Success: true, LatencyMs: latencyMs, HasTtft: info.IsStream && info.HasSendResponse(),
+	}
+	if probe.HasTtft {
+		probe.TtftMs = max(0, info.FirstResponseTime.Sub(info.StartTime).Milliseconds())
+	}
+	seen := map[string]bool{}
+	for group := range strings.SplitSeq(channel.Group, ",") {
+		group = strings.TrimSpace(group)
+		if group == "" || seen[group] || !ratio_setting.ContainsGroupRatio(group) {
+			continue
+		}
+		seen[group] = true
+		probe.ID, probe.GroupName = 0, group
+		if err := model.RecordStatusProbe(&probe); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func attachTestBillingRequestInput(info *relaycommon.RelayInfo, request dto.Request) error {
@@ -874,7 +968,7 @@ func TestChannel(c *gin.Context) {
 	if c.Request != nil {
 		requestCtx = c.Request.Context()
 	}
-	result := testChannel(requestCtx, channel, testUserID, testModel, endpointType, isStream)
+	result := runChannelTest(requestCtx, channel, testUserID, testModel, endpointType, isStream, channelTestOptions{manual: true})
 	if result.localErr != nil {
 		resp := gin.H{
 			"success": false,
@@ -917,11 +1011,11 @@ type channelTestSummary struct {
 	Enabled   int `json:"enabled"`
 }
 
-func testChannelForHealthCheck(ctx context.Context, channel *model.Channel, testUserID int, allowDisable bool, disableThreshold int64) channelTestSummary {
+func testChannelForHealthCheck(ctx context.Context, channel *model.Channel, testUserID int, allowDisable bool, disableThreshold int64, manual bool) channelTestSummary {
 	summary := channelTestSummary{}
 	isChannelEnabled := channel.Status == common.ChannelStatusEnabled
 	tik := time.Now()
-	result := testChannel(ctx, channel, testUserID, "", "", shouldUseStreamForAutomaticChannelTest(channel))
+	result := runChannelTest(ctx, channel, testUserID, "", "", shouldUseStreamForAutomaticChannelTest(channel), channelTestOptions{manual: manual})
 	milliseconds := time.Since(tik).Milliseconds()
 	if ctx.Err() != nil {
 		return summary
@@ -1059,7 +1153,7 @@ func runChannelTestWorkers(
 // performChannelTests runs channel health checks with the configured bounded
 // concurrency and honors cancellation when a system-task runner loses its
 // lease.
-func performChannelTests(ctx context.Context, channels []*model.Channel, testUserID int, allowDisable bool, concurrency int, report func(processed, total int)) channelTestSummary {
+func performChannelTests(ctx context.Context, channels []*model.Channel, testUserID int, allowDisable bool, manual bool, concurrency int, report func(processed, total int)) channelTestSummary {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -1072,7 +1166,7 @@ func performChannelTests(ctx context.Context, channels []*model.Channel, testUse
 		channels,
 		concurrency,
 		func(ctx context.Context, channel *model.Channel) channelTestSummary {
-			return testChannelForHealthCheck(ctx, channel, testUserID, allowDisable, disableThreshold)
+			return testChannelForHealthCheck(ctx, channel, testUserID, allowDisable, disableThreshold, manual)
 		},
 		report,
 	)
@@ -1101,7 +1195,8 @@ func runChannelTestTask(ctx context.Context, mode string, notify bool, report fu
 	selected := selectChannelsForAutomaticTest(channels, mode)
 	allowDisable := mode != operation_setting.ChannelTestModePassiveRecovery
 	concurrency := operation_setting.GetMonitorSetting().ChannelTestConcurrency
-	summary := performChannelTests(ctx, selected, testUserID, allowDisable, concurrency, report)
+	// The manual test-all payload requests notification; scheduled runs do not.
+	summary := performChannelTests(ctx, selected, testUserID, allowDisable, notify, concurrency, report)
 	if notify && (ctx == nil || ctx.Err() == nil) {
 		service.NotifyRootUser(dto.NotifyTypeChannelTest, "通道测试完成", "所有通道测试已完成")
 	}

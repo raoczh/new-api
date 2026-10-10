@@ -76,6 +76,16 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Model Square'), href: '/pricing', requiresAuth })
   }
 
+  // Status monitor
+  const statusMonitor = modules.statusMonitor
+  if (statusMonitor.enabled) {
+    links.push({
+      title: t('Status Monitor'),
+      href: '/status-monitor',
+      requiresAuth: statusMonitor.requireAuth && !isAuthed,
+    })
+  }
+
   // Rankings
   const rankings = modules?.rankings
   if (rankings && typeof rankings === 'object' && rankings.enabled) {

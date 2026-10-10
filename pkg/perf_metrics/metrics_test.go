@@ -182,7 +182,9 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
 			require.NoError(t, db.Migrator().DropTable(&model.PerfMetric{}))
-			require.NoError(t, db.AutoMigrate(&model.PerfMetric{}))
+			require.NoError(t, db.Migrator().DropTable(&model.StatusProbe{}))
+			require.NoError(t, db.AutoMigrate(&model.PerfMetric{}, &model.StatusProbe{}, &model.Ability{}, &model.Channel{}, &model.Model{}, &model.Vendor{}))
+			require.NoError(t, db.AutoMigrate(&model.StatusProbe{}))
 
 			now := time.Now()
 			start, _ := queryWindow(now, 24)
@@ -263,7 +265,7 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			assert.Equal(t, "Group A", groupA.Description)
 			require.NotNil(t, groupA.Summary)
 			assert.Equal(t, GroupSummary{SuccessRate: 99.01, AvgTtftMs: 100, AvgLatencyMs: 990, AvgTps: 5}, *groupA.Summary)
-			assert.Equal(t, []GroupHourPoint{{Ts: hour, SuccessRate: 99.01, AvgTtftMs: 100, TopModel: "test-model"}}, groupA.Hourly)
+			assert.Equal(t, []GroupHourPoint{{Ts: hour, SuccessRate: 99.01, AvgTtftMs: 100, TopModel: "test-model", Source: "request", SampleCount: 101, AvgLatencyMs: 990}}, groupA.Hourly)
 			require.Len(t, groupA.Models, 2)
 			assert.Equal(t, "test-model", groupA.Models[0].ModelName)
 			assert.Equal(t, 0.0, groupA.Models[1].SuccessRate)
@@ -274,6 +276,55 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			assert.Nil(t, idle.Summary)
 			assert.Empty(t, idle.Hourly)
 			assert.Empty(t, idle.Models)
+
+			// Probes fill idle hours, including failures, and never overwrite
+			// real request outcomes or affect the model-square metrics.
+			for _, probe := range []model.StatusProbe{
+				{GroupName: "a", ModelName: "test-model", Source: "manual_test", ObservedAt: hour + 1, Success: true, LatencyMs: 500},
+				{GroupName: "a", ModelName: "test-model", Source: "auto_probe", ObservedAt: hour + 3601, Success: true, LatencyMs: 600},
+				{GroupName: "idle", ModelName: "test-model", Source: "auto_probe", ObservedAt: hour + 1, Success: false, LatencyMs: 2000},
+				{GroupName: "idle", ModelName: "test-model", Source: "manual_test", ObservedAt: hour + 2, Success: true, LatencyMs: 500},
+				{GroupName: "hidden", ModelName: "test-model", Source: "auto_probe", ObservedAt: hour + 1, Success: true},
+			} {
+				require.NoError(t, model.RecordStatusProbe(&probe))
+			}
+			// Repeated migration preserves existing real counters and probes.
+			require.NoError(t, db.AutoMigrate(&model.PerfMetric{}, &model.StatusProbe{}))
+			withProbes, err := QueryGroupStatus(24, map[string]string{"a": "Group A", "b": "Group B", "idle": "Idle"})
+			require.NoError(t, err)
+			require.Len(t, withProbes.Groups, 3)
+			assert.Equal(t, groupA.Summary, withProbes.Groups[0].Summary)
+			require.Len(t, withProbes.Groups[0].Hourly, 2)
+			assert.Equal(t, groupA.Hourly[0], withProbes.Groups[0].Hourly[0])
+			assert.Equal(t, "auto_probe", withProbes.Groups[0].Hourly[1].Source)
+			assert.Equal(t, int64(1), withProbes.Groups[0].Hourly[1].SampleCount)
+			assert.Equal(t, "mixed_tests", withProbes.Groups[2].Hourly[0].Source)
+			assert.Equal(t, 50.0, withProbes.Groups[2].Summary.SuccessRate)
+			assert.Equal(t, hour+2, withProbes.Groups[2].LastSeenTs)
+			assert.Equal(t, "mixed_tests", withProbes.Groups[2].SummarySource)
+			unchanged, err := QuerySummaryAll(24, groups)
+			require.NoError(t, err)
+			assert.Equal(t, combined.Summary, unchanged.Summary)
+			assert.Equal(t, combined.Models, unchanged.Models)
+			var stored model.PerfMetric
+			require.NoError(t, db.Where("model_name = ? AND "+model.PerfMetric{}.TableName()+".bucket_ts = ?", "test-model", start-3600).First(&stored).Error)
+			assert.Equal(t, int64(100), stored.RequestCount)
+			for _, retention := range []struct {
+				days int
+				age  time.Duration
+			}{
+				{0, 31 * 24 * time.Hour},
+				{1, 2 * 24 * time.Hour},
+			} {
+				oldProbe := model.StatusProbe{GroupName: "idle", ModelName: "expired-probe", Source: "auto_probe", ObservedAt: time.Now().Add(-retention.age).Unix()}
+				require.NoError(t, model.RecordStatusProbe(&oldProbe))
+				cleanupExpiredMetrics(retention.days)
+				var oldCount, recentCount int64
+				require.NoError(t, db.Model(&model.StatusProbe{}).Where("id = ?", oldProbe.ID).Count(&oldCount).Error)
+				require.NoError(t, db.Model(&model.StatusProbe{}).Where("model_name = ?", "test-model").Count(&recentCount).Error)
+				assert.Zero(t, oldCount)
+				assert.EqualValues(t, 5, recentCount, "cleanup must retain current observations")
+			}
 		})
 	}
 }

@@ -21,7 +21,6 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { PerformanceOverview } from '@/features/dashboard/components/models/performance-overview'
-import { PerformanceOverview } from '@/features/dashboard/components/models/performance-overview'
 import { ModelDetailsPerformance } from '@/features/pricing/components/model-details-performance'
 import { UptimeSparkline } from '@/features/pricing/components/model-details-uptime-sparkline'
 
@@ -199,7 +198,7 @@ describe('server performance summaries', () => {
         <PerformanceOverview />
       </QueryClientProvider>
     )
-    expect(screen.getAllByText('—')).toHaveLength(3)
+    expect(screen.getByText('No performance data available')).toBeVisible()
     expect(screen.queryByText('0.00%')).not.toBeInTheDocument()
   })
 })

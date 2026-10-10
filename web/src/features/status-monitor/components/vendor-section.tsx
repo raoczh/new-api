@@ -28,6 +28,7 @@ import { GroupStatusCard } from './group-status-card'
 interface VendorSectionProps {
   section: VendorSectionData
   hourlyStart: number
+  windowLabel: string
   onOpenDetails: (group: GroupStatus) => void
 }
 
@@ -60,12 +61,14 @@ export function VendorSection(props: VendorSectionProps) {
           {t('{{count}} groups', { count: props.section.groups.length })}
         </span>
       </div>
-      <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6'>
+      <div className='grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
         {props.section.groups.map((group) => (
           <GroupStatusCard
             key={group.group}
             group={group}
             hourlyStart={props.hourlyStart}
+            windowLabel={props.windowLabel}
+            vendor={props.section.vendor}
             onOpenDetails={props.onOpenDetails}
           />
         ))}

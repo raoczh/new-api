@@ -23,7 +23,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { checkIsActive } from '@/components/layout/lib/url-utils'
 import {
+  parseHeaderNavModules,
   parseSidebarModulesAdmin,
+  serializeHeaderNavModules,
   serializeSidebarModulesAdmin,
 } from '@/features/system-settings/maintenance/config'
 import { useAuthStore } from '@/stores/auth-store'
@@ -72,6 +74,36 @@ function sidebarFor(admin?: object, user?: object, canConfigure = true) {
   )
   return result
 }
+
+describe('status monitor navigation settings', () => {
+  it('moves status monitoring out of the sidebar even with legacy settings', () => {
+    const legacy = parseSidebarModulesAdmin(
+      '{"console":{"enabled":true,"statusMonitor":true}}'
+    )
+    const { result } = sidebarFor(legacy)
+    expect(
+      result.current
+        .flatMap((group) => group.items)
+        .some((item) => item.title === 'Status Monitor')
+    ).toBe(false)
+    expect(
+      JSON.parse(serializeSidebarModulesAdmin(legacy)).console.statusMonitor
+    ).toBeUndefined()
+  })
+
+  it('defaults to public access and preserves login and visibility settings when saved', () => {
+    const config = parseHeaderNavModules('{"pricing":true}')
+    expect(config.statusMonitor).toEqual({ enabled: true, requireAuth: false })
+    config.statusMonitor = { enabled: true, requireAuth: true }
+    expect(
+      parseHeaderNavModules(serializeHeaderNavModules(config)).statusMonitor
+    ).toEqual({ enabled: true, requireAuth: true })
+    config.statusMonitor.enabled = false
+    expect(
+      parseHeaderNavModules(serializeHeaderNavModules(config)).statusMonitor
+    ).toEqual({ enabled: false, requireAuth: true })
+  })
+})
 
 describe('security sidebar visibility', () => {
   it('old configurations show Security & Access immediately after Profile and keep API Keys', () => {

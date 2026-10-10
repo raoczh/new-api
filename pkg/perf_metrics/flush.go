@@ -68,6 +68,14 @@ func deleteOldEmptyBucket(k bucketKey, rawKey any) {
 }
 
 func cleanupExpiredMetrics(retentionDays int) {
+	// Probe checks are only displayed within the supported 30-day window.
+	probeDays := 30
+	if retentionDays > 0 {
+		probeDays = min(probeDays, retentionDays)
+	}
+	if err := model.DB.Where("observed_at < ?", time.Now().Add(-time.Duration(probeDays)*24*time.Hour).Unix()).Delete(&model.StatusProbe{}).Error; err != nil {
+		common.SysError("failed to cleanup status probes: " + err.Error())
+	}
 	if retentionDays <= 0 {
 		return
 	}

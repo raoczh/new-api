@@ -114,6 +114,19 @@ func TestSystemTaskHistoryDatabaseMatrix(t *testing.T) {
 			deleted, err = DeleteSystemTaskHistory(SystemTaskFilter{})
 			require.NoError(t, err)
 			assert.Zero(t, deleted, "repeated cleanup preserves the scheduler's latest runs")
+			probeTasks := []SystemTask{
+				{TaskID: "probe-with-state", Type: SystemTaskTypeGroupProbe, Status: SystemTaskStatusFailed, State: `{"last_model":"a"}`},
+				{TaskID: "probe-empty-state", Type: SystemTaskTypeGroupProbe, Status: SystemTaskStatusFailed},
+				{TaskID: "probe-current", Type: SystemTaskTypeGroupProbe, Status: SystemTaskStatusRunning, State: `{"last_model":"b"}`},
+			}
+			require.NoError(t, db.Create(&probeTasks).Error)
+			previous, err := GetPreviousSystemTask(SystemTaskTypeGroupProbe, probeTasks[2].ID)
+			require.NoError(t, err)
+			require.NotNil(t, previous)
+			assert.Equal(t, probeTasks[0].TaskID, previous.TaskID, "rotation survives a run that failed before saving state")
+			previous, err = GetPreviousSystemTask(SystemTaskTypeGroupProbe, probeTasks[0].ID)
+			require.NoError(t, err)
+			assert.Nil(t, previous)
 		})
 	}
 }

@@ -91,11 +91,6 @@ export function useSidebarData(): SidebarData {
             icon: Key,
           },
           {
-            title: t('Status Monitor'),
-            url: '/status-monitor',
-            icon: Activity,
-          },
-          {
             title: t('Usage Logs'),
             url: '/usage-logs/common',
             icon: FileText,

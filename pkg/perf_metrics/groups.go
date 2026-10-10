@@ -17,10 +17,13 @@ const StatusHours = 24
 var lastSeenByGroup sync.Map
 
 type GroupHourPoint struct {
-	Ts          int64   `json:"ts"`
-	SuccessRate float64 `json:"success_rate"`
-	AvgTtftMs   int64   `json:"avg_ttft_ms"`
-	TopModel    string  `json:"top_model"`
+	Ts           int64   `json:"ts"`
+	SuccessRate  float64 `json:"success_rate"`
+	AvgTtftMs    int64   `json:"avg_ttft_ms"`
+	TopModel     string  `json:"top_model"`
+	Source       string  `json:"source"`
+	SampleCount  int64   `json:"sample_count"`
+	AvgLatencyMs int64   `json:"avg_latency_ms"`
 }
 
 type GroupModelStat struct {
@@ -39,9 +42,11 @@ type GroupSummary struct {
 }
 
 type GroupStatus struct {
-	Group       string `json:"group"`
-	Description string `json:"description"`
-	VendorID    int    `json:"vendor_id"`
+	Group         string  `json:"group"`
+	Description   string  `json:"description"`
+	VendorID      int     `json:"vendor_id"`
+	GroupRatio    float64 `json:"group_ratio"`
+	SummarySource string  `json:"summary_source"`
 	// Summary covers the selected window; nil when the group has no samples.
 	Summary    *GroupSummary    `json:"summary"`
 	LastSeenTs int64            `json:"last_seen_ts"`
@@ -87,6 +92,14 @@ func QueryGroupStatus(hours int, groupDescs map[string]string) (GroupStatusResul
 	rows, err := model.GetPerfMetricsGroupRows(queryStart, endTs, names)
 	if err != nil {
 		return GroupStatusResult{}, err
+	}
+	probes, err := model.GetStatusProbes(queryStart, endTs, names)
+	if err != nil {
+		return GroupStatusResult{}, err
+	}
+	probesByGroup := map[string][]model.StatusProbe{}
+	for _, probe := range probes {
+		probesByGroup[probe.GroupName] = append(probesByGroup[probe.GroupName], probe)
 	}
 
 	merged := map[bucketKey]counters{}
@@ -162,6 +175,8 @@ func QueryGroupStatus(hours int, groupDescs map[string]string) (GroupStatusResul
 		if seen, ok := lastSeenByGroup.Load(name); ok {
 			status.LastSeenTs = max(status.LastSeenTs, seen.(int64))
 		}
+		status.SummarySource = "request"
+		mergeGroupProbes(&status, probesByGroup[name], startTs, hourlyStart)
 		// Vendor follows the most requested model; idle groups fall back to
 		// the vendor most of their enabled models belong to.
 		if len(status.Models) > 0 {
@@ -242,14 +257,83 @@ func groupHourly(hours map[int64]map[string]counters) []GroupHourPoint {
 			continue
 		}
 		points = append(points, GroupHourPoint{
-			Ts:          hourTs,
-			SuccessRate: roundRate(successRate(total)),
-			AvgTtftMs:   avg(total.ttftSumMs, total.ttftCount),
-			TopModel:    topModel,
+			Ts:           hourTs,
+			SuccessRate:  roundRate(successRate(total)),
+			AvgTtftMs:    avg(total.ttftSumMs, total.ttftCount),
+			TopModel:     topModel,
+			Source:       "request",
+			SampleCount:  total.requestCount,
+			AvgLatencyMs: avg(total.totalLatencyMs, total.requestCount),
 		})
 	}
 	sort.Slice(points, func(i, j int) bool { return points[i].Ts < points[j].Ts })
 	return points
+}
+
+// mergeGroupProbes fills idle hours with synthetic checks. Real traffic always
+// wins for an hour and for the selected-window summary, so a successful check
+// cannot hide customer failures or skew customer latency/throughput.
+func mergeGroupProbes(status *GroupStatus, probes []model.StatusProbe, startTs, hourlyStart int64) {
+	observedHours := map[int64]bool{}
+	for _, point := range status.Hourly {
+		observedHours[point.Ts] = true
+	}
+	probeHours := map[int64]map[string]counters{}
+	sources := map[int64]string{}
+	total := counters{}
+	models := map[string]counters{}
+	summarySource := ""
+	for _, probe := range probes {
+		if probe.GroupName != status.Group {
+			continue
+		}
+		status.LastSeenTs = max(status.LastSeenTs, probe.ObservedAt)
+		value := counters{requestCount: 1, totalLatencyMs: max(0, probe.LatencyMs)}
+		if probe.Success {
+			value.successCount = 1
+		}
+		if probe.HasTtft {
+			value.ttftCount, value.ttftSumMs = 1, max(0, probe.TtftMs)
+		}
+		if probe.ObservedAt >= startTs {
+			total.add(value)
+			modelTotal := models[probe.ModelName]
+			modelTotal.add(value)
+			models[probe.ModelName] = modelTotal
+			if summarySource == "" {
+				summarySource = probe.Source
+			} else if summarySource != probe.Source {
+				summarySource = "mixed_tests"
+			}
+		}
+		hour := probe.ObservedAt - probe.ObservedAt%3600
+		if hour < hourlyStart || observedHours[hour] {
+			continue
+		}
+		if probeHours[hour] == nil {
+			probeHours[hour] = map[string]counters{}
+			sources[hour] = probe.Source
+		} else if sources[hour] != probe.Source {
+			sources[hour] = "mixed_tests"
+		}
+		modelHour := probeHours[hour][probe.ModelName]
+		modelHour.add(value)
+		probeHours[hour][probe.ModelName] = modelHour
+	}
+	for _, point := range groupHourly(probeHours) {
+		point.Source = sources[point.Ts]
+		status.Hourly = append(status.Hourly, point)
+	}
+	sort.Slice(status.Hourly, func(i, j int) bool { return status.Hourly[i].Ts < status.Hourly[j].Ts })
+	if status.Summary == nil && total.requestCount > 0 {
+		status.Summary = &GroupSummary{
+			SuccessRate:  roundRate(successRate(total)),
+			AvgTtftMs:    avg(total.ttftSumMs, total.ttftCount),
+			AvgLatencyMs: avg(total.totalLatencyMs, total.requestCount),
+		}
+		status.Models = groupModels(models)
+		status.SummarySource = summarySource
+	}
 }
 
 func groupModels(models map[string]counters) []GroupModelStat {

@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -85,6 +86,28 @@ func TestHeaderNavModuleAuthAllowsDefaultPublicAccess(t *testing.T) {
 	recorder := performHeaderNavRequest(t, HeaderNavModuleAuth("pricing"), false)
 
 	require.Equal(t, http.StatusOK, recorder.Code)
+}
+
+func TestStatusMonitorAccessPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		config        string
+		authenticated bool
+		status        int
+	}{
+		{"default public", "", false, http.StatusOK},
+		{"public with legacy config", `{"pricing":true}`, false, http.StatusOK},
+		{"require login", `{"statusMonitor":{"enabled":true,"requireAuth":true}}`, false, http.StatusUnauthorized},
+		{"valid credentials", `{"statusMonitor":{"enabled":true,"requireAuth":true}}`, true, http.StatusOK},
+		{"disabled for visitors", `{"statusMonitor":{"enabled":false,"requireAuth":false}}`, false, http.StatusForbidden},
+		{"disabled for members", `{"statusMonitor":{"enabled":false,"requireAuth":false}}`, true, http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withHeaderNavModules(t, tc.config)
+			recorder := performHeaderNavRequest(t, HeaderNavModuleAuth("statusMonitor"), tc.authenticated)
+			assert.Equal(t, tc.status, recorder.Code)
+		})
+	}
 }
 
 func TestHeaderNavModuleAuthRejectsDisabledPricing(t *testing.T) {

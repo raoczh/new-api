@@ -183,6 +183,16 @@ describe('shared status query deduplication', () => {
 describe('module guard status freshness', () => {
   test.each([
     {
+      module: 'statusMonitor',
+      before: { enabled: true, requireAuth: false },
+      after: { enabled: true, requireAuth: true },
+    },
+    {
+      module: 'statusMonitor',
+      before: { enabled: true, requireAuth: true },
+      after: { enabled: false, requireAuth: false },
+    },
+    {
       module: 'pricing',
       before: { enabled: false, requireAuth: false },
       after: { enabled: true, requireAuth: false },

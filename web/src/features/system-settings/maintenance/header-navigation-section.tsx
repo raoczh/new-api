@@ -55,6 +55,8 @@ const headerNavSchema = z.object({
   pricingRequireAuth: z.boolean(),
   rankingsEnabled: z.boolean(),
   rankingsRequireAuth: z.boolean(),
+  statusMonitorEnabled: z.boolean(),
+  statusMonitorRequireAuth: z.boolean(),
   docs: z.boolean(),
   about: z.boolean(),
 })
@@ -89,6 +91,11 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
     config.rankings?.requireAuth === undefined
       ? HEADER_NAV_DEFAULT.rankings.requireAuth
       : Boolean(config.rankings.requireAuth),
+  statusMonitorEnabled:
+    config.statusMonitor?.enabled ?? HEADER_NAV_DEFAULT.statusMonitor.enabled,
+  statusMonitorRequireAuth:
+    config.statusMonitor?.requireAuth ??
+    HEADER_NAV_DEFAULT.statusMonitor.requireAuth,
   docs:
     config.docs === undefined ? HEADER_NAV_DEFAULT.docs : Boolean(config.docs),
   about:
@@ -130,6 +137,10 @@ export function HeaderNavigationSection({
         ...(config.rankings ?? HEADER_NAV_DEFAULT.rankings),
         enabled: values.rankingsEnabled,
         requireAuth: values.rankingsRequireAuth,
+      },
+      statusMonitor: {
+        enabled: values.statusMonitorEnabled,
+        requireAuth: values.statusMonitorRequireAuth,
       },
     }
 
@@ -178,12 +189,26 @@ export function HeaderNavigationSection({
   const accessModules: Array<{
     enabledKey: keyof HeaderNavFormValues
     requireAuthKey: keyof HeaderNavFormValues
-    requireAuthDependsOn: 'pricingEnabled' | 'rankingsEnabled'
+    requireAuthDependsOn:
+      | 'pricingEnabled'
+      | 'rankingsEnabled'
+      | 'statusMonitorEnabled'
     title: string
     description: string
     requireAuthTitle: string
     requireAuthDescription: string
   }> = [
+    {
+      enabledKey: 'statusMonitorEnabled',
+      requireAuthKey: 'statusMonitorRequireAuth',
+      requireAuthDependsOn: 'statusMonitorEnabled',
+      title: t('Status Monitor'),
+      description: t('Group availability and model performance.'),
+      requireAuthTitle: t('Require login to view status'),
+      requireAuthDescription: t(
+        'Visitors must authenticate before accessing the status monitor.'
+      ),
+    },
     {
       enabledKey: 'pricingEnabled',
       requireAuthKey: 'pricingRequireAuth',

@@ -22,6 +22,34 @@ type PerfMetric struct {
 	GenerationMs   int64  `json:"-" gorm:"default:0"`
 }
 
+// StatusProbe stores synthetic checks separately from customer traffic. It is
+// only used to fill unobserved group hours, never for billing or relay metrics.
+type StatusProbe struct {
+	ID         int64  `gorm:"primaryKey"`
+	GroupName  string `gorm:"size:64;index:idx_status_probe_group_ts,priority:1"`
+	ModelName  string `gorm:"size:128"`
+	Source     string `gorm:"size:16"`
+	ObservedAt int64  `gorm:"index:idx_status_probe_group_ts,priority:2;index"`
+	Success    bool
+	LatencyMs  int64
+	TtftMs     int64
+	HasTtft    bool
+}
+
+func RecordStatusProbe(probe *StatusProbe) error {
+	return DB.Create(probe).Error
+}
+
+func GetStatusProbes(startTs, endTs int64, groups []string) ([]StatusProbe, error) {
+	probes := []StatusProbe{}
+	if len(groups) == 0 {
+		return probes, nil
+	}
+	err := DB.Where("observed_at >= ? AND observed_at <= ?", startTs, endTs).
+		Where("group_name IN ?", groups).Order("observed_at ASC, id ASC").Find(&probes).Error
+	return probes, err
+}
+
 func (PerfMetric) TableName() string {
 	return "perf_metrics"
 }

@@ -132,6 +132,51 @@ it('opens usage documentation in the current site despite an old external docs l
   expect(docs).not.toHaveAttribute('target', '_blank')
 })
 
+it.each([
+  ['legacy public', { pricing: true }, true, false],
+  [
+    'public',
+    { statusMonitor: { enabled: true, requireAuth: false } },
+    true,
+    false,
+  ],
+  [
+    'login required',
+    { statusMonitor: { enabled: true, requireAuth: true } },
+    true,
+    true,
+  ],
+  [
+    'disabled',
+    { statusMonitor: { enabled: false, requireAuth: false } },
+    false,
+    false,
+  ],
+] as const)(
+  'applies the %s status monitor setting to the top navigation',
+  async (_name, modules, visible, locked) => {
+    queryClient.setQueryData(['status'], {
+      system_name: 'New API',
+      HeaderNavModules: JSON.stringify(modules),
+    })
+    await renderHeader()
+    const link = within(screen.getByRole('navigation')).queryByRole('link', {
+      name: 'Status Monitor',
+    })
+    if (!visible) {
+      expect(link).not.toBeInTheDocument()
+      return
+    }
+    expect(link).not.toBeNull()
+    if (!link) throw new Error('Status monitor link is missing')
+    expect(link).toHaveAttribute('href', '/status-monitor')
+    if (locked) {
+      await userEvent.setup().click(link)
+      expect(await screen.findByText('Sign in required')).toBeVisible()
+    }
+  }
+)
+
 it('opens one mobile notification popup and returns focus to its trigger on Escape', async () => {
   const user = userEvent.setup()
   await renderHeader()

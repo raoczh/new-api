@@ -156,7 +156,7 @@ describe('model cards', () => {
     expect(onClick).toHaveBeenCalledWith(name)
   })
 
-  it('retains a neutral health strip and missing values when metrics are unavailable', () => {
+  it('shows missing metrics without a sampling strip when metrics are unavailable', () => {
     render(<ModelCard model={pricingModel()} onClick={vi.fn()} />)
     const metrics = screen.getByLabelText(
       'Performance metrics for the last 24 hours'
@@ -166,21 +166,12 @@ describe('model cards', () => {
     expect(within(metrics).getByText('—t/s')).toBeVisible()
     expect(within(metrics).queryByText(/100/)).not.toBeInTheDocument()
     expect(
-      within(metrics).getByRole('img', {
+      within(metrics).queryByRole('img', {
         name: 'Recent success-rate samples; gray bars indicate missing data.',
       })
-    ).toBeVisible()
+    ).not.toBeInTheDocument()
     expect(screen.getByText('No description available.')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Details' })).toBeEnabled()
-  })
-
-  it('uses fixed spacing between hourly status bars', () => {
-    render(<ModelCard model={pricingModel()} onClick={vi.fn()} />)
-    const statusStrip = screen.getByRole('img', {
-      name: 'Recent success-rate samples; gray bars indicate missing data.',
-    })
-    expect(statusStrip).toHaveClass('gap-px')
-    expect(statusStrip).not.toHaveClass('justify-between')
   })
 
   it('keeps group, endpoint and tag overflow counts with their own metadata', () => {
@@ -489,131 +480,20 @@ describe('model cards', () => {
     expect(grid).not.toHaveClass('min-[1440px]:grid-cols-3')
   })
 
-  it('lights slots 23 and 18 when series has the current hour and five hours earlier', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-09-07T12:00:00.000Z'))
-    const currentHourStart = Math.floor(Date.now() / 1000 / 3600) * 3600
-
+  it('retains success rate, latency and throughput without rendering sampling bars', () => {
     render(
       <ModelCard
         model={pricingModel()}
         onClick={vi.fn()}
-        perf={{
-          avg_latency_ms: 1200,
-          avg_tps: 42,
-          success_rate: 100,
-          window_start: currentHourStart - 23 * 3600,
-          recent_success_series: [
-            { ts: currentHourStart, success_rate: 100 },
-            { ts: currentHourStart - 5 * 3600, success_rate: 80 },
-          ],
-        }}
+        perf={{ avg_latency_ms: 1200, avg_tps: 42, success_rate: 80 }}
       />
     )
-
-    const spans = [
-      ...screen.getByRole('img', {
-        name: 'Recent success-rate samples; gray bars indicate missing data.',
-      }).children,
-    ]
-    expect(spans).toHaveLength(24)
-    spans.forEach((slot, index) => {
-      if (index === 18 || index === 23) {
-        expect(slot.classList.contains('bg-muted-foreground/15')).toBe(false)
-        return
-      }
-      expect(slot.classList.contains('bg-muted-foreground/15')).toBe(true)
-    })
-    vi.useRealTimers()
-  })
-
-  it('keeps all 24 slots gray when a series point is 24 hours before the current hour', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-09-07T12:00:00.000Z'))
-    const currentHourStart = Math.floor(Date.now() / 1000 / 3600) * 3600
-
-    render(
-      <ModelCard
-        model={pricingModel()}
-        onClick={vi.fn()}
-        perf={{
-          avg_latency_ms: 1200,
-          avg_tps: 42,
-          success_rate: 100,
-          window_start: currentHourStart - 23 * 3600,
-          recent_success_series: [
-            { ts: currentHourStart - 24 * 3600, success_rate: 100 },
-          ],
-        }}
-      />
+    const metrics = screen.getByLabelText(
+      'Performance metrics for the last 24 hours'
     )
-
-    const spans = [
-      ...screen.getByRole('img', {
-        name: 'Recent success-rate samples; gray bars indicate missing data.',
-      }).children,
-    ]
-    expect(spans).toHaveLength(24)
-    spans.forEach((slot) => {
-      expect(slot.classList.contains('bg-muted-foreground/15')).toBe(true)
-    })
-    vi.useRealTimers()
-  })
-
-  it('keeps all 24 slots gray when recent_success_series is undefined', () => {
-    render(
-      <ModelCard
-        model={pricingModel()}
-        onClick={vi.fn()}
-        perf={{ avg_latency_ms: 1200, avg_tps: 42, success_rate: 100 }}
-      />
-    )
-
-    const spans = [
-      ...screen.getByRole('img', {
-        name: 'Recent success-rate samples; gray bars indicate missing data.',
-      }).children,
-    ]
-    expect(spans).toHaveLength(24)
-    spans.forEach((slot) => {
-      expect(slot.classList.contains('bg-muted-foreground/15')).toBe(true)
-    })
-  })
-
-  it('uses the server window even when the browser clock is a day ahead', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-09-07T12:37:00.000Z'))
-    const currentHourStart = Math.floor(Date.now() / 1000 / 3600) * 3600
-
-    render(
-      <ModelCard
-        model={pricingModel()}
-        onClick={vi.fn()}
-        perf={{
-          avg_latency_ms: 1200,
-          avg_tps: 42,
-          success_rate: 80,
-          window_start: currentHourStart - 47 * 3600,
-          recent_success_series: [
-            { ts: currentHourStart - 29 * 3600, success_rate: 80 },
-          ],
-        }}
-      />
-    )
-
-    const spans = [
-      ...screen.getByRole('img', {
-        name: 'Recent success-rate samples; gray bars indicate missing data.',
-      }).children,
-    ]
-    expect(spans).toHaveLength(24)
-    spans.forEach((slot, index) => {
-      if (index === 18) {
-        expect(slot.classList.contains('bg-muted-foreground/15')).toBe(false)
-        return
-      }
-      expect(slot.classList.contains('bg-muted-foreground/15')).toBe(true)
-    })
-    vi.useRealTimers()
+    expect(within(metrics).getByText('80.00%')).toBeVisible()
+    expect(within(metrics).getByText('1.20s')).toBeVisible()
+    expect(within(metrics).getByText('42.0t/s')).toBeVisible()
+    expect(within(metrics).queryByRole('img')).not.toBeInTheDocument()
   })
 })

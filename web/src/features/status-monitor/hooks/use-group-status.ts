@@ -19,13 +19,21 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 
 import { requireServerSuccess } from '@/lib/server-error-message'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { getGroupStatus } from '../api'
 import { STATUS_MONITOR_REFETCH_INTERVAL_MS } from '../constants'
 
 export function useGroupStatus(hours: number) {
+  const user = useAuthStore((state) => state.auth.user)
   return useQuery({
-    queryKey: ['status-monitor', 'groups', hours],
+    queryKey: [
+      'status-monitor',
+      'groups',
+      hours,
+      user?.id ?? 0,
+      user?.group ?? '',
+    ],
     queryFn: async () => requireServerSuccess(await getGroupStatus(hours)),
     staleTime: STATUS_MONITOR_REFETCH_INTERVAL_MS,
     refetchInterval: STATUS_MONITOR_REFETCH_INTERVAL_MS,
