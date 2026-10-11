@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -24,6 +25,48 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
+
+func TestCanceledRelayRetryRequiresLiveClientAndUnwrittenResponse(t *testing.T) {
+	for _, tc := range []struct {
+		name                               string
+		canceled, written, skip, websocket bool
+		budget                             int
+		reason                             string
+	}{
+		{name: "upstream cancellation without a matching status", budget: 1, reason: "upstream_canceled"},
+		{name: "client cancellation", canceled: true, budget: 1, reason: "client_gone"},
+		{name: "partial response", written: true, budget: 1, reason: "response_started"},
+		{name: "websocket handshake is not response content", written: true, websocket: true, budget: 1, reason: "upstream_canceled"},
+		{name: "exhausted retry budget", reason: "attempt_budget_exhausted"},
+		{name: "non replayable request", skip: true, budget: 1, reason: "non_retryable_error"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil).WithContext(ctx)
+			if tc.canceled {
+				cancel()
+			}
+			if tc.written {
+				_, writeErr := c.Writer.WriteString("data: partial\n\n")
+				require.NoError(t, writeErr)
+			}
+			common.SetContextKey(c, constant.ContextKeyIsWebSocket, tc.websocket)
+			options := []types.NewAPIErrorOptions{types.ErrOptionWithStatusCode(http.StatusBadRequest)}
+			if tc.skip {
+				options = append(options, types.ErrOptionWithSkipRetry())
+			}
+			err := types.NewError(fmt.Errorf("upstream: %w", context.Canceled), types.ErrorCodeDoRequestFailed, options...)
+			err = types.NewError(err, types.ErrorCodeDoRequestFailed, types.ErrOptionWithHideErrMsg("upstream error: do request failed"))
+			assert.Equal(t, "upstream error: do request failed", err.Error(), "error redaction must preserve the safe public message")
+			assert.ErrorIs(t, err, context.Canceled, "redaction must preserve the cancellation cause used for retry")
+			decision := DecideRelayRetry(c, err, tc.budget)
+			assert.Equal(t, tc.reason, decision.Reason)
+			assert.Equal(t, tc.reason == "upstream_canceled", decision.Action == "retry")
+		})
+	}
+}
 
 func TestShouldRetryRelayErrorHonorsChannelPinOnChannelError(t *testing.T) {
 	err := types.NewError(errors.New("channel failed"), types.ErrorCodeChannelNoAvailableKey)

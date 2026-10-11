@@ -72,6 +72,7 @@ import {
   isPerCallBilling,
 } from '../../lib/utils'
 import type { LogOtherData } from '../../types'
+import { ChannelSwitchAction } from '../channel-switch-action'
 import { DetailsDialog } from '../dialogs/details-dialog'
 import { LogCostDisplay } from '../log-cost-display'
 import { ModelBadge } from '../model-badge'
@@ -885,6 +886,16 @@ export function useCommonLogsColumns(
       }
     )
 
+    if (isAdmin) {
+      columns.push({
+        id: 'actions',
+        header: t('Actions'),
+        cell: ({ row }) => <ChannelSwitchAction log={row.original} />,
+        enableSorting: false,
+        enableHiding: false,
+        size: 72,
+      })
+    }
     return columns
     // Log formatters read currency settings from the store.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -67,6 +67,7 @@ export function CommonLogMobileCard<TData>(props: {
   const [selectedField, setSelectedField] = useState<FieldName | null>(null)
   const log = props.log
   const other = parseLogOther(log.other)
+  const actionsCell = props.cells.get('actions')
   const displayable = isDisplayableLogType(log.type)
   const timing = isTimingLogType(log.type)
   const model = formatModelName(log)
@@ -318,6 +319,14 @@ export function CommonLogMobileCard<TData>(props: {
             aria-hidden='true'
             className='text-primary pointer-events-none absolute top-4 right-0 size-4'
           />
+        </div>
+      )}
+      {actionsCell && (
+        <div className='flex justify-end border-t pt-2'>
+          {flexRender(
+            actionsCell.column.columnDef.cell,
+            actionsCell.getContext()
+          )}
         </div>
       )}
       <Dialog

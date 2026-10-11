@@ -401,9 +401,19 @@ func ErrOptionWithHideErrMsg(replaceStr string) NewAPIErrorOptions {
 		if kitutil.Debug.Load() {
 			fmt.Printf("ErrOptionWithHideErrMsg: %s, origin error: %s", replaceStr, e.Err)
 		}
-		e.Err = errors.New(replaceStr)
+		e.Err = &redactedError{message: replaceStr, cause: e.Err}
 	}
 }
+
+// redactedError hides transport details while preserving cancellation and
+// other error identities for retry decisions made with errors.Is/errors.As.
+type redactedError struct {
+	message string
+	cause   error
+}
+
+func (e *redactedError) Error() string { return e.message }
+func (e *redactedError) Unwrap() error { return e.cause }
 
 func IsRecordErrorLog(e *NewAPIError) bool {
 	if e == nil {

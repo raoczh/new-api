@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -22,6 +24,12 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 	if err == nil {
 		return PolicyDecision{Action: "stop", Reason: "request_completed", Source: "system"}
 	}
+	if c != nil && c.Request != nil && c.Request.Context().Err() != nil {
+		return PolicyDecision{Action: "stop", Reason: "client_gone", Source: "system"}
+	}
+	if c != nil && c.Writer != nil && c.Writer.Written() && !common.GetContextKeyBool(c, constant.ContextKeyIsWebSocket) {
+		return PolicyDecision{Action: "stop", Reason: "response_started", Source: "system"}
+	}
 	if ShouldSkipRetryAfterChannelAffinityFailure(c) {
 		source := RequestPolicy(c).SessionModeSource
 		if source == "" {
@@ -40,6 +48,9 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 	}
 	if retryTimes <= 0 {
 		return PolicyDecision{Action: "stop", Reason: "attempt_budget_exhausted", Source: "global"}
+	}
+	if err.GetErrorCode() == types.ErrorCodeDoRequestFailed && errors.Is(err, context.Canceled) {
+		return PolicyDecision{Action: "retry", Reason: "upstream_canceled", Source: "system"}
 	}
 	code := err.StatusCode
 	if code >= 200 && code < 300 {
@@ -65,6 +76,37 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 
 func ShouldRetryRelayError(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
 	return DecideRelayRetry(c, openaiErr, retryTimes).Action == "retry"
+}
+
+// HandleRelayAffinityFailure prevents a session from repeatedly waiting on the
+// same channel after a canceled or timed-out attempt produced no output tokens.
+// A disconnected request cannot be replayed; the next request selects again.
+func HandleRelayAffinityFailure(c *gin.Context, info *relaycommon.RelayInfo, err *types.NewAPIError) {
+	if c == nil || info == nil || info.PerformanceOutputTokens > 0 {
+		return
+	}
+	if _, pinned, _ := GetChannelConstraints(c).ResolvedPin(); pinned {
+		return
+	}
+	clientGone := info.StreamStatus != nil && info.StreamStatus.EndReason == relaycommon.StreamEndReasonClientGone
+	timedOut := info.StreamStatus != nil && info.StreamStatus.EndReason == relaycommon.StreamEndReasonTimeout
+	transportCanceled := err != nil && err.GetErrorCode() == types.ErrorCodeDoRequestFailed && errors.Is(err, context.Canceled)
+	if !clientGone && !timedOut && !transportCanceled {
+		return
+	}
+	key, ttl, found := getChannelAffinityContext(c)
+	channelID := c.GetInt("channel_id")
+	if !found || channelID <= 0 {
+		return
+	}
+	if current, exists, err := getChannelAffinityCache().Get(key); err == nil && exists && current == -channelID {
+		return
+	}
+	if err := switchChannelAffinity(key, channelID, ttl); err != nil {
+		logger.LogError(c, "channel affinity switch failed: "+err.Error())
+		return
+	}
+	RequestPolicy(c).AddEvent(PolicyEvent{ChannelID: channelID, Decision: PolicyDecision{Action: "switch", Reason: "canceled_before_output", Source: "system"}})
 }
 
 func ProcessChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError, relayInfo *relaycommon.RelayInfo) {

@@ -84,6 +84,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			return
 		}
 		defer ws.Close()
+		common.SetContextKey(c, constant.ContextKeyIsWebSocket, true)
 	}
 
 	defer func() {
@@ -123,6 +124,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
 		return
 	}
+	defer func() {
+		service.HandleRelayAffinityFailure(c, relayInfo, newAPIError)
+	}()
 
 	defer func() {
 		recovered := recover()
@@ -203,6 +207,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		newAPIError = service.NormalizeViolationFeeError(newAPIError)
 		relayInfo.LastError = newAPIError
+		service.HandleRelayAffinityFailure(c, relayInfo, newAPIError)
 
 		decision := service.DecideRelayRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry())
 		service.RecordPolicyFailure(c, channel.Id, newAPIError, decision)

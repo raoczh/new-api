@@ -472,6 +472,8 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	}
 
 	logContent := strings.Join(extraContent, ", ")
+	relayInfo.PerformanceOutputTokens = int64(summary.CompletionTokens)
+	HandleRelayAffinityFailure(ctx, relayInfo, nil)
 	var other *model.LogOther
 	if summary.IsClaudeUsageSemantic {
 		other = GenerateClaudeOtherInfo(ctx, relayInfo,
@@ -550,5 +552,4 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		Group:            relayInfo.UsingGroup,
 		Other:            other,
 	})
-	relayInfo.PerformanceOutputTokens = int64(summary.CompletionTokens)
 }

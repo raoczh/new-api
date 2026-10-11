@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
@@ -15,6 +16,23 @@ func GetChannelAffinityCacheStats(c *gin.Context) {
 		"message": "",
 		"data":    stats,
 	})
+}
+
+func SwitchLogChannelAffinity(c *gin.Context) {
+	if c.GetInt("role") < common.RoleAdminUser {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Administrator access required"})
+		return
+	}
+	var target service.ChannelAffinitySwitch
+	if err := common.DecodeJson(c.Request.Body, &target); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid session binding"})
+		return
+	}
+	if err := service.SwitchChannelAffinityFromLog(target); err != nil {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	common.ApiSuccess(c, nil)
 }
 
 func ClearChannelAffinityCache(c *gin.Context) {

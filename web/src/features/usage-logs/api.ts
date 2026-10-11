@@ -21,6 +21,7 @@ import { api, type ApiRequestConfig } from '@/lib/api'
 import { buildQueryParams } from './lib/query-params'
 import { parseTaskArtifactsResponse } from './lib/task-artifacts'
 import type {
+  ChannelAffinitySwitchRequest,
   GetLogsParams,
   GetLogsResponse,
   GetLogStatsParams,
@@ -74,6 +75,13 @@ async function fetchLogStats<T>(
 
 export const getAllLogs = (params: GetLogsParams = {}) =>
   fetchLogs('/api/log', params, true)
+
+export async function switchLogChannelAffinity(
+  target: ChannelAffinitySwitchRequest
+): Promise<{ success: boolean; message?: string }> {
+  const response = await api.post('/api/log/channel_affinity/switch', target)
+  return response.data
+}
 
 export const getUserLogs = (
   params: Omit<GetLogsParams, 'username' | 'channel'> = {}

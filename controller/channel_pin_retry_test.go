@@ -1,16 +1,10 @@
 package controller
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/i18n"
-	"github.com/QuantumNous/new-api/middleware"
-	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,13 +12,131 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/i18n"
+	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/model"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
+
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestLogChannelSwitchRoutingDatabaseMatrix(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	for _, dialect := range []struct{ kind, env string }{{"sqlite", ""}, {"mysql", "TEST_MYSQL_DSN"}, {"postgres", "TEST_POSTGRES_DSN"}} {
+		t.Run(dialect.kind, func(t *testing.T) {
+			dsn := os.Getenv(dialect.env)
+			if dialect.env != "" && dsn == "" {
+				t.Skipf("%s not configured", dialect.env)
+			}
+			db := modelManagementDB(t, dialect.kind, dsn)
+			channels := []model.Channel{
+				{Id: 1, Name: "stalled", Type: 1, Key: "test-only", Status: common.ChannelStatusEnabled, Models: "switch-test,lonely-test", Group: "default", Priority: common.GetPointer(int64(10))},
+				{Id: 2, Name: "alternative", Type: 1, Key: "test-only", Status: common.ChannelStatusEnabled, Models: "switch-test", Group: "default", Priority: common.GetPointer(int64(5))},
+			}
+			for i := range channels {
+				require.NoError(t, db.Create(&channels[i]).Error)
+				require.NoError(t, channels[i].AddAbilities(db))
+			}
+			affinity := operation_setting.GetChannelAffinitySetting()
+			previous := *affinity
+			t.Cleanup(func() { *affinity = previous })
+			affinity.Enabled = true
+			affinity.Rules = []operation_setting.ChannelAffinityRule{{Name: "switch-test", ModelRegex: []string{".*"}, KeySources: []operation_setting.ChannelAffinityKeySource{{Type: "request_header", Key: "X-Session"}}, IncludeRuleName: true, IncludeModelName: true, IncludeUsingGroup: true, TTLSeconds: 60}}
+			for _, cached := range []bool{false, true} {
+				common.MemoryCacheEnabled = cached
+				model.InitChannelCache()
+				for _, mode := range []string{"prefer", "strict"} {
+					for _, scenario := range []string{"automatic", "manual", "legacy log", "with output", "no alternative"} {
+						t.Run(fmt.Sprintf("cache=%t/%s/%s", cached, mode, scenario), func(t *testing.T) {
+							affinity.Rules[0].SessionMode = mode
+							modelName := "switch-test"
+							if scenario == "no alternative" {
+								modelName = "lonely-test"
+							}
+							seed := newPinRetryContext()
+							seed.Request.Header.Set("X-Session", t.Name())
+							seed.Set("channel_id", 1)
+							_, _ = service.GetPreferredChannelByAffinity(seed, modelName, "default")
+							service.RecordChannelAffinity(seed, 1)
+							t.Cleanup(func() { service.ClearCurrentChannelAffinityCache(seed) })
+							other := model.NewLogOther()
+							service.AppendChannelAffinityAdminInfo(seed, other)
+							encoded, err := common.Marshal(other.Snapshot()["admin_info"].(map[string]any)["channel_affinity"])
+							require.NoError(t, err)
+							var target service.ChannelAffinitySwitch
+							require.NoError(t, common.Unmarshal(encoded, &target))
+							target.ChannelID = 1
+							if scenario == "manual" || scenario == "legacy log" {
+								if scenario == "legacy log" {
+									target.CacheKeyHash = ""
+								}
+								recorder := modelManagementRequest(t, SwitchLogChannelAffinity, http.MethodPost, "/api/log/channel_affinity/switch", target, nil)
+								require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+							} else {
+								status := relaycommon.NewStreamStatus()
+								status.SetEndReason(relaycommon.StreamEndReasonClientGone, context.Canceled)
+								output := int64(0)
+								if scenario == "with output" {
+									output = 40
+								}
+								service.HandleRelayAffinityFailure(seed, &relaycommon.RelayInfo{StreamStatus: status, PerformanceOutputTokens: output}, nil)
+							}
+							service.RecordChannelAffinity(seed, 1)
+							request := newPinRetryContext()
+							request.Request.Body = io.NopCloser(strings.NewReader(fmt.Sprintf(`{"model":%q}`, modelName)))
+							request.Request.Header.Set("Content-Type", "application/json")
+							request.Request.Header.Set("X-Session", t.Name())
+							common.SetContextKey(request, constant.ContextKeyUsingGroup, "default")
+							middleware.Distribute()(request)
+							if scenario == "no alternative" {
+								assert.Equal(t, http.StatusServiceUnavailable, request.Writer.Status())
+								assert.True(t, request.IsAborted())
+								return
+							}
+							assert.False(t, request.IsAborted())
+							want := 2
+							if scenario == "with output" {
+								want = 1
+							}
+							assert.Equal(t, want, request.GetInt("channel_id"))
+							bound, found := service.GetPreferredChannelByAffinity(request, modelName, "default")
+							assert.True(t, found)
+							assert.Equal(t, want, bound)
+							if scenario == "manual" {
+								recorder := modelManagementRequest(t, SwitchLogChannelAffinity, http.MethodPost, "/api/log/channel_affinity/switch", target, nil)
+								assert.Equal(t, http.StatusConflict, recorder.Code, "an old log cannot replace a newer binding")
+							}
+						})
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestLogChannelSwitchRequiresAdministratorPermission(t *testing.T) {
+	user, token := setupAccessTokenAudit(t)
+	router := gin.New()
+	router.POST("/api/log/channel_affinity/switch", middleware.AdminAuth(), middleware.RequirePermission(authz.ChannelOperate), SwitchLogChannelAffinity)
+	assert.Equal(t, http.StatusUnauthorized, auditRequest(router, http.MethodPost, "/api/log/channel_affinity/switch", "").Code)
+	require.NoError(t, model.DB.Model(user).Update("role", common.RoleCommonUser).Error)
+	assert.Equal(t, http.StatusForbidden, auditRequest(router, http.MethodPost, "/api/log/channel_affinity/switch", token).Code)
+	require.NoError(t, model.DB.Model(user).Update("role", common.RoleAdminUser).Error)
+	assert.Equal(t, http.StatusConflict, auditRequest(router, http.MethodPost, "/api/log/channel_affinity/switch", token).Code, "authorized invalid payload must reach validation")
+	require.NoError(t, authz.SetUserPermissions(user.Id, authz.PermissionsMap{"channel": {"operate": false}}))
+	assert.Equal(t, http.StatusForbidden, auditRequest(router, http.MethodPost, "/api/log/channel_affinity/switch", token).Code, "administrators without channel operation permission cannot switch sessions")
+}
 
 func TestShouldRetryHonorsPinRetryMode(t *testing.T) {
 	openaiErr := types.NewOpenAIError(errors.New("upstream"), types.ErrorCodeBadResponseStatusCode, http.StatusInternalServerError)

@@ -27,6 +27,8 @@ import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 
 import { formatUseTime } from '@/lib/format'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { usageLogSchema, type UsageLog } from '../../data/schema'
 import { useCommonLogsColumns } from '../columns/common-logs-columns'
@@ -34,6 +36,37 @@ import { UsageLogsMobileList } from '../usage-logs-mobile-card'
 import { UsageLogsProvider, useUsageLogsContext } from '../usage-logs-provider'
 
 const longName = 'enterprise-production-failover-2026-without-any-short-alias'
+
+it('shows the administrator channel switch action in the mobile request card', async () => {
+  const previousUser = useAuthStore.getState().auth.user
+  useAuthStore
+    .getState()
+    .auth.setUser({ id: 1, username: 'root', role: ROLE.SUPER_ADMIN })
+  try {
+    const user = userEvent.setup()
+    renderLogs({
+      logs: [
+        {
+          ...log,
+          other: JSON.stringify({
+            admin_info: {
+              channel_affinity: {
+                rule_name: 'session',
+                key_fp: 'abcd1234',
+                model: longName,
+                using_group: 'default',
+              },
+            },
+          }),
+        },
+      ],
+    })
+    await user.click(screen.getByRole('button', { name: 'Switch channel' }))
+    expect(await screen.findByRole('alertdialog')).toBeVisible()
+  } finally {
+    useAuthStore.getState().auth.setUser(previousUser)
+  }
+})
 const log = usageLogSchema.parse({
   id: 1,
   user_id: 2,

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,13 +13,133 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/cachex"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestLogChannelSwitchCacheBackends(t *testing.T) {
+	previousCache := getChannelAffinityCache()
+	setting := operation_setting.GetChannelAffinitySetting()
+	previousSetting := *setting
+	setting.Enabled = true
+	setting.Rules = []operation_setting.ChannelAffinityRule{{Name: "switch-cache", ModelRegex: []string{".*"}, KeySources: []operation_setting.ChannelAffinityKeySource{{Type: "request_header", Key: "X-Session"}}, IncludeRuleName: true, IncludeModelName: true, IncludeUsingGroup: true, TTLSeconds: 60}}
+	t.Cleanup(func() { channelAffinityCache = previousCache; *setting = previousSetting })
+	for _, backend := range []string{"memory", "redis"} {
+		t.Run(backend, func(t *testing.T) {
+			channelAffinityCache = previousCache
+			if backend == "redis" {
+				server := miniredis.RunT(t)
+				client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+				t.Cleanup(func() { require.NoError(t, client.Close()) })
+				channelAffinityCache = cachex.NewHybridCache[int](cachex.HybridCacheConfig[int]{Namespace: cachex.Namespace(channelAffinityCacheNamespace), Redis: client, RedisCodec: cachex.IntCodec{}, RedisEnabled: func() bool { return true }})
+			}
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			c.Request.Header.Set("X-Session", "private-session-value:"+backend)
+			_, _ = GetPreferredChannelByAffinity(c, "test-model", "default")
+			c.Set("channel_id", 7)
+			RecordChannelAffinity(c, 7)
+			t.Cleanup(func() { ClearCurrentChannelAffinityCache(c) })
+			other := model.NewLogOther()
+			AppendChannelAffinityAdminInfo(c, other)
+			encoded, err := common.Marshal(other.Snapshot()["admin_info"].(map[string]any)["channel_affinity"])
+			require.NoError(t, err)
+			assert.NotContains(t, string(encoded), "private-session-value", "logs must not expose the session key")
+			var target ChannelAffinitySwitch
+			require.NoError(t, common.Unmarshal(encoded, &target))
+			target.ChannelID = 7
+			require.NoError(t, SwitchChannelAffinityFromLog(target))
+			key, _, _ := getChannelAffinityContext(c)
+			staleValue := 7
+			written, err := channelAffinityCache.CompareAndSwap(key, &staleValue, 7, time.Minute)
+			require.NoError(t, err)
+			assert.False(t, written, "a concurrent stale cache write cannot undo the switch")
+			RecordChannelAffinity(c, 7)
+			c.Set(ginKeyChannelAffinitySkipRetry, false)
+			channelID, found := GetPreferredChannelByAffinity(c, "test-model", "default")
+			assert.False(t, found)
+			assert.Zero(t, channelID)
+			assert.Contains(t, GetChannelConstraints(c).Filters, dto.ChannelFilter{Kind: dto.FilterExcludeChannels, ExcludeChannelIds: []int{7}})
+			next, _ := gin.CreateTestContext(httptest.NewRecorder())
+			next.Request = c.Request.Clone(context.Background())
+			_, _ = GetPreferredChannelByAffinity(next, "test-model", "default")
+			next.Set("channel_id", 8)
+			RecordChannelAffinity(next, 8)
+			RecordChannelAffinity(c, 7)
+			channelID, found = GetPreferredChannelByAffinity(next, "test-model", "default")
+			assert.True(t, found)
+			assert.Equal(t, 8, channelID)
+			assert.ErrorContains(t, SwitchChannelAffinityFromLog(target), "already changed")
+			ClearCurrentChannelAffinityCache(c)
+			assert.ErrorContains(t, SwitchChannelAffinityFromLog(target), "expired or was cleared")
+		})
+	}
+}
+
+func TestCanceledStreamAffinityFollowsOutputAndPreservesNewerBinding(t *testing.T) {
+	setting := operation_setting.GetChannelAffinitySetting()
+	previous := *setting
+	previousRedis := common.RedisEnabled
+	common.RedisEnabled = false
+	setting.Enabled = true
+	t.Cleanup(func() { *setting = previous; common.RedisEnabled = previousRedis })
+	for _, tc := range []struct {
+		name          string
+		output        int64
+		end           relaycommon.StreamEndReason
+		newer, pinned bool
+		wantSwitch    bool
+	}{
+		{name: "client gone with no output", end: relaycommon.StreamEndReasonClientGone, wantSwitch: true},
+		{name: "metadata events without output tokens", end: relaycommon.StreamEndReasonClientGone, wantSwitch: true},
+		{name: "manual cancellation after output", end: relaycommon.StreamEndReasonClientGone, output: 40},
+		{name: "stream timeout without output", end: relaycommon.StreamEndReasonTimeout, wantSwitch: true},
+		{name: "completed zero output", end: relaycommon.StreamEndReasonDone},
+		{name: "session already switched", end: relaycommon.StreamEndReasonClientGone, newer: true},
+		{name: "token pinned channel", end: relaycommon.StreamEndReasonClientGone, pinned: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			key := "cancel-regression:" + tc.name
+			cache := getChannelAffinityCache()
+			bound := 7
+			if tc.newer {
+				bound = 8
+			}
+			require.NoError(t, cache.SetWithTTL(key, bound, time.Minute))
+			t.Cleanup(func() { _, err := cache.DeleteMany([]string{key}); require.NoError(t, err) })
+			c := buildChannelAffinityTemplateContextForTest(channelAffinityMeta{CacheKey: key, TTLSeconds: 60})
+			c.Set("channel_id", 7)
+			if tc.pinned {
+				GetChannelConstraints(c).AddPin(dto.ChannelPin{ChannelId: 7, Source: dto.PinSourceToken, Rank: dto.PinRankToken})
+			}
+			status := relaycommon.NewStreamStatus()
+			status.SetEndReason(tc.end, context.Canceled)
+			count := 0
+			if tc.name == "metadata events without output tokens" {
+				count = 3
+			}
+			HandleRelayAffinityFailure(c, &relaycommon.RelayInfo{StreamStatus: status, PerformanceOutputTokens: tc.output, ReceivedResponseCount: count}, nil)
+			current, found, err := cache.Get(key)
+			require.NoError(t, err)
+			require.True(t, found)
+			if tc.wantSwitch {
+				RecordChannelAffinity(c, 7)
+				current, _, err = cache.Get(key)
+				require.NoError(t, err)
+				assert.Equal(t, -7, current, "post-handler recording must not restore the canceled channel")
+			} else {
+				assert.Equal(t, bound, current)
+			}
+		})
+	}
+}
 
 func buildChannelAffinityTemplateContextForTest(meta channelAffinityMeta) *gin.Context {
 	rec := httptest.NewRecorder()

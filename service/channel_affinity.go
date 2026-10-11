@@ -1,6 +1,7 @@
 package service
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"hash/fnv"
 	"maps"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	taskdto "github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/cachex"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -44,6 +46,7 @@ var (
 
 type channelAffinityMeta struct {
 	CacheKey       string
+	BoundChannelID int
 	TTLSeconds     int
 	RuleName       string
 	SkipRetry      bool
@@ -623,6 +626,15 @@ func GetPreferredChannelByAffinity(c *gin.Context, modelName string, usingGroup 
 			return 0, false
 		}
 		if found {
+			meta, _ := getChannelAffinityMeta(c)
+			meta.BoundChannelID = channelID
+			setChannelAffinityContext(c, meta)
+			// Negative entries clear the binding while remembering the channel
+			// that the next request must avoid. Keep the normal routing filters.
+			if channelID < 0 {
+				GetChannelConstraints(c).AddFilter(taskdto.ChannelFilter{Kind: taskdto.FilterExcludeChannels, ExcludeChannelIds: []int{-channelID}})
+				return 0, false
+			}
 			return channelID, true
 		}
 		return 0, false
@@ -702,6 +714,7 @@ func MarkChannelAffinityUsed(c *gin.Context, selectedGroup string, channelID int
 		"key_path":       meta.KeySourcePath,
 		"key_hint":       meta.KeyHint,
 		"key_fp":         meta.KeyFingerprint,
+		"cache_key_hash": fmt.Sprintf("%x", sha256.Sum256([]byte(meta.CacheKey))),
 	}
 	c.Set(ginKeyChannelAffinityLogInfo, info)
 }
@@ -711,6 +724,10 @@ func AppendChannelAffinityAdminInfo(c *gin.Context, other *model.LogOther) {
 		return
 	}
 	anyInfo, ok := c.Get(ginKeyChannelAffinityLogInfo)
+	if !ok {
+		MarkChannelAffinityUsed(c, RequestPolicy(c).SelectedGroup, c.GetInt("channel_id"))
+		anyInfo, ok = c.Get(ginKeyChannelAffinityLogInfo)
+	}
 	if !ok || anyInfo == nil {
 		return
 	}
@@ -719,6 +736,9 @@ func AppendChannelAffinityAdminInfo(c *gin.Context, other *model.LogOther) {
 	if info, ok := anyInfo.(map[string]any); ok {
 		sanitized := cloneStringAnyMap(info)
 		delete(sanitized, "key_hint")
+		if meta, found := getChannelAffinityMeta(c); found {
+			sanitized["cache_key_hash"] = fmt.Sprintf("%x", sha256.Sum256([]byte(meta.CacheKey)))
+		}
 		anyInfo = sanitized
 	}
 	other.SetAdmin("channel_affinity", anyInfo)
@@ -751,9 +771,111 @@ func RecordChannelAffinity(c *gin.Context, channelID int) {
 		ttlSeconds = 3600
 	}
 	cache := getChannelAffinityCache()
-	if err := cache.SetWithTTL(cacheKey, channelID, time.Duration(ttlSeconds)*time.Second); err != nil {
+	current, found, err := cache.Get(cacheKey)
+	if err != nil {
+		common.SysError("channel affinity cache read before binding failed: " + err.Error())
+		return
+	}
+	if found && current == -channelID {
+		// Distribute records after the handler returns; do not restore the
+		// channel that the handler or an administrator just invalidated.
+		return
+	}
+	if meta, ok := getChannelAffinityMeta(c); ok && found && current != channelID && current != meta.BoundChannelID {
+		// A request that started on an older binding cannot undo a completed
+		// switch, even if it finishes after the next request has rebound.
+		return
+	}
+	var expected *int
+	if found {
+		expected = &current
+	}
+	if _, err := cache.CompareAndSwap(cacheKey, expected, channelID, time.Duration(ttlSeconds)*time.Second); err != nil {
 		common.SysError(fmt.Sprintf("channel affinity cache set failed: key=%s, err=%v", cacheKey, err))
 	}
+}
+
+func switchChannelAffinity(key string, channelID, ttlSeconds int) error {
+	cache := getChannelAffinityCache()
+	current, found, err := cache.Get(key)
+	if err != nil {
+		return err
+	}
+	if found && current != channelID && current != -channelID {
+		return fmt.Errorf("Session channel has already changed")
+	}
+	if ttlSeconds <= 0 {
+		ttlSeconds = operation_setting.GetChannelAffinitySetting().DefaultTTLSeconds
+	}
+	if ttlSeconds <= 0 {
+		ttlSeconds = 3600
+	}
+	var expected *int
+	if found {
+		expected = &current
+	}
+	switched, err := cache.CompareAndSwap(key, expected, -channelID, time.Duration(ttlSeconds)*time.Second)
+	if err != nil {
+		return err
+	}
+	if !switched {
+		return fmt.Errorf("Session channel has already changed")
+	}
+	return nil
+}
+
+// ChannelAffinitySwitch identifies a log's binding without exposing its raw
+// session value. Legacy logs can use their existing fingerprint and rule scope.
+type ChannelAffinitySwitch struct {
+	CacheKeyHash string `json:"cache_key_hash"`
+	RuleName     string `json:"rule_name"`
+	Model        string `json:"model"`
+	UsingGroup   string `json:"using_group"`
+	KeyFP        string `json:"key_fp"`
+	ChannelID    int    `json:"channel_id"`
+}
+
+func SwitchChannelAffinityFromLog(target ChannelAffinitySwitch) error {
+	if target.ChannelID <= 0 || target.RuleName == "" || target.Model == "" || len(target.KeyFP) != 8 {
+		return fmt.Errorf("Invalid session binding")
+	}
+	setting := operation_setting.GetChannelAffinitySetting()
+	var rule *operation_setting.ChannelAffinityRule
+	for i := range setting.Rules {
+		if setting.Rules[i].Name == target.RuleName {
+			rule = &setting.Rules[i]
+			break
+		}
+	}
+	if rule == nil {
+		return fmt.Errorf("Session rule no longer exists")
+	}
+	keys, err := getChannelAffinityCache().Keys()
+	if err != nil {
+		return err
+	}
+	prefix := channelAffinityCacheNamespace + ":" + buildChannelAffinityCacheKeySuffix(*rule, target.Model, target.UsingGroup, "")
+	matched := ""
+	for _, key := range keys {
+		if target.CacheKeyHash != "" {
+			if fmt.Sprintf("%x", sha256.Sum256([]byte(key))) != target.CacheKeyHash {
+				continue
+			}
+		} else {
+			value, found := strings.CutPrefix(key, prefix)
+			if !found || affinityFingerprint(value) != target.KeyFP {
+				continue
+			}
+		}
+		if matched != "" && matched != key {
+			return fmt.Errorf("Session fingerprint is ambiguous")
+		}
+		matched = key
+	}
+	if matched == "" {
+		return fmt.Errorf("Session binding has expired or was cleared")
+	}
+	return switchChannelAffinity(matched, target.ChannelID, rule.TTLSeconds)
 }
 
 type ChannelAffinityUsageCacheStats struct {

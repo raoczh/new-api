@@ -3,6 +3,7 @@ package cachex
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -37,9 +38,10 @@ type HybridCache[V any] struct {
 	redisCodec   ValueCodec[V]
 	redisEnabled func() bool
 
-	memOnce sync.Once
-	memInit func() *hot.HotCache[string, V]
-	mem     *hot.HotCache[string, V]
+	memOnce    sync.Once
+	memInit    func() *hot.HotCache[string, V]
+	mem        *hot.HotCache[string, V]
+	memWriteMu sync.Mutex
 }
 
 func NewHybridCache[V any](cfg HybridCacheConfig[V]) *HybridCache[V] {
@@ -124,8 +126,61 @@ func (c *HybridCache[V]) SetWithTTL(key string, v V, ttl time.Duration) error {
 		return c.redis.Set(ctx, full, raw, ttl).Err()
 	}
 
+	c.memWriteMu.Lock()
+	defer c.memWriteMu.Unlock()
 	c.memCache().SetWithTTL(full, v, ttl)
 	return nil
+}
+
+// CompareAndSwap changes a binding only if it still has the observed value.
+// A nil expected value means the key must be absent. Redis compares codec
+// representations atomically; memory compares values under the write lock.
+func (c *HybridCache[V]) CompareAndSwap(key string, expected *V, value V, ttl time.Duration) (bool, error) {
+	full := c.ns.FullKey(key)
+	if full == "" {
+		return false, nil
+	}
+	if ttl <= 0 {
+		return false, errors.New("compare-and-swap requires a positive TTL")
+	}
+	if c.redisOn() {
+		raw, err := c.redisCodec.Encode(value)
+		if err != nil {
+			return false, err
+		}
+		expectedRaw := ""
+		expectedState := "absent"
+		if expected != nil {
+			expectedState = "present"
+			expectedRaw, err = c.redisCodec.Encode(*expected)
+			if err != nil {
+				return false, err
+			}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), defaultRedisOpTimeout)
+		defer cancel()
+		result, err := c.redis.Eval(ctx, `
+local current = redis.call('GET', KEYS[1])
+if ARGV[1] == 'absent' then
+  if current then return 0 end
+elseif current ~= ARGV[2] then
+  return 0
+end
+redis.call('PSETEX', KEYS[1], ARGV[4], ARGV[3])
+return 1`, []string{full}, expectedState, expectedRaw, raw, max(ttl.Milliseconds(), 1)).Int()
+		return result == 1, err
+	}
+	c.memWriteMu.Lock()
+	defer c.memWriteMu.Unlock()
+	current, found, err := c.memCache().Get(full)
+	if err != nil {
+		return false, err
+	}
+	if expected == nil && found || expected != nil && (!found || !reflect.DeepEqual(current, *expected)) {
+		return false, nil
+	}
+	c.memCache().SetWithTTL(full, value, ttl)
+	return true, nil
 }
 
 // Keys returns keys with valid values. In Redis, it returns all matching keys.
@@ -169,6 +224,8 @@ func (c *HybridCache[V]) Purge() error {
 		return err
 	}
 
+	c.memWriteMu.Lock()
+	defer c.memWriteMu.Unlock()
 	c.memCache().Purge()
 	return nil
 }
@@ -267,6 +324,8 @@ func (c *HybridCache[V]) DeleteMany(keys []string) (map[string]bool, error) {
 		return res, nil
 	}
 
+	c.memWriteMu.Lock()
+	defer c.memWriteMu.Unlock()
 	return c.memCache().DeleteMany(fullKeys), nil
 }
 
