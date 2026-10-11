@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
@@ -160,42 +161,64 @@ func (groupProbeHandler) Run(ctx context.Context, task *model.SystemTask, runner
 			finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, state, err)
 			return
 		}
-		channel, selectErr := model.GetRandomSatisfiedChannel(group, name, 0, nil)
-		if selectErr != nil || channel == nil || channel.Type == constant.ChannelTypeTaskPlugin {
-			state.Skipped++
-			continue
-		}
-		// Choose the protocol supported by the selected channel, since pricing
-		// combines capabilities from all channels that offer the same model.
-		channelEndpoints := common.GetEndpointTypesByChannelType(channel.Type, name)
-		config := channel.GetOtherSettings().AdvancedCustom
-		if config != nil {
-			channelEndpoints = config.SupportedEndpointTypesForModel(name)
-		} else if slices.Contains(channelEndpoints, constant.EndpointTypeOpenAI) {
-			// Catalog metadata also identifies embedding/rerank aliases whose
-			// names cannot be inferred by the generic channel test.
-			for _, endpoint := range model.GetModelSupportEndpointTypes(name) {
-				if endpoint == constant.EndpointTypeEmbeddings || endpoint == constant.EndpointTypeJinaRerank {
-					channelEndpoints = append(channelEndpoints, endpoint)
+		var triedChannelIDs []int
+		groupTested, groupSucceeded := false, false
+		for ctx.Err() == nil {
+			var filters []dto.ChannelFilter
+			if len(triedChannelIDs) > 0 {
+				filters = []dto.ChannelFilter{{
+					Kind:              dto.FilterExcludeChannels,
+					ExcludeChannelIds: triedChannelIDs,
+				}}
+			}
+			channel, selectErr := model.GetRandomSatisfiedChannel(group, name, 0, filters)
+			if selectErr != nil || channel == nil {
+				break
+			}
+			triedChannelIDs = append(triedChannelIDs, channel.Id)
+			if channel.Type == constant.ChannelTypeTaskPlugin {
+				continue
+			}
+			// Choose the protocol supported by the selected channel, since pricing
+			// combines capabilities from all channels that offer the same model.
+			channelEndpoints := common.GetEndpointTypesByChannelType(channel.Type, name)
+			config := channel.GetOtherSettings().AdvancedCustom
+			if config != nil {
+				channelEndpoints = config.SupportedEndpointTypesForModel(name)
+			} else if slices.Contains(channelEndpoints, constant.EndpointTypeOpenAI) {
+				// Catalog metadata also identifies embedding/rerank aliases whose
+				// names cannot be inferred by the generic channel test.
+				for _, endpoint := range model.GetModelSupportEndpointTypes(name) {
+					if endpoint == constant.EndpointTypeEmbeddings || endpoint == constant.EndpointTypeJinaRerank {
+						channelEndpoints = append(channelEndpoints, endpoint)
+					}
 				}
 			}
+			if channel.Type == constant.ChannelTypeMokaAI {
+				channelEndpoints = []constant.EndpointType{constant.EndpointTypeEmbeddings}
+			}
+			endpoint := probeEndpoint(name, channelEndpoints)
+			if endpoint == "" {
+				continue
+			}
+			probeCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+			result := runChannelTest(probeCtx, channel, userID, name, endpoint, shouldUseStreamForAutomaticChannelTest(channel), channelTestOptions{group: group, probe: true})
+			cancel()
+			state.Tested++
+			groupTested = true
+			if result.localErr == nil && result.newAPIError == nil {
+				groupSucceeded = true
+				break
+			}
 		}
-		if channel.Type == constant.ChannelTypeMokaAI {
-			channelEndpoints = []constant.EndpointType{constant.EndpointTypeEmbeddings}
-		}
-		endpoint := probeEndpoint(name, channelEndpoints)
-		if endpoint == "" {
-			state.Skipped++
-			continue
-		}
-		probeCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
-		result := runChannelTest(probeCtx, channel, userID, name, endpoint, shouldUseStreamForAutomaticChannelTest(channel), channelTestOptions{group: group, probe: true})
-		cancel()
-		state.Tested++
-		if result.localErr != nil || result.newAPIError != nil {
+		if groupSucceeded {
+			state.Succeeded++
+		} else if groupTested {
+			// A group is failed only after every probeable channel for its
+			// selected model has failed.
 			state.Failed++
 		} else {
-			state.Succeeded++
+			state.Skipped++
 		}
 	}
 	if err = model.UpdateSystemTaskState(task.TaskID, runnerID, state); err != nil {

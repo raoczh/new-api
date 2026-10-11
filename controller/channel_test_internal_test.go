@@ -134,7 +134,7 @@ func testModelTestRecords(t *testing.T, dialect, dsn string) {
 	}{
 		{"successful manual", channelTestOptions{manual: true}, false, 2, "manual_test", 0},
 		{"failed manual", channelTestOptions{manual: true}, true, 0, "manual_test", 0},
-		{"successful automatic", channelTestOptions{probe: true, group: "vip"}, false, 1, "auto_probe", model.LogTypeConsume},
+		{"successful automatic", channelTestOptions{probe: true, group: "default"}, false, 1, "auto_probe", model.LogTypeConsume},
 		{"failed automatic", channelTestOptions{probe: true, group: "vip"}, true, 1, "auto_probe", model.LogTypeConsume},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -158,19 +158,23 @@ func testModelTestRecords(t *testing.T, dialect, dsn string) {
 			assert.Equal(t, tc.source, probes[len(probes)-1].Source)
 			assert.Equal(t, "gpt-4o-mini", probes[len(probes)-1].ModelName)
 			if tc.options.probe {
-				assert.Equal(t, "vip", probes[len(probes)-1].GroupName)
+				assert.Equal(t, tc.options.group, probes[len(probes)-1].GroupName)
 				assert.Equal(t, !tc.fail, probes[len(probes)-1].Success)
 				var logsAfter int64
 				require.NoError(t, db.Model(&model.Log{}).Count(&logsAfter).Error)
 				assert.Equal(t, logsBefore+1, logsAfter, "each upstream probe must create one usage record")
 				var log model.Log
 				require.NoError(t, db.Order("id DESC").First(&log).Error)
-				assert.Equal(t, "vip", log.Group)
+				assert.Equal(t, tc.options.group, log.Group)
 				assert.Equal(t, "gpt-4o-mini", log.ModelName)
 				assert.Equal(t, channel.Id, log.ChannelId)
 				assert.Equal(t, user.Id, log.UserId)
 				assert.Equal(t, "分组自动探测", log.TokenName)
-				assert.Zero(t, log.Quota, "system probes do not charge the administrator")
+				if tc.fail {
+					assert.Zero(t, log.Quota, "failed probes have no upstream usage to settle")
+				} else {
+					assert.Greater(t, log.Quota, 0, "successful probes should record the upstream usage cost")
+				}
 				assert.NotEmpty(t, log.RequestId)
 				assert.Equal(t, tc.expectedType, log.Type)
 				if tc.fail {
@@ -251,6 +255,130 @@ func testModelTestRecords(t *testing.T, dialect, dsn string) {
 	var customers int64
 	require.NoError(t, db.Model(&model.PerfMetric{}).Count(&customers).Error)
 	assert.Zero(t, customers, "synthetic checks must not enter customer metrics")
+}
+
+func TestGroupProbeFallsBackAcrossChannelsAndCountsGroupFailures(t *testing.T) {
+	db := modelManagementDB(t, "sqlite", "")
+	require.NoError(t, db.AutoMigrate(&model.StatusProbe{}, &model.Log{}, &model.SystemTask{}, &model.SystemTaskLock{}))
+	withTieredBillingConfig(t,
+		map[string]string{"gpt-4o-mini": "tiered_expr"},
+		map[string]string{"gpt-4o-mini": `tier("base", p * 1 + c * 1)`},
+	)
+
+	oldLogConsume := common.LogConsumeEnabled
+	common.LogConsumeEnabled = true
+	oldRatios := ratio_setting.GroupRatio2JSONString()
+	oldProbeEnabled := groupProbeHandler{}.Enabled()
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1}`))
+	require.NoError(t, model.UpdateRequestPolicyOptions(map[string]string{"monitor_setting.auto_probe_enabled": "true"}))
+	t.Cleanup(func() {
+		common.LogConsumeEnabled = oldLogConsume
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(oldRatios))
+		require.NoError(t, model.UpdateRequestPolicyOptions(map[string]string{
+			"monitor_setting.auto_probe_enabled": fmt.Sprintf("%t", oldProbeEnabled),
+		}))
+		model.InvalidatePricingCache()
+	})
+
+	user := model.User{Username: "group-probe-root", Password: "unused", Group: "default", Role: common.RoleRootUser, Status: common.UserStatusEnabled}
+	require.NoError(t, db.Create(&user).Error)
+
+	var firstRequests, secondRequests atomic.Int32
+	var secondAvailable atomic.Bool
+	secondAvailable.Store(true)
+	firstUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		firstRequests.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"error":{"message":"first channel unavailable"}}`))
+	}))
+	secondUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		secondRequests.Add(1)
+		if !secondAvailable.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":{"message":"second channel unavailable"}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"probe","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
+	}))
+	t.Cleanup(firstUpstream.Close)
+	t.Cleanup(secondUpstream.Close)
+
+	modelName := "gpt-4o-mini"
+	firstChannel := &model.Channel{
+		Type:     constant.ChannelTypeOpenAI,
+		Key:      "first-key",
+		BaseURL:  common.GetPointer(firstUpstream.URL),
+		Name:     "first-probe-channel",
+		Models:   modelName,
+		Group:    "default",
+		Priority: common.GetPointer(int64(10)),
+		Status:   common.ChannelStatusEnabled,
+	}
+	secondChannel := &model.Channel{
+		Type:     constant.ChannelTypeOpenAI,
+		Key:      "second-key",
+		BaseURL:  common.GetPointer(secondUpstream.URL),
+		Name:     "second-probe-channel",
+		Models:   modelName,
+		Group:    "default",
+		Priority: common.GetPointer(int64(0)),
+		Status:   common.ChannelStatusEnabled,
+	}
+	require.NoError(t, firstChannel.Insert())
+	require.NoError(t, secondChannel.Insert())
+	service.InitHttpClient()
+	model.InvalidatePricingCache()
+
+	runProbe := func() *model.SystemTask {
+		task, err := model.CreateSystemTask(model.SystemTaskTypeGroupProbe, nil, nil)
+		require.NoError(t, err)
+		claimed, ok, err := model.ClaimSystemTask(task.ID, task.Type, "group-probe-runner", time.Now().Add(time.Minute).Unix())
+		require.NoError(t, err)
+		require.True(t, ok)
+		groupProbeHandler{}.Run(context.Background(), claimed, "group-probe-runner")
+		stored, err := model.GetSystemTaskByTaskID(task.TaskID)
+		require.NoError(t, err)
+		require.NotNil(t, stored)
+		return stored
+	}
+
+	firstRun := runProbe()
+	assert.Equal(t, model.SystemTaskStatusSucceeded, firstRun.Status)
+	var firstState groupProbeState
+	require.NoError(t, firstRun.DecodeState(&firstState))
+	assert.Equal(t, 2, firstState.Tested)
+	assert.Equal(t, 1, firstState.Succeeded)
+	assert.Zero(t, firstState.Failed)
+	assert.Equal(t, int32(1), firstRequests.Load())
+	assert.Equal(t, int32(1), secondRequests.Load())
+
+	var firstRunProbes []model.StatusProbe
+	require.NoError(t, db.Order("id ASC").Find(&firstRunProbes).Error)
+	require.Len(t, firstRunProbes, 2)
+	assert.False(t, firstRunProbes[0].Success)
+	assert.True(t, firstRunProbes[1].Success)
+
+	var firstRunLogs []model.Log
+	require.NoError(t, db.Order("id ASC").Find(&firstRunLogs).Error)
+	require.Len(t, firstRunLogs, 2)
+	assert.Equal(t, firstChannel.Id, firstRunLogs[0].ChannelId)
+	assert.Zero(t, firstRunLogs[0].Quota)
+	assert.Equal(t, secondChannel.Id, firstRunLogs[1].ChannelId)
+	assert.Greater(t, firstRunLogs[1].Quota, 0)
+
+	firstRequests.Store(0)
+	secondRequests.Store(0)
+	// Both channels fail on the next run; the group should contribute one
+	// failure after both channel attempts are exhausted.
+	secondAvailable.Store(false)
+	secondRun := runProbe()
+	assert.Equal(t, model.SystemTaskStatusFailed, secondRun.Status)
+	var secondState groupProbeState
+	require.NoError(t, secondRun.DecodeState(&secondState))
+	assert.Equal(t, 2, secondState.Tested)
+	assert.Zero(t, secondState.Succeeded)
+	assert.Equal(t, 1, secondState.Failed)
 }
 
 func TestGroupStatusRestrictsVisitorsToPublicGroupsAndAppliesMemberRatios(t *testing.T) {

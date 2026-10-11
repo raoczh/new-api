@@ -568,18 +568,18 @@ func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int,
 		}
 	}
 	info.SetEstimatePromptTokens(usage.PromptTokens)
+	quota, tieredResult := settleTestQuota(info, priceData, usage)
 	if options.probe {
-		other := buildTestLogOther(c, info, priceData, usage, nil)
+		other := buildTestLogOther(c, info, priceData, usage, tieredResult)
 		other.SetPublic("source", "auto_probe")
 		model.RecordConsumeLog(c, testUserID, model.RecordConsumeLogParams{
 			ChannelId: channel.Id, PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens,
-			ModelName: info.OriginModelName, TokenName: "分组自动探测", Content: "分组自动探测",
+			ModelName: info.OriginModelName, TokenName: "分组自动探测", Quota: quota, Content: "分组自动探测",
 			UseTimeSeconds: int(time.Since(tik).Seconds()), IsStream: info.IsStream, Group: group, Other: other,
 		})
 		return testResult{context: c}
 	}
 
-	quota, tieredResult := settleTestQuota(info, priceData, usage)
 	tok := time.Now()
 	milliseconds := tok.Sub(tik).Milliseconds()
 	consumedTime := float64(milliseconds) / 1000.0
