@@ -16,15 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createJSONStorage } from 'zustand/middleware'
@@ -53,7 +45,6 @@ function pricingModel(overrides: Partial<PricingModel> = {}): PricingModel {
   }
 }
 
-let queryClient: QueryClient
 const originalStorage = useSystemConfigStore.persist.getOptions().storage
 beforeEach(() => {
   const storage = new Map<string, string>()
@@ -73,12 +64,9 @@ beforeEach(() => {
   useSystemConfigStore.getState().setConfig({
     currency: { ...DEFAULT_CURRENCY_CONFIG, quotaDisplayType: 'USD' },
   })
-  queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
-  })
 })
 afterEach(() => {
-  queryClient.clear()
+  vi.restoreAllMocks()
   useSystemConfigStore
     .getState()
     .setConfig({ currency: { ...DEFAULT_CURRENCY_CONFIG } })
@@ -156,20 +144,14 @@ describe('model cards', () => {
     expect(onClick).toHaveBeenCalledWith(name)
   })
 
-  it('shows missing metrics without a sampling strip when metrics are unavailable', () => {
+  it('omits performance metrics while keeping the model details action', () => {
     render(<ModelCard model={pricingModel()} onClick={vi.fn()} />)
-    const metrics = screen.getByLabelText(
-      'Performance metrics for the last 24 hours'
-    )
-    expect(within(metrics).getByText('—')).toBeVisible()
-    expect(within(metrics).getByText('—s')).toBeVisible()
-    expect(within(metrics).getByText('—t/s')).toBeVisible()
-    expect(within(metrics).queryByText(/100/)).not.toBeInTheDocument()
     expect(
-      within(metrics).queryByRole('img', {
-        name: 'Recent success-rate samples; gray bars indicate missing data.',
-      })
+      screen.queryByLabelText('Performance metrics for the last 24 hours')
     ).not.toBeInTheDocument()
+    expect(screen.queryByText('Status')).not.toBeInTheDocument()
+    expect(screen.queryByText('Latency')).not.toBeInTheDocument()
+    expect(screen.queryByText('Throughput')).not.toBeInTheDocument()
     expect(screen.getByText('No description available.')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Details' })).toBeEnabled()
   })
@@ -201,6 +183,13 @@ describe('model cards', () => {
     if (!groupField || !endpointField) {
       throw new Error('Expected labeled group and endpoint fields')
     }
+    const cardFooter = groupField.closest('[data-slot="card-footer"]')
+    expect(cardFooter).not.toBeNull()
+    expect(cardFooter).toHaveClass('flex-row')
+    expect(cardFooter).toContainElement(endpointField)
+    expect(cardFooter).toContainElement(
+      screen.getByRole('button', { name: 'Details' })
+    )
     const tagField = screen.getByRole('group', { name: 'Tags' })
     expect(within(groupField).getByText(groups[0])).toBeVisible()
     expect(within(groupField).getByText('+2')).toHaveAttribute(
@@ -235,30 +224,6 @@ describe('model cards', () => {
       screen.queryByRole('group', { name: 'Tags' })
     ).not.toBeInTheDocument()
   })
-
-  it.each([
-    { success_rate: 0, expected: '0.00%' },
-    { success_rate: 99.8, expected: '99.80%' },
-    { success_rate: Number.NaN, expected: '—' },
-  ])(
-    'shows $expected for the reported request success rate $success_rate',
-    ({ success_rate, expected }) => {
-      render(
-        <ModelCard
-          model={pricingModel()}
-          onClick={vi.fn()}
-          perf={{ avg_latency_ms: 1200, avg_tps: 42, success_rate }}
-        />
-      )
-      const metrics = screen.getByLabelText(
-        'Performance metrics for the last 24 hours'
-      )
-      expect(within(metrics).getByText(expected)).toBeVisible()
-      expect(within(metrics).getByText('Status')).toBeVisible()
-      expect(within(metrics).getByText('1.20s')).toBeVisible()
-      expect(within(metrics).getByText('42.0t/s')).toBeVisible()
-    }
-  )
 
   it('keeps group and recharge pricing correct when changing the token unit, including a free cache price', () => {
     const props = {
@@ -410,48 +375,24 @@ describe('model cards', () => {
     expect(screen.getByText(expression)).toBeVisible()
   })
 
-  it('keeps browsing and neutral health placeholders available after the metrics request fails', async () => {
-    const request = vi
-      .spyOn(api, 'get')
-      .mockRejectedValue(new Error('metrics unavailable'))
+  it('renders the card grid without requesting performance metrics', async () => {
+    const request = vi.spyOn(api, 'get')
     const onModelClick = vi.fn()
     render(
-      <QueryClientProvider client={queryClient}>
-        <ModelCardGrid models={[pricingModel()]} onModelClick={onModelClick} />
-      </QueryClientProvider>
+      <ModelCardGrid models={[pricingModel()]} onModelClick={onModelClick} />
     )
-    await waitFor(() =>
-      expect(
-        queryClient.getQueryState(['perf-metrics-summary', 24])?.status
-      ).toBe('error')
-    )
-    expect(request).toHaveBeenCalledWith('/api/perf-metrics/summary', {
-      params: { hours: 24 },
-    })
-    expect(
-      within(
-        screen.getByLabelText('Performance metrics for the last 24 hours')
-      ).getAllByText(/^—/)
-    ).toHaveLength(3)
+    expect(request).not.toHaveBeenCalled()
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Details' }))
     expect(onModelClick).toHaveBeenCalledWith('example-model')
   })
 
   it('paginates the model cards and disables navigation at both boundaries', async () => {
-    queryClient.setQueryData(['perf-metrics-summary', 24], {
-      success: true,
-      data: { models: [] },
-    })
     const models = Array.from({ length: 21 }, (_, index) =>
       pricingModel({ id: index + 1, model_name: `model-${index + 1}` })
     )
     const user = userEvent.setup()
-    render(
-      <QueryClientProvider client={queryClient}>
-        <ModelCardGrid models={models} onModelClick={vi.fn()} />
-      </QueryClientProvider>
-    )
+    render(<ModelCardGrid models={models} onModelClick={vi.fn()} />)
     expect(
       screen.getByRole('button', { name: 'Go to previous page' })
     ).toBeDisabled()
@@ -478,37 +419,12 @@ describe('model cards', () => {
   })
 
   it('switches the card grid to three columns at the xl breakpoint instead of 2xl', () => {
-    queryClient.setQueryData(['perf-metrics-summary', 24], {
-      success: true,
-      data: { models: [] },
-    })
-    render(
-      <QueryClientProvider client={queryClient}>
-        <ModelCardGrid models={[pricingModel()]} onModelClick={vi.fn()} />
-      </QueryClientProvider>
-    )
+    render(<ModelCardGrid models={[pricingModel()]} onModelClick={vi.fn()} />)
     const grid = screen
       .getByRole('heading', { name: 'example-model' })
       .closest('.grid')
     expect(grid).toHaveClass('xl:grid-cols-3')
     expect(grid).not.toHaveClass('2xl:grid-cols-3')
     expect(grid).not.toHaveClass('min-[1440px]:grid-cols-3')
-  })
-
-  it('retains success rate, latency and throughput without rendering sampling bars', () => {
-    render(
-      <ModelCard
-        model={pricingModel()}
-        onClick={vi.fn()}
-        perf={{ avg_latency_ms: 1200, avg_tps: 42, success_rate: 80 }}
-      />
-    )
-    const metrics = screen.getByLabelText(
-      'Performance metrics for the last 24 hours'
-    )
-    expect(within(metrics).getByText('80.00%')).toBeVisible()
-    expect(within(metrics).getByText('1.20s')).toBeVisible()
-    expect(within(metrics).getByText('42.0t/s')).toBeVisible()
-    expect(within(metrics).queryByRole('img')).not.toBeInTheDocument()
   })
 })

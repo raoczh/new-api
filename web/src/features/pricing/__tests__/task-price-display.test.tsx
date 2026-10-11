@@ -100,6 +100,36 @@ const model: PricingModel = {
 }
 const clients: QueryClient[] = []
 
+it('omits performance metrics and the performance tab from model details', () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  clients.push(client)
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { groups: [] } } })
+
+  render(
+    <QueryClientProvider client={client}>
+      <ModelDetailsContent
+        model={model}
+        groupRatio={{ default: 1 }}
+        usableGroup={{ default: { desc: '', ratio: 1 } }}
+        endpointMap={{}}
+        autoGroups={[]}
+        priceRate={1}
+        usdExchangeRate={1}
+        tokenUnit='M'
+      />
+    </QueryClientProvider>
+  )
+
+  expect(screen.getByRole('tab', { name: 'Overview' })).toBeVisible()
+  expect(screen.getByRole('tab', { name: 'API' })).toBeVisible()
+  expect(screen.queryByRole('tab', { name: 'Performance' })).toBeNull()
+  expect(screen.queryByText('TPS')).not.toBeInTheDocument()
+  expect(screen.queryByText('Average latency')).not.toBeInTheDocument()
+  expect(screen.queryByText('Success rate')).not.toBeInTheDocument()
+})
+
 it('shows nested task conditions and prices in detail and group tables without ambiguous log matches', () => {
   vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { groups: [] } } })
   const client = new QueryClient({

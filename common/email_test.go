@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/smtp"
@@ -17,8 +18,58 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSMTPTimeoutCoversGreetingTLSAndCommands(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		ssl          bool
+		sendGreeting bool
+	}{
+		{name: "stalled greeting"},
+		{name: "stalled TLS handshake", ssl: true},
+		{name: "stalled SMTP command", sendGreeting: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withSMTPSettings(t)
+			SMTPServer = "127.0.0.1"
+			SMTPPort = 25
+			SMTPSSLEnabled = tc.ssl
+			SMTPStartTLSEnabled = false
+			SMTPInsecureSkipVerify = false
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+			defer listener.Close()
+			serverDone := make(chan struct{})
+			go func() {
+				defer close(serverDone)
+				conn, err := listener.Accept()
+				if err != nil {
+					return
+				}
+				defer conn.Close()
+				if tc.sendGreeting {
+					_, _ = io.WriteString(conn, "220 fake.smtp.local ESMTP\r\n")
+				}
+				_, _ = io.Copy(io.Discard, conn)
+			}()
+
+			client, err := newSMTPClient(listener.Addr().String(), 100*time.Millisecond)
+			if tc.sendGreeting {
+				require.NoError(t, err)
+				err = client.Mail("sender@example.com")
+				_ = client.Close()
+			}
+			require.Error(t, err)
+			var networkError net.Error
+			require.ErrorAs(t, err, &networkError)
+			assert.True(t, networkError.Timeout(), "a stalled SMTP server must fail with a timeout")
+			<-serverDone
+		})
+	}
+}
 
 type fakeSMTPServer struct {
 	listener          net.Listener
@@ -391,7 +442,7 @@ func TestNewSMTPClientHonorsExplicitStartTLSWhenPortIs465(t *testing.T) {
 	SMTPStartTLSEnabled = true
 	SMTPInsecureSkipVerify = true
 
-	client, err := newSMTPClient(fmt.Sprintf("%s:%d", server.host, server.port))
+	client, err := newSMTPClient(fmt.Sprintf("%s:%d", server.host, server.port), smtpTimeout)
 	require.NoError(t, err)
 	defer client.Close()
 
@@ -414,7 +465,7 @@ func TestNewSMTPClientKeepsImplicitTLSForLegacyPort465(t *testing.T) {
 	SMTPStartTLSEnabled = false
 	SMTPInsecureSkipVerify = true
 
-	client, err := newSMTPClient(fmt.Sprintf("%s:%d", server.host, server.port))
+	client, err := newSMTPClient(fmt.Sprintf("%s:%d", server.host, server.port), smtpTimeout)
 	require.NoError(t, err)
 	defer client.Close()
 }

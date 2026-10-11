@@ -227,7 +227,8 @@ func SendEmailVerification(c *gin.Context) {
 		"<p>验证码 %d 分钟内有效，如果不是本人操作，请忽略。</p>", common.SystemName, code, common.VerificationValidMinutes)
 	err = common.SendEmail(subject, email, content)
 	if err != nil {
-		common.ApiError(c, err)
+		logger.LogError(c.Request.Context(), fmt.Sprintf("registration verification email delivery failed via SMTP: %v", err))
+		common.ApiError(c, fmt.Errorf("SMTP email delivery failed: %w", err))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{

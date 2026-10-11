@@ -16,12 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useRef } from 'react'
+import { useEffect, useEffectEvent, useRef } from 'react'
 
 declare global {
   interface Window {
     turnstile?: {
-      render: (element: HTMLElement, options: Record<string, unknown>) => void
+      render: (element: HTMLElement, options: Record<string, unknown>) => string
+      remove: (widgetId: string) => void
     }
   }
 }
@@ -33,44 +34,55 @@ interface TurnstileProps {
   className?: string
 }
 
-export function Turnstile({
-  siteKey,
-  onVerify,
-  onExpire,
-  className,
-}: TurnstileProps) {
+export function Turnstile(props: TurnstileProps) {
   const ref = useRef<HTMLDivElement | null>(null)
+  const onVerify = useEffectEvent((token: string) => props.onVerify(token))
+  const onExpire = useEffectEvent(() => props.onExpire?.())
 
   useEffect(() => {
+    const container = ref.current
+    if (!container) return
+    let widgetId: string | undefined
     const render = () => {
-      if (!ref.current || !window.turnstile) return
+      if (!window.turnstile || widgetId !== undefined) return
       try {
-        window.turnstile.render(ref.current, {
-          sitekey: siteKey,
-          callback: (token: string) => onVerify(token),
-          'error-callback': () => onExpire?.(),
-          'expired-callback': () => onExpire?.(),
+        widgetId = window.turnstile.render(container, {
+          sitekey: props.siteKey,
+          callback: onVerify,
+          'error-callback': onExpire,
+          'expired-callback': onExpire,
         })
       } catch {
-        /* empty */
+        onExpire()
       }
     }
 
+    let script: HTMLScriptElement | null = null
     if (window.turnstile) {
       render()
-      return
+    } else {
+      const scriptId = 'cf-turnstile'
+      script = document.querySelector<HTMLScriptElement>(`#${scriptId}`)
+      const isNewScript = !script
+      if (!script) {
+        script = document.createElement('script')
+        script.id = scriptId
+        script.src =
+          'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+        script.async = true
+        script.defer = true
+      }
+      script.addEventListener('load', render)
+      script.addEventListener('error', onExpire)
+      if (isNewScript) document.head.appendChild(script)
     }
-    const scriptId = 'cf-turnstile'
-    if (document.getElementById(scriptId)) return
-    const s = document.createElement('script')
-    s.id = scriptId
-    s.src =
-      'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
-    s.async = true
-    s.defer = true
-    s.onload = () => render()
-    document.head.appendChild(s)
-  }, [siteKey, onVerify, onExpire])
 
-  return <div ref={ref} className={className} />
+    return () => {
+      script?.removeEventListener('load', render)
+      script?.removeEventListener('error', onExpire)
+      if (widgetId !== undefined) window.turnstile?.remove(widgetId)
+    }
+  }, [props.siteKey])
+
+  return <div ref={ref} className={props.className} />
 }

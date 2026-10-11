@@ -29,9 +29,9 @@ func SetUpLogger(server *gin.Engine) {
 			tag = "web"
 		}
 		path := param.Path
-		// OAuth callbacks carry one-time codes and state in the query string.
+		// OAuth callbacks and Turnstile checks carry one-time secrets in the query string.
 		// Redact the log value only; the handler still needs the original query.
-		if strings.HasPrefix(path, "/api/oauth/") || strings.HasPrefix(path, "/oauth/") {
+		if strings.HasPrefix(path, "/api/oauth/") || strings.HasPrefix(path, "/oauth/") || param.Request.URL.Query().Has("turnstile") {
 			path, _, _ = strings.Cut(path, "?")
 		}
 		return fmt.Sprintf("[GIN] %s | %s | %s | %3d | %13v | %15s | %7s %s\n",

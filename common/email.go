@@ -4,11 +4,14 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"net/smtp"
 	"slices"
 	"strings"
 	"time"
 )
+
+const smtpTimeout = 15 * time.Second
 
 func generateMessageID() (string, error) {
 	split := strings.Split(SMTPFrom, "@")
@@ -41,26 +44,29 @@ func smtpTLSConfig() *tls.Config {
 	}
 }
 
-func newSMTPClient(addr string) (*smtp.Client, error) {
-	if SMTPSSLEnabled || (SMTPPort == 465 && !SMTPStartTLSEnabled) {
-		conn, err := tls.Dial("tcp", addr, smtpTLSConfig())
-		if err != nil {
-			return nil, err
-		}
-		client, err := smtp.NewClient(conn, SMTPServer)
-		if err != nil {
-			_ = conn.Close()
-			return nil, err
-		}
-		return client, nil
-	}
-
-	client, err := smtp.Dial(addr)
+func newSMTPClient(addr string, timeout time.Duration) (*smtp.Client, error) {
+	// Bound the entire SMTP exchange, including DNS, TLS and server replies.
+	deadline := time.Now().Add(timeout)
+	dialer := net.Dialer{Deadline: deadline}
+	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {
+		return nil, fmt.Errorf("SMTP connection failed: %w", err)
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
+		_ = conn.Close()
 		return nil, err
 	}
+	if SMTPSSLEnabled || (SMTPPort == 465 && !SMTPStartTLSEnabled) {
+		conn = tls.Client(conn, smtpTLSConfig())
+	}
 
-	if SMTPStartTLSEnabled {
+	client, err := smtp.NewClient(conn, SMTPServer)
+	if err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("SMTP greeting or TLS handshake failed: %w", err)
+	}
+
+	if SMTPStartTLSEnabled && !SMTPSSLEnabled {
 		startTLSSupported, _ := client.Extension("STARTTLS")
 		if !startTLSSupported {
 			_ = client.Close()
@@ -98,7 +104,7 @@ func SendEmail(subject string, receiver string, content string) error {
 	addr := fmt.Sprintf("%s:%d", SMTPServer, SMTPPort)
 	to := strings.Split(receiver, ";")
 	var err error
-	client, err := newSMTPClient(addr)
+	client, err := newSMTPClient(addr, smtpTimeout)
 	if err != nil {
 		return err
 	}

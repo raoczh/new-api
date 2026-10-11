@@ -16,19 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import {
   ArrowLeft,
   CalendarClock,
   Code2,
   FileText,
-  HeartPulse,
   Info,
   Layers,
   Maximize2,
   Sparkles,
-  Timer,
 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -48,16 +45,8 @@ import {
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { getPerfMetrics } from '@/features/performance-metrics/api'
-import {
-  formatLatency,
-  formatThroughput,
-  formatUptimePct,
-  getSuccessRateTextClass,
-} from '@/features/performance-metrics/lib/format'
 import { PluginIcon } from '@/features/task-plugins/components/plugin-icon'
 import { getLobeIcon } from '@/lib/lobe-icon'
-import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
@@ -103,7 +92,6 @@ import type {
 import { DynamicPricingBreakdown } from './dynamic-pricing-breakdown'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
 import { ModelDetailsApi } from './model-details-api'
-import { ModelDetailsPerformance } from './model-details-performance'
 
 // ----------------------------------------------------------------------------
 // Local UI helpers
@@ -235,70 +223,6 @@ function formatCatalogYearMonth(value?: string): string {
 function normalizeCatalogItems(items?: readonly string[]): string[] {
   if (!items) return []
   return items.filter((item) => item.trim().length > 0)
-}
-
-function OverviewMetric(props: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  value: React.ReactNode
-  valueClassName?: string
-}) {
-  const Icon = props.icon
-
-  return (
-    <div className='flex min-w-0 items-center gap-2 px-3 py-2'>
-      <Icon className='text-muted-foreground size-3.5 shrink-0' />
-      <div className='min-w-0 flex-1'>
-        <div className='text-muted-foreground truncate text-[10px] font-medium tracking-wider uppercase'>
-          {props.label}
-        </div>
-        <div
-          className={cn(
-            'text-foreground truncate font-mono text-sm font-semibold tabular-nums',
-            props.valueClassName
-          )}
-        >
-          {props.value}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function OverviewSummaryGrid(props: { model: PricingModel }) {
-  const { t } = useTranslation()
-  const metricsQuery = useQuery({
-    queryKey: ['perf-metrics', props.model.model_name],
-    queryFn: async () =>
-      requireServerSuccess(await getPerfMetrics(props.model.model_name, 24)),
-    staleTime: 60 * 1000,
-  })
-
-  const summary = metricsQuery.data?.data.summary
-  const successRate = summary?.success_rate ?? Number.NaN
-  const avgTps = summary?.avg_tps ?? 0
-  const avgLatency = summary?.avg_latency_ms ?? 0
-
-  return (
-    <div className='bg-muted/20 grid overflow-hidden rounded-lg border sm:grid-cols-3 sm:divide-x'>
-      <OverviewMetric
-        icon={Timer}
-        label='TPS'
-        value={formatThroughput(avgTps)}
-      />
-      <OverviewMetric
-        icon={Timer}
-        label={t('Average latency')}
-        value={formatLatency(avgLatency)}
-      />
-      <OverviewMetric
-        icon={HeartPulse}
-        label={t('Success rate')}
-        value={formatUptimePct(successRate)}
-        valueClassName={getSuccessRateTextClass(successRate)}
-      />
-    </div>
-  )
 }
 
 function CatalogPillList(props: { items: string[] }) {
@@ -1444,7 +1368,7 @@ function ProviderGroupPricingSection(
   )
 }
 
-const TAB_VALUES = ['overview', 'performance', 'api'] as const
+const TAB_VALUES = ['overview', 'api'] as const
 type TabValue = (typeof TAB_VALUES)[number]
 
 const TAB_META: Record<
@@ -1452,7 +1376,6 @@ const TAB_META: Record<
   { icon: React.ComponentType<{ className?: string }>; labelKey: string }
 > = {
   overview: { icon: Info, labelKey: 'Overview' },
-  performance: { icon: HeartPulse, labelKey: 'Performance' },
   api: { icon: Code2, labelKey: 'API' },
 }
 
@@ -1491,7 +1414,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
       <ModelHeader model={props.model} />
 
       <Tabs defaultValue='overview' className='gap-4'>
-        <TabsList className='bg-muted/60 grid w-full grid-cols-3 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto'>
+        <TabsList className='bg-muted/60 grid w-full grid-cols-2 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto'>
           {TAB_VALUES.map((value) => {
             const Icon = TAB_META[value].icon
             return (
@@ -1508,8 +1431,6 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
         </TabsList>
 
         <TabsContent value='overview' className='space-y-6 outline-none'>
-          <OverviewSummaryGrid model={props.model} />
-
           <section className='bg-card/60 space-y-5 rounded-xl border p-4 shadow-sm'>
             <SectionTitle>{t('Pricing')}</SectionTitle>
             {showBasePrices && (
@@ -1545,10 +1466,6 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
           </section>
 
           <ModelBackendDetailsSection model={props.model} />
-        </TabsContent>
-
-        <TabsContent value='performance' className='outline-none'>
-          <ModelDetailsPerformance model={props.model} />
         </TabsContent>
 
         <TabsContent value='api' className='outline-none'>
