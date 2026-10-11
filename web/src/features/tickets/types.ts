@@ -42,6 +42,17 @@ export type TicketMessage = {
   is_admin: boolean
   content: string
   created_at: number
+  attachments?: TicketAttachment[]
+}
+
+export type TicketAttachment = {
+  id: number
+  ticket_id: number
+  message_id: number
+  filename: string
+  content_type: string
+  size: number
+  created_at: number
 }
 
 export type TicketDetail = {

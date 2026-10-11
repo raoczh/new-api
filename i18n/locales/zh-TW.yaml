@@ -70,6 +70,8 @@ ticket.title_length: "工單標題長度必須在1-100之間"
 ticket.content_length: "工單內容長度必須在1-5000之間"
 ticket.not_found: "工單不存在"
 ticket.closed: "工單已關閉"
+ticket.attachment_too_large: "每個附件不得超過 2 MB"
+ticket.attachment_count: "最多可上傳 5 個附件"
 
 # User messages
 user.password_login_disabled: "管理員關閉了密碼登錄"

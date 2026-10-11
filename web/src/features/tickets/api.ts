@@ -21,6 +21,7 @@ import { api } from '@/lib/api'
 import type {
   ApiResponse,
   Ticket,
+  TicketAttachment,
   TicketDetail,
   TicketListData,
   TicketListParams,
@@ -31,6 +32,42 @@ import type {
 const BASE_PATH: Record<TicketScope, string> = {
   self: '/api/ticket/self',
   admin: '/api/ticket/admin',
+}
+
+export function getTicketAttachmentUrl(
+  scope: TicketScope,
+  ticketId: number,
+  attachmentId: number
+): string {
+  return `${BASE_PATH[scope]}/${ticketId}/attachments/${attachmentId}`
+}
+
+export async function getTicketAttachment(
+  scope: TicketScope,
+  ticketId: number,
+  attachmentId: number
+): Promise<Blob> {
+  const res = await api.get(
+    getTicketAttachmentUrl(scope, ticketId, attachmentId),
+    { responseType: 'blob' }
+  )
+  return res.data
+}
+
+export async function downloadTicketAttachment(
+  scope: TicketScope,
+  ticketId: number,
+  attachment: TicketAttachment
+): Promise<void> {
+  const blob = await getTicketAttachment(scope, ticketId, attachment.id)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = attachment.filename
+  document.body.append(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 export async function getTickets(
@@ -57,18 +94,38 @@ export async function getTicket(
 export async function createTicket(data: {
   title: string
   content: string
+  attachments?: File[]
 }): Promise<ApiResponse<Ticket>> {
-  const res = await api.post(BASE_PATH.self, data)
+  const body = data.attachments?.length
+    ? createMultipartBody(data.title, data.content, data.attachments)
+    : { title: data.title, content: data.content }
+  const res = await api.post(BASE_PATH.self, body)
   return res.data
 }
 
 export async function replyTicket(
   scope: TicketScope,
   id: number,
-  content: string
+  content: string,
+  attachments: File[] = []
 ): Promise<ApiResponse<TicketMessage>> {
-  const res = await api.post(`${BASE_PATH[scope]}/${id}/reply`, { content })
+  const body = attachments.length
+    ? createMultipartBody('', content, attachments)
+    : { content }
+  const res = await api.post(`${BASE_PATH[scope]}/${id}/reply`, body)
   return res.data
+}
+
+function createMultipartBody(
+  title: string,
+  content: string,
+  attachments: File[]
+): FormData {
+  const form = new FormData()
+  if (title) form.append('title', title)
+  form.append('content', content)
+  for (const attachment of attachments) form.append('attachments', attachment)
+  return form
 }
 
 export async function closeTicket(

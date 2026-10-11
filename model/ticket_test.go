@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,13 +45,19 @@ func TestTicketLifecycle(t *testing.T) {
 			originalDB := DB
 			DB = db
 			t.Cleanup(func() { DB = originalDB })
+			originalLogDir := common.LogDir
+			logDir := t.TempDir()
+			common.LogDir = &logDir
+			t.Cleanup(func() { common.LogDir = originalLogDir })
 			// Migrating twice proves restarts do not keep altering the schema.
-			require.NoError(t, db.AutoMigrate(&Ticket{}, &TicketMessage{}))
-			require.NoError(t, db.AutoMigrate(&Ticket{}, &TicketMessage{}))
-			t.Cleanup(func() { require.NoError(t, db.Migrator().DropTable(&Ticket{}, &TicketMessage{})) })
+			require.NoError(t, db.AutoMigrate(&Ticket{}, &TicketMessage{}, &TicketAttachment{}))
+			require.NoError(t, db.AutoMigrate(&Ticket{}, &TicketMessage{}, &TicketAttachment{}))
+			t.Cleanup(func() { require.NoError(t, db.Migrator().DropTable(&TicketAttachment{}, &TicketMessage{}, &Ticket{})) })
 
 			const ownerId, otherId, adminId = 11, 12, 1
-			ticket, err := CreateTicket(ownerId, "alice", "API returns 500", "first message")
+			ticket, err := CreateTicketWithAttachments(ownerId, "alice", "API returns 500", "first message", []TicketAttachmentInput{{
+				Filename: "error.txt", ContentType: "text/plain", Data: []byte("details"),
+			}})
 			require.NoError(t, err)
 			assert.Equal(t, TicketStatusOpen, ticket.Status)
 			_, err = CreateTicket(otherId, "bob", "Billing question", "other user")
@@ -88,6 +95,9 @@ func TestTicketLifecycle(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, TicketStatusOpen, got.Status)
 			require.Len(t, messages, 3)
+			require.Len(t, messages[0].Attachments, 1)
+			assert.Equal(t, "error.txt", messages[0].Attachments[0].Filename)
+			assert.FileExists(t, TicketAttachmentPath(messages[0].Attachments[0]))
 			assert.Equal(t, []string{"first message", "admin reply", "user follow-up"},
 				[]string{messages[0].Content, messages[1].Content, messages[2].Content})
 			assert.Equal(t, []bool{false, true, false},

@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Lock, Send } from 'lucide-react'
+import { ArrowLeft, Lock, Send, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { handleServerError } from '@/lib/handle-server-error'
@@ -32,6 +33,10 @@ import { createServerError } from '@/lib/server-error-message'
 
 import { closeTicket, getTicket, replyTicket } from '../api'
 import { TICKET_CONTENT_MAX_LENGTH, TICKET_STATUS } from '../constants'
+import {
+  appendTicketAttachments,
+  type PendingTicketAttachment,
+} from '../lib/attachments'
 import { ticketQueryKeys } from '../lib/query-keys'
 import type { TicketScope } from '../types'
 import { TicketMessageBubble } from './ticket-message-bubble'
@@ -48,6 +53,7 @@ export function TicketConversation(props: TicketConversationProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
+  const [attachments, setAttachments] = useState<PendingTicketAttachment[]>([])
   const [closeOpen, setCloseOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -78,11 +84,17 @@ export function TicketConversation(props: TicketConversationProps) {
 
   const replyMutation = useMutation({
     mutationFn: async (content: string) => {
-      const res = await replyTicket(props.scope, props.ticketId, content)
+      const res = await replyTicket(
+        props.scope,
+        props.ticketId,
+        content,
+        attachments.map((attachment) => attachment.file)
+      )
       if (!res.success) throw createServerError(res, t('Failed to send reply'))
     },
     onSuccess: async () => {
       setDraft('')
+      setAttachments([])
       await invalidate()
     },
     onError: (error) => handleServerError(error, t('Failed to send reply')),
@@ -110,6 +122,17 @@ export function TicketConversation(props: TicketConversationProps) {
     trimmedDraft.length > 0 &&
     draft.length <= TICKET_CONTENT_MAX_LENGTH &&
     !replyMutation.isPending
+
+  const addAttachments = (files: File[]) => {
+    const result = appendTicketAttachments(attachments, files)
+    setAttachments(result.attachments)
+    if (result.hasOversizedFile) {
+      toast.error(t('Each file must be 2 MB or smaller'))
+    }
+    if (result.exceedsCount) {
+      toast.error(t('You can upload up to 5 attachments'))
+    }
+  }
 
   const submitReply = () => {
     if (canSend) replyMutation.mutate(trimmedDraft)
@@ -181,6 +204,7 @@ export function TicketConversation(props: TicketConversationProps) {
               <TicketMessageBubble
                 key={message.id}
                 message={message}
+                scope={props.scope}
                 // A message is "mine" when it was sent from the same side as the viewer.
                 own={message.is_admin === (props.scope === 'admin')}
               />
@@ -206,6 +230,18 @@ export function TicketConversation(props: TicketConversationProps) {
             <Textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
+              onPaste={(event) => {
+                const pastedImages = [...event.clipboardData.items]
+                  .filter(
+                    (item) =>
+                      item.kind === 'file' && item.type.startsWith('image/')
+                  )
+                  .map((item) => item.getAsFile())
+                  .filter((file): file is File => file !== null)
+                if (pastedImages.length === 0) return
+                event.preventDefault()
+                addAttachments(pastedImages)
+              }}
               onKeyDown={(event) => {
                 if (
                   event.key === 'Enter' &&
@@ -222,6 +258,53 @@ export function TicketConversation(props: TicketConversationProps) {
               disabled={!ticket}
               className='max-h-48 min-h-20 resize-none'
             />
+            <div className='flex flex-col gap-2'>
+              <Input
+                type='file'
+                multiple
+                disabled={replyMutation.isPending || !ticket}
+                onChange={(event) => {
+                  addAttachments([...(event.target.files ?? [])])
+                  event.target.value = ''
+                }}
+                aria-label={t('Upload files')}
+              />
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  'Up to 5 files, 2 MB each. You can paste images directly into the text field.'
+                )}
+              </p>
+              {attachments.length > 0 && (
+                <ul
+                  className='flex flex-wrap gap-1.5'
+                  aria-label={t('Upload files')}
+                >
+                  {attachments.map((attachment) => (
+                    <li
+                      key={attachment.id}
+                      className='bg-muted flex items-center gap-1 rounded-md px-2 py-1 text-xs'
+                    >
+                      <span className='max-w-40 truncate'>
+                        {attachment.file.name}
+                      </span>
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='icon-xs'
+                        aria-label={t('Remove attachment')}
+                        onClick={() =>
+                          setAttachments((current) =>
+                            current.filter((item) => item.id !== attachment.id)
+                          )
+                        }
+                      >
+                        <X aria-hidden='true' />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <div className='flex items-center justify-between gap-2'>
               <span className='text-muted-foreground text-xs'>
                 {t('Press Ctrl+Enter to send')} · {draft.length}/

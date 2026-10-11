@@ -69,6 +69,8 @@ ticket.title_length: "Ticket title length must be between 1 and 100"
 ticket.content_length: "Ticket content length must be between 1 and 5000"
 ticket.not_found: "Ticket not found"
 ticket.closed: "Ticket is closed"
+ticket.attachment_too_large: "Each attachment must be 2 MB or smaller"
+ticket.attachment_count: "You can upload up to 5 attachments"
 
 # User messages
 user.password_login_disabled: "Password login has been disabled by administrator"

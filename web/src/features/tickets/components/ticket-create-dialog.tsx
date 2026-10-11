@@ -18,7 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -39,6 +40,10 @@ import { handleServerError } from '@/lib/handle-server-error'
 import { createServerError } from '@/lib/server-error-message'
 
 import { createTicket } from '../api'
+import {
+  appendTicketAttachments,
+  type PendingTicketAttachment,
+} from '../lib/attachments'
 import { ticketQueryKeys } from '../lib/query-keys'
 import { getTicketFormSchema, type TicketFormValues } from '../lib/ticket-form'
 import type { Ticket } from '../types'
@@ -54,18 +59,25 @@ type TicketCreateDialogProps = {
 export function TicketCreateDialog(props: TicketCreateDialogProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const [attachments, setAttachments] = useState<PendingTicketAttachment[]>([])
   const form = useForm<TicketFormValues>({
     resolver: zodResolver(getTicketFormSchema(t)),
     defaultValues: { title: '', content: '' },
   })
 
   useEffect(() => {
-    if (!props.open) form.reset({ title: '', content: '' })
+    if (!props.open) {
+      form.reset({ title: '', content: '' })
+      setAttachments([])
+    }
   }, [props.open, form])
 
   const createMutation = useMutation({
     mutationFn: async (values: TicketFormValues) => {
-      const res = await createTicket(values)
+      const res = await createTicket({
+        ...values,
+        attachments: attachments.map((attachment) => attachment.file),
+      })
       if (!res.success || !res.data) {
         throw createServerError(res, t('Failed to submit ticket'))
       }
@@ -81,6 +93,17 @@ export function TicketCreateDialog(props: TicketCreateDialogProps) {
     },
     onError: (error) => handleServerError(error, t('Failed to submit ticket')),
   })
+
+  const addAttachments = (files: File[]) => {
+    const result = appendTicketAttachments(attachments, files)
+    setAttachments(result.attachments)
+    if (result.hasOversizedFile) {
+      toast.error(t('Each file must be 2 MB or smaller'))
+    }
+    if (result.exceedsCount) {
+      toast.error(t('You can upload up to 5 attachments'))
+    }
+  }
 
   return (
     <Dialog
@@ -146,6 +169,19 @@ export function TicketCreateDialog(props: TicketCreateDialogProps) {
                 <FormControl>
                   <Textarea
                     {...field}
+                    onPaste={(event) => {
+                      const pastedImages = [...event.clipboardData.items]
+                        .filter(
+                          (item) =>
+                            item.kind === 'file' &&
+                            item.type.startsWith('image/')
+                        )
+                        .map((item) => item.getAsFile())
+                        .filter((file): file is File => file !== null)
+                      if (pastedImages.length === 0) return
+                      event.preventDefault()
+                      addAttachments(pastedImages)
+                    }}
                     placeholder={t(
                       'Include details such as the model, request time and error message'
                     )}
@@ -156,6 +192,54 @@ export function TicketCreateDialog(props: TicketCreateDialogProps) {
               </FormItem>
             )}
           />
+          <div className='space-y-2'>
+            <FormLabel htmlFor='ticket-attachments'>
+              {t('Upload files')}
+            </FormLabel>
+            <Input
+              id='ticket-attachments'
+              type='file'
+              multiple
+              disabled={createMutation.isPending}
+              onChange={(event) => {
+                addAttachments([...(event.target.files ?? [])])
+                event.target.value = ''
+              }}
+              aria-describedby='ticket-attachment-help'
+            />
+            <p
+              id='ticket-attachment-help'
+              className='text-muted-foreground text-xs'
+            >
+              {t(
+                'Up to 5 files, 2 MB each. You can paste images directly into the text field.'
+              )}
+            </p>
+            {attachments.length > 0 && (
+              <ul className='space-y-1 text-sm'>
+                {attachments.map((attachment) => (
+                  <li key={attachment.id} className='flex items-center gap-2'>
+                    <span className='min-w-0 flex-1 truncate'>
+                      {attachment.file.name}
+                    </span>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='icon-xs'
+                      aria-label={t('Remove attachment')}
+                      onClick={() =>
+                        setAttachments((current) =>
+                          current.filter((item) => item.id !== attachment.id)
+                        )
+                      }
+                    >
+                      <X aria-hidden='true' />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </form>
       </Form>
     </Dialog>

@@ -23,7 +23,13 @@ import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { Input } from '@/components/ui/input'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatTimestampRelative } from '@/lib/format'
@@ -67,19 +73,22 @@ export function TicketList(props: TicketListProps) {
           }
           aria-label={t('Search tickets')}
         />
-        <NativeSelect
-          aria-label={t('Status')}
-          className='w-full'
+        <Select
           value={String(props.status)}
-          onChange={(event) => props.onStatusChange(Number(event.target.value))}
+          onValueChange={(value) => props.onStatusChange(Number(value))}
         >
-          <NativeSelectOption value='0'>{t('All Status')}</NativeSelectOption>
-          {Object.entries(TICKET_STATUS_CONFIG).map(([value, config]) => (
-            <NativeSelectOption key={value} value={value}>
-              {t(config.labelKey)}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+          <SelectTrigger aria-label={t('Status')} className='w-full'>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value='0'>{t('All Status')}</SelectItem>
+            {Object.entries(TICKET_STATUS_CONFIG).map(([value, config]) => (
+              <SelectItem key={value} value={value}>
+                {t(config.labelKey)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className='min-h-0 flex-1 overflow-y-auto'>

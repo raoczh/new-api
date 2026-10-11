@@ -78,10 +78,12 @@ const (
 
 // Ticket related messages
 const (
-	MsgTicketTitleLength   = "ticket.title_length"
-	MsgTicketContentLength = "ticket.content_length"
-	MsgTicketNotFound      = "ticket.not_found"
-	MsgTicketClosed        = "ticket.closed"
+	MsgTicketTitleLength        = "ticket.title_length"
+	MsgTicketContentLength      = "ticket.content_length"
+	MsgTicketNotFound           = "ticket.not_found"
+	MsgTicketClosed             = "ticket.closed"
+	MsgTicketAttachmentTooLarge = "ticket.attachment_too_large"
+	MsgTicketAttachmentCount    = "ticket.attachment_count"
 )
 
 // User related messages

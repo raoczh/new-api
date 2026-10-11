@@ -38,4 +38,6 @@ export const TICKET_STATUS_CONFIG: Record<
 
 export const TICKET_TITLE_MAX_LENGTH = 100
 export const TICKET_CONTENT_MAX_LENGTH = 5000
+export const TICKET_ATTACHMENT_MAX_SIZE = 2 * 1024 * 1024
+export const TICKET_ATTACHMENT_MAX_COUNT = 5
 export const TICKET_PAGE_SIZE = 20
