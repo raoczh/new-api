@@ -1,3 +1,4 @@
+import { Reorder, useDragControls } from 'motion/react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -18,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import * as React from 'react'
 
+import { GroupReorderHandle } from '@/components/auto-group-order-item'
 import {
   Table,
   TableBody,
@@ -42,6 +44,10 @@ type StaticDataTableBaseProps = {
 }
 
 type StaticDataTableDataProps<TData = unknown> = StaticDataTableBaseProps & {
+  reorder?: {
+    onReorder: (rows: TData[]) => void
+    getLabel: (row: TData) => string
+  }
   columns: StaticDataTableColumn<TData>[]
   data: TData[]
   getRowKey?: (row: TData, index: number) => React.Key
@@ -102,6 +108,7 @@ function StaticDataTableWithColumns<TData>({
   emptyContent,
   emptyClassName,
   headerRowClassName,
+  reorder,
 }: StaticDataTableDataProps<TData>) {
   const isEmpty = empty ?? (data !== undefined && data.length === 0)
   const bodyRows = data.map((row, index) => (
@@ -112,6 +119,8 @@ function StaticDataTableWithColumns<TData>({
       columns={columns}
       getRowClassName={getRowClassName}
       renderRow={renderRow}
+      reorder={reorder}
+      data={data}
     />
   ))
 
@@ -119,6 +128,7 @@ function StaticDataTableWithColumns<TData>({
     <>
       <TableHeader>
         <TableRow className={headerRowClassName}>
+          {reorder && <TableHead className='w-10' />}
           {columns.map((column) => (
             <TableHead key={column.id} className={column.className}>
               {column.header}
@@ -126,18 +136,30 @@ function StaticDataTableWithColumns<TData>({
           ))}
         </TableRow>
       </TableHeader>
-      <TableBody>
-        {isEmpty ? (
-          <StaticDataTableEmptyRow
-            colSpan={columns.length}
-            className={emptyClassName}
-          >
-            {emptyContent}
-          </StaticDataTableEmptyRow>
-        ) : (
-          bodyRows
-        )}
-      </TableBody>
+      {reorder && !isEmpty ? (
+        <Reorder.Group
+          as='tbody'
+          axis='y'
+          values={data}
+          onReorder={reorder.onReorder}
+          className='[&_tr:last-child]:border-0 [&>tr]:h-15'
+        >
+          {bodyRows}
+        </Reorder.Group>
+      ) : (
+        <TableBody>
+          {isEmpty ? (
+            <StaticDataTableEmptyRow
+              colSpan={columns.length + (reorder ? 1 : 0)}
+              className={emptyClassName}
+            >
+              {emptyContent}
+            </StaticDataTableEmptyRow>
+          ) : (
+            bodyRows
+          )}
+        </TableBody>
+      )}
     </>
   )
 }
@@ -146,6 +168,8 @@ type StaticDataTableRowProps<TData> = Required<
   Pick<StaticDataTableDataProps<TData>, 'columns'>
 > &
   Pick<StaticDataTableDataProps<TData>, 'getRowClassName' | 'renderRow'> & {
+    reorder?: StaticDataTableDataProps<TData>['reorder']
+    data: TData[]
     row: TData
     index: number
   }
@@ -156,25 +180,57 @@ function StaticDataTableRow<TData>({
   columns,
   getRowClassName,
   renderRow,
+  reorder,
+  data,
 }: StaticDataTableRowProps<TData>) {
+  const dragControls = useDragControls()
   if (renderRow) {
     return <>{renderRow(row, index)}</>
   }
 
+  const cells = columns.map((column) => (
+    <TableCell
+      key={column.id}
+      className={cn(
+        'max-w-full min-w-0 overflow-hidden',
+        getStaticCellClassName(column, row, index)
+      )}
+    >
+      {renderStaticCellContent(column, row, index)}
+    </TableCell>
+  ))
+  if (!reorder) {
+    return (
+      <TableRow className={getRowClassName?.(row, index)}>{cells}</TableRow>
+    )
+  }
   return (
-    <TableRow className={getRowClassName?.(row, index)}>
-      {columns.map((column) => (
-        <TableCell
-          key={column.id}
-          className={cn(
-            'max-w-full min-w-0 overflow-hidden',
-            getStaticCellClassName(column, row, index)
-          )}
-        >
-          {renderStaticCellContent(column, row, index)}
-        </TableCell>
-      ))}
-    </TableRow>
+    <Reorder.Item
+      as='tr'
+      value={row}
+      dragControls={dragControls}
+      dragListener={false}
+      dragMomentum={false}
+      className={cn(
+        'bg-background relative border-b',
+        getRowClassName?.(row, index)
+      )}
+    >
+      <TableCell>
+        <GroupReorderHandle
+          group={reorder.getLabel(row)}
+          dragControls={dragControls}
+          onMove={(direction) => {
+            const target = index + (direction === 'up' ? -1 : 1)
+            if (target < 0 || target >= data.length) return
+            const next = [...data]
+            ;[next[index], next[target]] = [next[target], next[index]]
+            reorder.onReorder(next)
+          }}
+        />
+      </TableCell>
+      {cells}
+    </Reorder.Item>
   )
 }
 

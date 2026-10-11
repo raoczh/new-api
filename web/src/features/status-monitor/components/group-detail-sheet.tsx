@@ -90,9 +90,9 @@ export function GroupDetailSheet(props: GroupDetailSheetProps) {
     <Sheet open={group != null} onOpenChange={props.onOpenChange}>
       <SheetContent className={sideDrawerContentClassName('sm:max-w-2xl')}>
         <SheetHeader className={sideDrawerHeaderClassName()}>
-          <SheetTitle>{group?.description || group?.group}</SheetTitle>
+          <SheetTitle>{group?.group}</SheetTitle>
           <SheetDescription>
-            {group?.group} · {props.windowLabel}
+            {group?.description} · {props.windowLabel}
           </SheetDescription>
         </SheetHeader>
         {group && (

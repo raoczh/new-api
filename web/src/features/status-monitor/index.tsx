@@ -73,8 +73,7 @@ export function StatusMonitor() {
     () =>
       sections
         .filter(
-          (section) =>
-            vendorTab === ALL_VENDORS || String(section.vendorId) === vendorTab
+          (section) => vendorTab === ALL_VENDORS || section.key === vendorTab
         )
         .map((section) => ({
           ...section,
@@ -123,7 +122,7 @@ export function StatusMonitor() {
   } else {
     content = visibleSections.map((section) => (
       <VendorSection
-        key={section.vendorId}
+        key={section.key}
         section={section}
         hourlyStart={data?.hourly_start ?? 0}
         windowLabel={windowLabel}
@@ -194,11 +193,8 @@ export function StatusMonitor() {
                     {t('All vendors')}
                   </TabsTrigger>
                   {sections.map((section) => (
-                    <TabsTrigger
-                      key={section.vendorId}
-                      value={String(section.vendorId)}
-                    >
-                      {section.vendor?.name ?? t('Other vendors')}
+                    <TabsTrigger key={section.key} value={section.key ?? ''}>
+                      {section.vendor?.name ?? section.groups[0]?.group}
                     </TabsTrigger>
                   ))}
                 </TabsList>

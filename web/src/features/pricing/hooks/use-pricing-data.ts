@@ -48,6 +48,9 @@ export function usePricingData(enabled = true) {
     if (!data?.data || !data?.vendors) return []
 
     const vendorMap = new Map(data.vendors.map((v) => [v.id, v]))
+    const groups =
+      data.group_order ?? Object.keys(data.usable_group ?? {}).sort()
+    const groupRanks = new Map(groups.map((group, index) => [group, index]))
 
     return data.data.map((model) => {
       const vendor = model.vendor_id
@@ -60,6 +63,11 @@ export function usePricingData(enabled = true) {
         vendor_icon: vendor?.icon,
         vendor_description: vendor?.description,
         group_ratio: data.group_ratio,
+        enable_groups: [...model.enable_groups].sort(
+          (a, b) =>
+            (groupRanks.get(a) ?? groups.length) -
+            (groupRanks.get(b) ?? groups.length)
+        ),
       }
     })
   }, [data])
@@ -69,6 +77,8 @@ export function usePricingData(enabled = true) {
     vendors: data?.vendors ?? [],
     groupRatio: data?.group_ratio ?? {},
     usableGroup: data?.usable_group ?? {},
+    groupOrder:
+      data?.group_order ?? Object.keys(data?.usable_group ?? {}).sort(),
     endpointMap: data?.supported_endpoint ?? {},
     autoGroups: data?.auto_groups ?? [],
     isLoading,

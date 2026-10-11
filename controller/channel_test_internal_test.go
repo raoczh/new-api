@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -58,7 +59,19 @@ func TestGroupProbeRotation(t *testing.T) {
 }
 
 func TestModelTestsRecordOnlySuccessfulManualChecksAndAllAutomaticOutcomes(t *testing.T) {
-	db := setupModelListControllerTestDB(t)
+	for _, dialect := range []struct{ name, env string }{{"sqlite", ""}, {"mysql", "TEST_MYSQL_DSN"}, {"postgres", "TEST_POSTGRES_DSN"}} {
+		t.Run(dialect.name, func(t *testing.T) {
+			if dialect.env != "" && os.Getenv(dialect.env) == "" {
+				t.Skip("set " + dialect.env + " to run this database")
+			}
+			testModelTestRecords(t, dialect.name, os.Getenv(dialect.env))
+		})
+	}
+}
+
+func testModelTestRecords(t *testing.T, dialect, dsn string) {
+	t.Helper()
+	db := modelManagementDB(t, dialect, dsn)
 	require.NoError(t, db.AutoMigrate(&model.StatusProbe{}, &model.Log{}, &model.PerfMetric{}, &model.SystemTask{}, &model.SystemTaskLock{}))
 	withTieredBillingConfig(t, map[string]string{
 		"gpt-4o-mini": "tiered_expr", "gpt-4o": "tiered_expr",
@@ -112,16 +125,17 @@ func TestModelTestsRecordOnlySuccessfulManualChecksAndAllAutomaticOutcomes(t *te
 	}).Error)
 	service.InitHttpClient()
 	for _, tc := range []struct {
-		name    string
-		options channelTestOptions
-		fail    bool
-		count   int
-		source  string
+		name         string
+		options      channelTestOptions
+		fail         bool
+		count        int
+		source       string
+		expectedType int
 	}{
-		{"successful manual", channelTestOptions{manual: true}, false, 2, "manual_test"},
-		{"failed manual", channelTestOptions{manual: true}, true, 0, "manual_test"},
-		{"successful automatic", channelTestOptions{probe: true, group: "vip"}, false, 1, "auto_probe"},
-		{"failed automatic", channelTestOptions{probe: true, group: "vip"}, true, 1, "auto_probe"},
+		{"successful manual", channelTestOptions{manual: true}, false, 2, "manual_test", 0},
+		{"failed manual", channelTestOptions{manual: true}, true, 0, "manual_test", 0},
+		{"successful automatic", channelTestOptions{probe: true, group: "vip"}, false, 1, "auto_probe", model.LogTypeConsume},
+		{"failed automatic", channelTestOptions{probe: true, group: "vip"}, true, 1, "auto_probe", model.LogTypeConsume},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.NoError(t, db.Where("1 = 1").Delete(&model.StatusProbe{}).Error)
@@ -148,7 +162,25 @@ func TestModelTestsRecordOnlySuccessfulManualChecksAndAllAutomaticOutcomes(t *te
 				assert.Equal(t, !tc.fail, probes[len(probes)-1].Success)
 				var logsAfter int64
 				require.NoError(t, db.Model(&model.Log{}).Count(&logsAfter).Error)
-				assert.Equal(t, logsBefore, logsAfter, "synthetic probes must not create consumption logs")
+				assert.Equal(t, logsBefore+1, logsAfter, "each upstream probe must create one usage record")
+				var log model.Log
+				require.NoError(t, db.Order("id DESC").First(&log).Error)
+				assert.Equal(t, "vip", log.Group)
+				assert.Equal(t, "gpt-4o-mini", log.ModelName)
+				assert.Equal(t, channel.Id, log.ChannelId)
+				assert.Equal(t, user.Id, log.UserId)
+				assert.Equal(t, "分组自动探测", log.TokenName)
+				assert.Zero(t, log.Quota, "system probes do not charge the administrator")
+				assert.NotEmpty(t, log.RequestId)
+				assert.Equal(t, tc.expectedType, log.Type)
+				if tc.fail {
+					assert.Contains(t, log.Content, "分组自动探测失败")
+					assert.Zero(t, log.PromptTokens)
+					assert.Zero(t, log.CompletionTokens)
+				} else {
+					assert.Equal(t, 1, log.PromptTokens)
+					assert.Equal(t, 1, log.CompletionTokens)
+				}
 			}
 		})
 	}
@@ -170,6 +202,33 @@ func TestModelTestsRecordOnlySuccessfulManualChecksAndAllAutomaticOutcomes(t *te
 	// The system-task lease persists the shuffled bag across independent runs.
 	reject.Store(false)
 	model.InvalidatePricingCache()
+	previousProbeEnabled := groupProbeHandler{}.Enabled()
+	t.Cleanup(func() {
+		require.NoError(t, model.UpdateRequestPolicyOptions(map[string]string{
+			"monitor_setting.auto_probe_enabled": fmt.Sprintf("%t", previousProbeEnabled),
+		}))
+	})
+	require.NoError(t, model.UpdateRequestPolicyOptions(map[string]string{"monitor_setting.auto_probe_enabled": "false"}))
+	assert.False(t, groupProbeHandler{}.Enabled())
+	var logsBeforeDisabledRun, probesBeforeDisabledRun int64
+	require.NoError(t, db.Model(&model.Log{}).Count(&logsBeforeDisabledRun).Error)
+	require.NoError(t, db.Model(&model.StatusProbe{}).Count(&probesBeforeDisabledRun).Error)
+	disabledTask, err := model.CreateSystemTask(model.SystemTaskTypeGroupProbe, nil, nil)
+	require.NoError(t, err)
+	claimedDisabledTask, ok, err := model.ClaimSystemTask(disabledTask.ID, disabledTask.Type, "probe-runner", time.Now().Add(time.Minute).Unix())
+	require.NoError(t, err)
+	require.True(t, ok)
+	groupProbeHandler{}.Run(context.Background(), claimedDisabledTask, "probe-runner")
+	var logsAfterDisabledRun, probesAfterDisabledRun int64
+	require.NoError(t, db.Model(&model.Log{}).Count(&logsAfterDisabledRun).Error)
+	require.NoError(t, db.Model(&model.StatusProbe{}).Count(&probesAfterDisabledRun).Error)
+	assert.Equal(t, logsBeforeDisabledRun, logsAfterDisabledRun)
+	assert.Equal(t, probesBeforeDisabledRun, probesAfterDisabledRun)
+	storedDisabledTask, err := model.GetLatestSystemTask(model.SystemTaskTypeGroupProbe)
+	require.NoError(t, err)
+	assert.Equal(t, model.SystemTaskStatusSucceeded, storedDisabledTask.Status)
+	require.NoError(t, model.UpdateRequestPolicyOptions(map[string]string{"monitor_setting.auto_probe_enabled": "true"}))
+	assert.True(t, groupProbeHandler{}.Enabled())
 	var selected []string
 	for range 4 {
 		task, err := model.CreateSystemTask(model.SystemTaskTypeGroupProbe, nil, nil)

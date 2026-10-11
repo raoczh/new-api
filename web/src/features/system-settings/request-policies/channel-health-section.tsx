@@ -87,6 +87,7 @@ const createChannelHealthSchema = (
       AutomaticDisableKeywords: z.string(),
       AutomaticDisableStatusCodes: z.string(),
       monitor_setting: z.object({
+        auto_probe_enabled: z.boolean(),
         auto_test_channel_enabled: z.boolean(),
         auto_test_channel_minutes: z.coerce
           .number()
@@ -136,6 +137,7 @@ type NormalizedChannelHealthValues = {
   AutomaticEnableChannelEnabled: boolean
   AutomaticDisableKeywords: string
   AutomaticDisableStatusCodes: string
+  'monitor_setting.auto_probe_enabled': boolean
   'monitor_setting.auto_test_channel_enabled': boolean
   'monitor_setting.auto_test_channel_minutes': number
   'monitor_setting.channel_test_concurrency': number
@@ -160,6 +162,7 @@ const buildFormDefaults = (
   ),
   AutomaticDisableStatusCodes: defaults.AutomaticDisableStatusCodes ?? '',
   monitor_setting: {
+    auto_probe_enabled: defaults['monitor_setting.auto_probe_enabled'],
     auto_test_channel_enabled:
       defaults['monitor_setting.auto_test_channel_enabled'],
     auto_test_channel_minutes:
@@ -184,6 +187,8 @@ const normalizeDefaults = (
   AutomaticDisableStatusCodes: parseHttpStatusCodeRules(
     defaults.AutomaticDisableStatusCodes ?? ''
   ).normalized,
+  'monitor_setting.auto_probe_enabled':
+    defaults['monitor_setting.auto_probe_enabled'],
   'monitor_setting.auto_test_channel_enabled':
     defaults['monitor_setting.auto_test_channel_enabled'],
   'monitor_setting.auto_test_channel_minutes':
@@ -207,6 +212,8 @@ const normalizeFormValues = (
   AutomaticDisableStatusCodes: parseHttpStatusCodeRules(
     values.AutomaticDisableStatusCodes
   ).normalized,
+  'monitor_setting.auto_probe_enabled':
+    values.monitor_setting.auto_probe_enabled,
   'monitor_setting.auto_test_channel_enabled':
     values.monitor_setting.auto_test_channel_enabled,
   'monitor_setting.auto_test_channel_minutes':
@@ -325,6 +332,29 @@ export function ChannelHealthSection({
             </h4>
             <SettingsFormGrid>
               <SettingsControlGroup>
+                <FormField
+                  control={form.control}
+                  name='monitor_setting.auto_probe_enabled'
+                  render={({ field }) => (
+                    <SettingsSwitchItem>
+                      <SettingsSwitchContent>
+                        <FormLabel>{t('Automatic model probes')}</FormLabel>
+                        <FormDescription>
+                          {t(
+                            'Probe one eligible model per group every 30 minutes; results are recorded in request logs and status samples.'
+                          )}
+                        </FormDescription>
+                      </SettingsSwitchContent>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </SettingsSwitchItem>
+                  )}
+                />
+
                 <FormField
                   control={form.control}
                   name='monitor_setting.auto_test_channel_enabled'

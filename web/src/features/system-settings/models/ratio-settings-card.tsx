@@ -36,6 +36,7 @@ import {
   type ModelPricingConfig,
 } from '@/features/model-pricing/api'
 import { pricingOptions } from '@/features/model-pricing/pricing'
+import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import { SettingsPageTitleStatusPortal } from '../components/settings-page-context'
@@ -132,6 +133,23 @@ const createModelSchema = (t: Translate) =>
 
 const createGroupSchema = (t: Translate) =>
   z.object({
+    GroupOrder: createJsonStringField(t, {
+      predicate: (parsed) =>
+        Array.isArray(parsed) &&
+        parsed.every(
+          (item) => typeof item === 'string' && item.trim() !== ''
+        ) &&
+        new Set(parsed).size === parsed.length,
+      predicateMessage: 'Expected a JSON array of unique group identifiers',
+    }),
+    GroupVendors: createJsonStringField(t, {
+      predicate: (parsed) =>
+        parsed != null &&
+        !Array.isArray(parsed) &&
+        typeof parsed === 'object' &&
+        Object.values(parsed).every((value) => Number.isSafeInteger(value)),
+      predicateMessage: 'Expected a JSON map of groups to vendor IDs',
+    }),
     GroupRatio: createJsonStringField(t),
     TopupGroupRatio: createJsonStringField(t),
     UserUsableGroups: createJsonStringField(t),
@@ -173,6 +191,7 @@ export function RatioSettingsCard({
 }: RatioSettingsCardProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const { vendors } = usePricingData(visibleTabs.includes('groups'))
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   const pricingQuery = useModelPricing()
@@ -243,6 +262,8 @@ export function RatioSettingsCard({
 
   const groupNormalizedDefaults = useRef({
     GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
+    GroupOrder: normalizeJsonString(groupDefaults.GroupOrder),
+    GroupVendors: normalizeJsonString(groupDefaults.GroupVendors),
     TopupGroupRatio: normalizeJsonString(groupDefaults.TopupGroupRatio),
     UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
     GroupGroupRatio: normalizeJsonString(groupDefaults.GroupGroupRatio),
@@ -283,6 +304,8 @@ export function RatioSettingsCard({
     defaultValues: {
       ...groupDefaults,
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
+      GroupOrder: formatJsonForTextarea(groupDefaults.GroupOrder),
+      GroupVendors: formatJsonForTextarea(groupDefaults.GroupVendors),
       TopupGroupRatio: formatJsonForTextarea(groupDefaults.TopupGroupRatio),
       UserUsableGroups: formatJsonForTextarea(groupDefaults.UserUsableGroups),
       GroupGroupRatio: formatJsonForTextarea(groupDefaults.GroupGroupRatio),
@@ -333,6 +356,8 @@ export function RatioSettingsCard({
   useEffect(() => {
     groupNormalizedDefaults.current = {
       GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
+      GroupOrder: normalizeJsonString(groupDefaults.GroupOrder),
+      GroupVendors: normalizeJsonString(groupDefaults.GroupVendors),
       TopupGroupRatio: normalizeJsonString(groupDefaults.TopupGroupRatio),
       UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
       GroupGroupRatio: normalizeJsonString(groupDefaults.GroupGroupRatio),
@@ -347,6 +372,8 @@ export function RatioSettingsCard({
     groupForm.reset({
       ...groupDefaults,
       GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
+      GroupOrder: formatJsonForTextarea(groupDefaults.GroupOrder),
+      GroupVendors: formatJsonForTextarea(groupDefaults.GroupVendors),
       TopupGroupRatio: formatJsonForTextarea(groupDefaults.TopupGroupRatio),
       UserUsableGroups: formatJsonForTextarea(groupDefaults.UserUsableGroups),
       GroupGroupRatio: formatJsonForTextarea(groupDefaults.GroupGroupRatio),
@@ -411,6 +438,8 @@ export function RatioSettingsCard({
     async (values: GroupFormValues) => {
       const normalized = {
         GroupRatio: normalizeJsonString(values.GroupRatio),
+        GroupOrder: normalizeJsonString(values.GroupOrder),
+        GroupVendors: normalizeJsonString(values.GroupVendors),
         TopupGroupRatio: normalizeJsonString(values.TopupGroupRatio),
         UserUsableGroups: normalizeJsonString(values.UserUsableGroups),
         GroupGroupRatio: normalizeJsonString(values.GroupGroupRatio),
@@ -511,6 +540,7 @@ export function RatioSettingsCard({
     if (tab === 'groups') {
       return (
         <GroupRatioForm
+          vendors={vendors}
           form={groupForm}
           onSave={saveGroupRatios}
           isSaving={updateOption.isPending}

@@ -23,7 +23,7 @@ import {
   Drag01Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Reorder, useDragControls } from 'motion/react'
+import { Reorder, useDragControls, type DragControls } from 'motion/react'
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -43,21 +43,6 @@ export function AutoGroupOrderItem(props: AutoGroupOrderItemProps) {
   const { t } = useTranslation()
   const dragControls = useDragControls()
 
-  const handleDragStart = (event: PointerEvent<HTMLButtonElement>) => {
-    dragControls.start(event)
-  }
-
-  const handleDragKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      props.onMove(props.index, 'up')
-    }
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      props.onMove(props.index, 'down')
-    }
-  }
-
   return (
     <Reorder.Item
       value={props.group}
@@ -66,18 +51,11 @@ export function AutoGroupOrderItem(props: AutoGroupOrderItemProps) {
       dragControls={dragControls}
       className='bg-background relative flex min-w-0 items-center gap-2 rounded-lg border p-2'
     >
-      <Button
-        type='button'
-        variant='ghost'
-        size='icon-sm'
-        className='text-muted-foreground cursor-grab touch-none font-mono active:cursor-grabbing'
-        aria-label={t('Drag {{group}} to reorder', { group: props.group })}
-        title={t('Drag {{group}} to reorder', { group: props.group })}
-        onPointerDown={handleDragStart}
-        onKeyDown={handleDragKeyDown}
-      >
-        <HugeiconsIcon icon={Drag01Icon} strokeWidth={2} aria-hidden='true' />
-      </Button>
+      <GroupReorderHandle
+        group={props.group}
+        dragControls={dragControls}
+        onMove={(direction) => props.onMove(props.index, direction)}
+      />
       {props.leading}
       <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
         <span
@@ -132,5 +110,35 @@ export function AutoGroupOrderItem(props: AutoGroupOrderItemProps) {
         </Button>
       </div>
     </Reorder.Item>
+  )
+}
+
+export function GroupReorderHandle(props: {
+  group: string
+  dragControls: DragControls
+  onMove: (direction: 'up' | 'down') => void
+}) {
+  const { t } = useTranslation()
+  const handleDragStart = (event: PointerEvent<HTMLButtonElement>) => {
+    props.dragControls.start(event)
+  }
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+    event.preventDefault()
+    props.onMove(event.key === 'ArrowUp' ? 'up' : 'down')
+  }
+  return (
+    <Button
+      type='button'
+      variant='ghost'
+      size='icon-sm'
+      className='text-muted-foreground cursor-grab touch-none font-mono active:cursor-grabbing'
+      aria-label={t('Drag {{group}} to reorder', { group: props.group })}
+      title={t('Drag {{group}} to reorder', { group: props.group })}
+      onPointerDown={handleDragStart}
+      onKeyDown={handleKeyDown}
+    >
+      <HugeiconsIcon icon={Drag01Icon} strokeWidth={2} aria-hidden='true' />
+    </Button>
   )
 }

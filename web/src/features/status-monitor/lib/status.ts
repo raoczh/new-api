@@ -86,40 +86,32 @@ export function getGroupHealth(group: GroupStatus): GroupHealth {
 }
 
 export type VendorSection = {
-  /** 0 collects groups whose vendor is unknown. */
+  key?: string
   vendorId: number
   vendor: GroupStatusVendor | undefined
   groups: GroupStatus[]
 }
 
 /**
- * Buckets groups by vendor, keeping the server's busiest-first group order.
- * Vendors with more groups come first; unknown vendors always go last.
+ * Keeps configured group order. Unassigned groups each get their own section.
  */
 export function groupByVendor(
   groups: GroupStatus[],
   vendors: GroupStatusVendor[]
 ): VendorSection[] {
   const vendorById = new Map(vendors.map((vendor) => [vendor.id, vendor]))
-  const sections = new Map<number, VendorSection>()
+  const sections = new Map<string, VendorSection>()
   for (const group of groups) {
     const vendorId = vendorById.has(group.vendor_id) ? group.vendor_id : 0
-    let section = sections.get(vendorId)
+    const key = vendorId ? `vendor:${vendorId}` : `group:${group.group}`
+    let section = sections.get(key)
     if (!section) {
-      section = { vendorId, vendor: vendorById.get(vendorId), groups: [] }
-      sections.set(vendorId, section)
+      section = { key, vendorId, vendor: vendorById.get(vendorId), groups: [] }
+      sections.set(key, section)
     }
     section.groups.push(group)
   }
-  return [...sections.values()].sort((a, b) => {
-    if ((a.vendorId === 0) !== (b.vendorId === 0)) {
-      return a.vendorId === 0 ? 1 : -1
-    }
-    if (a.groups.length !== b.groups.length) {
-      return b.groups.length - a.groups.length
-    }
-    return (a.vendor?.name ?? '').localeCompare(b.vendor?.name ?? '')
-  })
+  return [...sections.values()]
 }
 
 export function matchesGroupSearch(group: GroupStatus, query: string): boolean {

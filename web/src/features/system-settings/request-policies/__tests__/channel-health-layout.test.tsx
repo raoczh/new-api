@@ -71,6 +71,7 @@ describe('channel health layout', () => {
   it('marks every switch row as full width so it never shares a grid row with an input', () => {
     show()
     for (const name of [
+      'Automatic model probes',
       'Scheduled channel tests',
       'Re-enable on success',
       'Disable on failure',

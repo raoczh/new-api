@@ -34,11 +34,11 @@ interface VendorSectionProps {
 
 export function VendorSection(props: VendorSectionProps) {
   const { t } = useTranslation()
-  const name = props.section.vendor?.name ?? t('Other vendors')
+  const name = props.section.vendor?.name ?? props.section.groups[0]?.group
   const icon = props.section.vendor?.icon
     ? getLobeIcon(props.section.vendor.icon, 18)
     : null
-  const headingId = `vendor-section-${props.section.vendorId}`
+  const headingId = `vendor-section-${encodeURIComponent(props.section.key ?? String(props.section.vendorId))}`
 
   return (
     <section

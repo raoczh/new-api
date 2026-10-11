@@ -150,6 +150,17 @@ func getDisplayVendor(vendorName string, vendorMap map[int]*Vendor) int {
 	return id
 }
 
+// GetDefaultVendorByID returns presentation metadata for built-in vendors,
+// including vendors that no longer have an enabled model in the pricing list.
+func GetDefaultVendorByID(id int) (PricingVendor, bool) {
+	for name, vendorID := range defaultVendorDisplayIDs {
+		if vendorID == id {
+			return PricingVendor{ID: id, Name: name, Icon: getDefaultVendorIcon(name)}, true
+		}
+	}
+	return PricingVendor{}, false
+}
+
 // 获取供应商默认图标
 func getDefaultVendorIcon(vendorName string) string {
 	if icon, exists := defaultVendorIcons[vendorName]; exists {

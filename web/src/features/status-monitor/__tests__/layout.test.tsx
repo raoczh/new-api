@@ -150,7 +150,7 @@ describe('group monitor cards', () => {
     expect(onOpenDetails).toHaveBeenCalledWith(longGroup)
   })
 
-  it('shows a model and accurate availability after receiving observations', () => {
+  it('shows the group name and description with availability and omits the tested model', () => {
     const observed = {
       ...group,
       hourly: [
@@ -184,7 +184,11 @@ describe('group monitor cards', () => {
       />
     )
     expect(screen.getByText('Operational')).toBeVisible()
-    expect(screen.getByText('gpt-test')).toBeVisible()
+    expect(
+      screen.getByRole('heading', { level: 3, name: 'default' })
+    ).toBeVisible()
+    expect(screen.getByText('Public group')).toBeVisible()
+    expect(screen.queryByText('gpt-test')).not.toBeInTheDocument()
     expect(screen.getByText('100.00%')).toBeVisible()
     expect(screen.getByText('0.30s')).toBeVisible()
   })

@@ -115,22 +115,25 @@ describe('groupByVendor', () => {
     { id: 2, name: 'Claude' },
   ]
 
-  it('puts larger vendors first, keeps group order, and unknown vendors last', () => {
+  it('preserves configured group order and gives each unassigned group its own section', () => {
     const sections = groupByVendor(
       [
         makeGroup({ group: 'orphan', vendor_id: 99 }),
         makeGroup({ group: 'claude', vendor_id: 2 }),
         makeGroup({ group: 'codex-b', vendor_id: 1 }),
         makeGroup({ group: 'codex-a', vendor_id: 1 }),
+        makeGroup({ group: 'standalone', vendor_id: 0 }),
       ],
       vendors
     )
-    expect(sections.map((s) => s.vendorId)).toEqual([1, 2, 0])
-    expect(sections[0].groups.map((g) => g.group)).toEqual([
+    expect(sections.map((s) => s.vendorId)).toEqual([0, 2, 1, 0])
+    expect(sections[2].groups.map((g) => g.group)).toEqual([
       'codex-b',
       'codex-a',
     ])
-    expect(sections[2].vendor).toBeUndefined()
+    expect(sections[0].vendor).toBeUndefined()
+    expect(sections[0].groups.map((g) => g.group)).toEqual(['orphan'])
+    expect(sections[3].groups.map((g) => g.group)).toEqual(['standalone'])
   })
 
   it('returns no sections for an empty group list', () => {

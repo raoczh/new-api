@@ -231,6 +231,21 @@ describe('request policy settings', () => {
     }
   )
 
+  it('saves the automatic model probe switch independently from scheduled channel tests', async () => {
+    await renderPolicies('/system-settings/request-policies/health')
+    await userEvent.click(
+      await screen.findByRole('switch', { name: 'Automatic model probes' })
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledExactlyOnceWith(
+        '/api/option/request_policy',
+        { options: { 'monitor_setting.auto_probe_enabled': 'false' } }
+      )
+    )
+  })
+
   it('turning filtering off preserves the prompt switch and keyword list', async () => {
     await renderPolicies('/system-settings/request-policies/filtering')
     await userEvent.click(

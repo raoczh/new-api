@@ -452,14 +452,29 @@ describe('model cards', () => {
         <ModelCardGrid models={models} onModelClick={vi.fn()} />
       </QueryClientProvider>
     )
-    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Go to previous page' })
+    ).toBeDisabled()
     expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(20)
-    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    await user.click(screen.getByRole('button', { name: 'Go to next page' }))
     expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(1)
     expect(screen.getByRole('heading', { name: 'model-21' })).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
-    await user.click(screen.getByRole('button', { name: 'Previous page' }))
+    expect(
+      screen.getByRole('button', { name: 'Go to next page' })
+    ).toBeDisabled()
+    await user.click(
+      screen.getByRole('button', { name: 'Go to previous page' })
+    )
     expect(screen.getByRole('heading', { name: 'model-1' })).toBeVisible()
+    await user.click(screen.getByRole('combobox', { name: 'Rows per page' }))
+    await user.click(screen.getByRole('option', { name: '50' }))
+    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(21)
+    expect(
+      screen.getByRole('button', { name: 'Go to next page' })
+    ).toBeDisabled()
+    expect(
+      screen.getByRole('combobox', { name: 'Rows per page' })
+    ).toBeVisible()
   })
 
   it('switches the card grid to three columns at the xl breakpoint instead of 2xl', () => {

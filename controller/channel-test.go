@@ -278,7 +278,23 @@ func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int,
 	upstreamAttempted := false
 	if options.probe {
 		defer func() {
-			if !upstreamAttempted || errors.Is(ctx.Err(), context.Canceled) {
+			if !upstreamAttempted {
+				return
+			}
+			if result.localErr != nil || result.newAPIError != nil {
+				other := model.NewLogOther()
+				other.SetPublic("source", "auto_probe")
+				message := "分组自动探测失败"
+				if result.newAPIError != nil {
+					message += ": " + result.newAPIError.MaskSensitiveErrorWithStatusCode()
+				}
+				model.RecordConsumeLog(c, testUserID, model.RecordConsumeLogParams{
+					ChannelId: channel.Id, ModelName: info.OriginModelName,
+					TokenName: "分组自动探测", Content: message,
+					UseTimeSeconds: int(time.Since(tik).Seconds()), IsStream: info.IsStream, Group: group, Other: other,
+				})
+			}
+			if errors.Is(ctx.Err(), context.Canceled) {
 				return
 			}
 			probe := model.StatusProbe{
@@ -553,6 +569,13 @@ func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int,
 	}
 	info.SetEstimatePromptTokens(usage.PromptTokens)
 	if options.probe {
+		other := buildTestLogOther(c, info, priceData, usage, nil)
+		other.SetPublic("source", "auto_probe")
+		model.RecordConsumeLog(c, testUserID, model.RecordConsumeLogParams{
+			ChannelId: channel.Id, PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens,
+			ModelName: info.OriginModelName, TokenName: "分组自动探测", Content: "分组自动探测",
+			UseTimeSeconds: int(time.Since(tik).Seconds()), IsStream: info.IsStream, Group: group, Other: other,
+		})
 		return testResult{context: c}
 	}
 

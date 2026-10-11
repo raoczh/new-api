@@ -117,23 +117,39 @@ function getModelPrice(model: PricingModel): number {
  */
 export function sortModels(
   models: PricingModel[],
-  sortBy: string
+  sortBy: string,
+  groupOrder: string[] = []
 ): PricingModel[] {
   const sorted = [...models]
 
-  switch (sortBy) {
-    case SORT_OPTIONS.NAME:
-      sorted.sort((a, b) =>
-        (a.model_name || '').localeCompare(b.model_name || '')
-      )
-      break
-    case SORT_OPTIONS.PRICE_LOW:
-      sorted.sort((a, b) => getModelPrice(a) - getModelPrice(b))
-      break
-    case SORT_OPTIONS.PRICE_HIGH:
-      sorted.sort((a, b) => getModelPrice(b) - getModelPrice(a))
-      break
+  const getSortValue = (model: PricingModel) => {
+    if (sortBy === SORT_OPTIONS.PRICE_LOW) return getModelPrice(model)
+    if (sortBy === SORT_OPTIONS.PRICE_HIGH) return -getModelPrice(model)
+    return (model.model_name || '').toLocaleLowerCase()
   }
+  const compareWithinGroup = (a: PricingModel, b: PricingModel) => {
+    const aValue = getSortValue(a)
+    const bValue = getSortValue(b)
+    if (typeof aValue === 'number' && typeof bValue === 'number') {
+      return aValue - bValue
+    }
+    return String(aValue).localeCompare(String(bValue))
+  }
+
+  const ranks = new Map(groupOrder.map((group, index) => [group, index]))
+  const modelRanks = new Map(
+    sorted.map((model) => [
+      model,
+      model.enable_groups.reduce(
+        (rank, group) => Math.min(rank, ranks.get(group) ?? groupOrder.length),
+        groupOrder.length
+      ),
+    ])
+  )
+  sorted.sort((a, b) => {
+    const groupComparison = (modelRanks.get(a) ?? 0) - (modelRanks.get(b) ?? 0)
+    return groupComparison || compareWithinGroup(a, b)
+  })
 
   return sorted
 }
@@ -151,6 +167,7 @@ export function filterAndSortModels(
     endpointType: string
     tag: string
     sortBy: string
+    groupOrder?: string[]
   }
 ): PricingModel[] {
   let result = filterBySearch(models, filters.search)
@@ -159,7 +176,7 @@ export function filterAndSortModels(
   result = filterByQuotaType(result, filters.quotaType)
   result = filterByEndpointType(result, filters.endpointType)
   result = filterByTag(result, filters.tag)
-  result = sortModels(result, filters.sortBy)
+  result = sortModels(result, filters.sortBy, filters.groupOrder)
 
   return result
 }
@@ -190,7 +207,7 @@ export function extractAllTags(models: PricingModel[]): string[] {
     }
   })
 
-  return Array.from(tagSet).sort((a, b) => a.localeCompare(b))
+  return [...tagSet].sort((a, b) => a.localeCompare(b))
 }
 
 /**

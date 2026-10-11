@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -178,6 +179,15 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			})
 			require.NoError(t, model.InitDB())
 			db := model.DB
+			previousGroupOrder := setting.GroupOrderJSONString()
+			previousGroupVendors := setting.GroupVendorsJSONString()
+			t.Cleanup(func() {
+				require.NoError(t, setting.UpdateGroupOrder(previousGroupOrder))
+				require.NoError(t, setting.UpdateGroupVendors(previousGroupVendors))
+				model.InvalidatePricingCache()
+			})
+			require.NoError(t, setting.UpdateGroupOrder(`[]`))
+			require.NoError(t, setting.UpdateGroupVendors(`{}`))
 			sqlDB, err := db.DB()
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
@@ -281,7 +291,7 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			// real request outcomes or affect the model-square metrics.
 			for _, probe := range []model.StatusProbe{
 				{GroupName: "a", ModelName: "test-model", Source: "manual_test", ObservedAt: hour + 1, Success: true, LatencyMs: 500},
-				{GroupName: "a", ModelName: "test-model", Source: "auto_probe", ObservedAt: hour + 3601, Success: true, LatencyMs: 600},
+				{GroupName: "a", ModelName: "probe-only-model", Source: "auto_probe", ObservedAt: hour + 3601, Success: true, LatencyMs: 600},
 				{GroupName: "idle", ModelName: "test-model", Source: "auto_probe", ObservedAt: hour + 1, Success: false, LatencyMs: 2000},
 				{GroupName: "idle", ModelName: "test-model", Source: "manual_test", ObservedAt: hour + 2, Success: true, LatencyMs: 500},
 				{GroupName: "hidden", ModelName: "test-model", Source: "auto_probe", ObservedAt: hour + 1, Success: true},
@@ -294,6 +304,13 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, withProbes.Groups, 3)
 			assert.Equal(t, groupA.Summary, withProbes.Groups[0].Summary)
+			modelsByName := make(map[string]GroupModelStat, len(withProbes.Groups[0].Models))
+			for _, modelStat := range withProbes.Groups[0].Models {
+				modelsByName[modelStat.ModelName] = modelStat
+			}
+			require.Len(t, modelsByName, len(groupA.Models)+1)
+			assert.Equal(t, groupA.Models[0], modelsByName["test-model"], "request stats should take precedence when both sources observe a model")
+			assert.Equal(t, GroupModelStat{ModelName: "probe-only-model", SuccessRate: 100, AvgLatencyMs: 600}, modelsByName["probe-only-model"])
 			require.Len(t, withProbes.Groups[0].Hourly, 2)
 			assert.Equal(t, groupA.Hourly[0], withProbes.Groups[0].Hourly[0])
 			assert.Equal(t, "auto_probe", withProbes.Groups[0].Hourly[1].Source)
@@ -321,10 +338,30 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 				cleanupExpiredMetrics(retention.days)
 				var oldCount, recentCount int64
 				require.NoError(t, db.Model(&model.StatusProbe{}).Where("id = ?", oldProbe.ID).Count(&oldCount).Error)
-				require.NoError(t, db.Model(&model.StatusProbe{}).Where("model_name = ?", "test-model").Count(&recentCount).Error)
+				require.NoError(t, db.Model(&model.StatusProbe{}).Count(&recentCount).Error)
 				assert.Zero(t, oldCount)
 				assert.EqualValues(t, 5, recentCount, "cleanup must retain current observations")
 			}
+
+			vendor := model.Vendor{Name: "Status Display Vendor", Icon: "OpenAI"}
+			require.NoError(t, db.Create(&vendor).Error)
+			model.InvalidatePricingCache()
+			require.NoError(t, setting.UpdateGroupOrder(`["idle","b","a"]`))
+			require.NoError(t, setting.UpdateGroupVendors(common.GetJsonString(map[string]int{"a": -1006, "b": vendor.Id})))
+			display, err := QueryGroupStatus(24, map[string]string{"a": "Group A", "b": "Group B", "idle": "Idle"})
+			require.NoError(t, err)
+			require.Len(t, display.Groups, 3)
+			assert.Equal(t, []string{"idle", "b", "a"}, []string{
+				display.Groups[0].Group, display.Groups[1].Group, display.Groups[2].Group,
+			})
+			assert.Equal(t, vendor.Id, display.Groups[1].VendorID)
+			assert.Equal(t, -1006, display.Groups[2].VendorID)
+			vendorsByID := make(map[int]GroupStatusVendor, len(display.Vendors))
+			for _, groupVendor := range display.Vendors {
+				vendorsByID[groupVendor.ID] = groupVendor
+			}
+			assert.Equal(t, GroupStatusVendor{ID: vendor.Id, Name: vendor.Name, Icon: vendor.Icon}, vendorsByID[vendor.Id])
+			assert.Equal(t, GroupStatusVendor{ID: -1006, Name: "Google", Icon: "Gemini.Color"}, vendorsByID[-1006])
 		})
 	}
 }

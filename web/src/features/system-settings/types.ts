@@ -259,6 +259,8 @@ export type ModelSettings = {
   'billing_setting.plugin_billing_expr': string
   'tool_price_setting.prices': string
   TopupGroupRatio: string
+  GroupOrder: string
+  GroupVendors: string
   GroupRatio: string
   UserUsableGroups: string
   GroupGroupRatio: string
@@ -271,6 +273,8 @@ export type ModelSettings = {
 }
 
 export type BillingSettings = {
+  GroupOrder: string
+  GroupVendors: string
   QuotaForNewUser: number
   QuotaForInviter: number
   QuotaForInvitee: number

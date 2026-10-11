@@ -51,7 +51,6 @@ export const GroupStatusCard = memo(function GroupStatusCard(
   const config = GROUP_HEALTH_CONFIG[getGroupHealth(props.group)]
   const latest = props.group.hourly.at(-1)
   const icon = props.vendor?.icon ? getLobeIcon(props.vendor.icon, 24) : null
-  const modelName = latest?.top_model || props.group.models[0]?.model_name
   const rate = props.group.summary?.success_rate ?? Number.NaN
   let summarySource = t('Request observation')
   if (props.group.summary_source === 'auto_probe') {
@@ -84,15 +83,15 @@ export const GroupStatusCard = memo(function GroupStatusCard(
           <div className='min-w-0'>
             <h3
               className='truncate text-base font-semibold'
-              title={props.group.description || props.group.group}
+              title={props.group.group}
             >
-              {props.group.description || props.group.group}
+              {props.group.group}
             </h3>
             <p
               className='text-muted-foreground truncate text-xs'
-              title={modelName || props.group.group}
+              title={props.group.description}
             >
-              {modelName || props.group.group}
+              {props.group.description}
             </p>
           </div>
         </div>

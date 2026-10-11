@@ -9,6 +9,7 @@ import (
 )
 
 type MonitorSetting struct {
+	AutoProbeEnabled       bool    `json:"auto_probe_enabled"`
 	AutoTestChannelEnabled bool    `json:"auto_test_channel_enabled"`
 	AutoTestChannelMinutes float64 `json:"auto_test_channel_minutes"`
 	ChannelTestMode        string  `json:"channel_test_mode"`
@@ -27,6 +28,7 @@ const (
 
 // 默认配置
 var monitorSetting = MonitorSetting{
+	AutoProbeEnabled:       true,
 	AutoTestChannelEnabled: false,
 	AutoTestChannelMinutes: 10,
 	ChannelTestMode:        ChannelTestModeScheduledAll,

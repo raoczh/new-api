@@ -75,9 +75,18 @@ func TestRequestPolicyDatabaseMatrix(t *testing.T) {
 			require.NoError(t, db.Raw(query).Scan(&version).Error)
 			t.Logf("database version: %s", version)
 			rules := `[{"name":"session","model_regex":[".*"],"key_sources":[{"type":"request_header","key":"X-Session"}],"ttl_seconds":0,"skip_retry_on_failure":false,"include_using_group":false,"param_override_template":{"temperature":0},"future_field":{"enabled":false}}]`
-			require.NoError(t, UpdateRequestPolicyOptions(map[string]string{"RetryTimes": "2", "channel_affinity_setting.rules": rules}))
+			require.NoError(t, UpdateRequestPolicyOptions(map[string]string{
+				"RetryTimes": "2", "channel_affinity_setting.rules": rules,
+				"monitor_setting.auto_probe_enabled": "true",
+			}))
 			assert.Equal(t, 2, CurrentRequestPolicy().RetryTimes)
+			assert.True(t, CurrentRequestPolicy().AutoProbeEnabled)
 			assert.Equal(t, 2, common.RetryTimes, "the runtime global follows the same write")
+			require.NoError(t, UpdateOption("monitor_setting.auto_probe_enabled", "false"))
+			assert.False(t, CurrentRequestPolicy().AutoProbeEnabled, "the scheduler setting changes with the saved option")
+			disabledSnapshot := CurrentRequestPolicy()
+			assert.Error(t, UpdateRequestPolicyOptions(map[string]string{"monitor_setting.auto_probe_enabled": "not-a-bool"}))
+			assert.Same(t, disabledSnapshot, CurrentRequestPolicy())
 			require.NoError(t, UpdateOption("AutomaticRetryStatusCodes", "429,500-503"))
 			assert.Equal(t, "429,500-503", CurrentRequestPolicy().Options["AutomaticRetryStatusCodes"])
 			assert.Equal(t, "429,500-503", operation_setting.AutomaticRetryStatusCodesToString())

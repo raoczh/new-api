@@ -293,6 +293,17 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "GroupOrder", "GroupVendors":
+		value := option.Value.(string)
+		if option.Key == "GroupOrder" {
+			err = setting.ValidateGroupOrder(value)
+		} else {
+			err = setting.ValidateGroupVendors(value)
+		}
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+			return
+		}
 	case "GroupRatio":
 		err = ratio_setting.CheckGroupRatio(option.Value.(string))
 		if err != nil {

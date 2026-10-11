@@ -11,14 +11,13 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting/perf_metrics_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
 
 type groupProbeHandler struct{}
 
 func (groupProbeHandler) Type() string            { return model.SystemTaskTypeGroupProbe }
-func (groupProbeHandler) Enabled() bool           { return perf_metrics_setting.GetSetting().Enabled }
+func (groupProbeHandler) Enabled() bool           { return model.CurrentRequestPolicy().AutoProbeEnabled }
 func (groupProbeHandler) Interval() time.Duration { return 30 * time.Minute }
 func (groupProbeHandler) NewPayload() any         { return nil }
 
@@ -104,6 +103,10 @@ func probeEndpoint(modelName string, endpoints []constant.EndpointType) string {
 }
 
 func (groupProbeHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	if !(groupProbeHandler{}).Enabled() {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, nil, nil)
+		return
+	}
 	state := groupProbeState{Rotations: map[string]*groupProbeRotation{}}
 	previous, err := model.GetPreviousSystemTask(task.Type, task.ID)
 	if err == nil && previous != nil {
@@ -140,7 +143,7 @@ func (groupProbeHandler) Run(ctx context.Context, task *model.SystemTask, runner
 	}
 	slices.Sort(groups)
 	for _, group := range groups {
-		if ctx.Err() != nil || !perf_metrics_setting.GetSetting().Enabled {
+		if ctx.Err() != nil || !(groupProbeHandler{}).Enabled() {
 			break
 		}
 		rotation := state.Rotations[group]

@@ -60,6 +60,19 @@ export function useUpdateOption() {
       if (data.success) {
         // Always refresh system-options
         queryClient.invalidateQueries({ queryKey: ['system-options'] })
+        if (
+          [
+            'GroupOrder',
+            'GroupVendors',
+            'GroupRatio',
+            'UserUsableGroups',
+            'GroupGroupRatio',
+            'group_ratio_setting.group_special_usable_group',
+          ].includes(variables.key)
+        ) {
+          queryClient.invalidateQueries({ queryKey: ['pricing'] })
+          queryClient.invalidateQueries({ queryKey: ['status-monitor'] })
+        }
 
         // If updating frontend-display-related config, also refresh status
         if (STATUS_RELATED_KEYS.has(variables.key)) {

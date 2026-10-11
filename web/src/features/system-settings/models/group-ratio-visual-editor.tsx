@@ -79,6 +79,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import type { PricingVendor } from '@/features/pricing/types'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
 
@@ -96,6 +97,9 @@ type GroupRatioVisualEditorProps = {
   onSectionChange: (section: GroupSettingsSection) => void
   defaultUseAutoGroupField: ReactNode
   groupRatio: string
+  groupOrder?: string
+  groupVendors?: string
+  vendors?: PricingVendor[]
   topupGroupRatio: string
   userUsableGroups: string
   groupGroupRatio: string
@@ -112,6 +116,7 @@ type GroupPricingRow = {
   topupRatio: string
   selectable: boolean
   description: string
+  vendorId: number
 }
 
 type RegistryEntry = {
@@ -159,24 +164,36 @@ function parseNestedRatioMap(
 function buildGroupPricingRows(
   groupRatio: string,
   userUsableGroups: string,
-  topupGroupRatio: string
+  topupGroupRatio: string,
+  groupOrder: string,
+  groupVendors: string
 ): GroupPricingRow[] {
   const ratioMap = parseRatioMap(groupRatio)
   const usableMap = parseUsableMap(userUsableGroups)
   const topupMap = parseRatioMap(topupGroupRatio)
+  const vendorMap = parseRatioMap(groupVendors)
+  const order = safeJsonParse<string[]>(groupOrder, {
+    fallback: [],
+    silent: true,
+  })
   const names = new Set([
     ...Object.keys(ratioMap),
     ...Object.keys(usableMap),
     ...Object.keys(topupMap),
   ])
 
-  return [...names].map((name) => ({
+  const orderedNames = [...new Set(order)].filter((name) => names.has(name))
+  const remainingNames = [...names]
+    .filter((name) => !orderedNames.includes(name))
+    .sort()
+  return [...orderedNames, ...remainingNames].map((name) => ({
     _id: createGroupPricingId(),
     name,
     ratio: String(normalizeRatio(ratioMap[name])),
     topupRatio: Object.hasOwn(topupMap, name) ? String(topupMap[name]) : '',
     selectable: Object.hasOwn(usableMap, name),
     description: String(usableMap[name] ?? ''),
+    vendorId: vendorMap[name] ?? 0,
   }))
 }
 
@@ -184,10 +201,14 @@ function serializeGroupPricingRows(rows: GroupPricingRow[]) {
   const groupRatio: Record<string, number> = {}
   const userUsableGroups: Record<string, string> = {}
   const topupGroupRatio: Record<string, number> = {}
+  const groupOrder: string[] = []
+  const groupVendors: Record<string, number> = {}
 
   for (const row of rows) {
     const name = row.name.trim()
     if (!name) continue
+    if (!groupOrder.includes(name)) groupOrder.push(name)
+    if (row.vendorId !== 0) groupVendors[name] = row.vendorId
     groupRatio[name] = normalizeRatio(row.ratio)
     if (row.selectable) {
       userUsableGroups[name] = row.description
@@ -202,6 +223,8 @@ function serializeGroupPricingRows(rows: GroupPricingRow[]) {
     GroupRatio: JSON.stringify(groupRatio, null, 2),
     UserUsableGroups: JSON.stringify(userUsableGroups, null, 2),
     TopupGroupRatio: JSON.stringify(topupGroupRatio, null, 2),
+    GroupOrder: JSON.stringify(groupOrder, null, 2),
+    GroupVendors: JSON.stringify(groupVendors, null, 2),
   }
 }
 
@@ -211,18 +234,30 @@ function groupPricingSignature(rows: GroupPricingRow[]): string {
     groupRatio: parseRatioMap(serialized.GroupRatio),
     userUsableGroups: parseUsableMap(serialized.UserUsableGroups),
     topupGroupRatio: parseRatioMap(serialized.TopupGroupRatio),
+    groupOrder: safeJsonParse<string[]>(serialized.GroupOrder, {
+      fallback: [],
+      silent: true,
+    }),
+    groupVendors: parseRatioMap(serialized.GroupVendors),
   })
 }
 
 function sourceGroupPricingSignature(
   groupRatio: string,
   userUsableGroups: string,
-  topupGroupRatio: string
+  topupGroupRatio: string,
+  groupOrder: string,
+  groupVendors: string
 ): string {
   return JSON.stringify({
     groupRatio: parseRatioMap(groupRatio),
     userUsableGroups: parseUsableMap(userUsableGroups),
     topupGroupRatio: parseRatioMap(topupGroupRatio),
+    groupOrder: safeJsonParse<string[]>(groupOrder, {
+      fallback: [],
+      silent: true,
+    }),
+    groupVendors: parseRatioMap(groupVendors),
   })
 }
 
@@ -271,6 +306,9 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   onSectionChange,
   defaultUseAutoGroupField,
   groupRatio,
+  groupOrder = '[]',
+  groupVendors = '{}',
+  vendors = [],
   topupGroupRatio,
   userUsableGroups,
   groupGroupRatio,
@@ -368,6 +406,9 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
       <TabsContent value='pricing' keepMounted>
         <GroupPricingTable
           groupRatio={groupRatio}
+          groupOrder={groupOrder}
+          groupVendors={groupVendors}
+          vendors={vendors}
           userUsableGroups={userUsableGroups}
           topupGroupRatio={topupGroupRatio}
           onChange={onChange}
@@ -472,6 +513,9 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
 })
 
 type GroupPricingTableProps = {
+  groupOrder: string
+  groupVendors: string
+  vendors: PricingVendor[]
   groupRatio: string
   userUsableGroups: string
   topupGroupRatio: string
@@ -480,6 +524,9 @@ type GroupPricingTableProps = {
 }
 
 function GroupPricingTable({
+  groupOrder,
+  groupVendors,
+  vendors,
   groupRatio,
   userUsableGroups,
   topupGroupRatio,
@@ -489,14 +536,22 @@ function GroupPricingTable({
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState<GroupPricingRow[]>(() =>
-    buildGroupPricingRows(groupRatio, userUsableGroups, topupGroupRatio)
+    buildGroupPricingRows(
+      groupRatio,
+      userUsableGroups,
+      topupGroupRatio,
+      groupOrder,
+      groupVendors
+    )
   )
 
   useEffect(() => {
     const incomingSignature = sourceGroupPricingSignature(
       groupRatio,
       userUsableGroups,
-      topupGroupRatio
+      topupGroupRatio,
+      groupOrder,
+      groupVendors
     )
     setRows((currentRows) => {
       if (groupPricingSignature(currentRows) === incomingSignature) {
@@ -505,10 +560,12 @@ function GroupPricingTable({
       return buildGroupPricingRows(
         groupRatio,
         userUsableGroups,
-        topupGroupRatio
+        topupGroupRatio,
+        groupOrder,
+        groupVendors
       )
     })
-  }, [groupRatio, userUsableGroups, topupGroupRatio])
+  }, [groupRatio, userUsableGroups, topupGroupRatio, groupOrder, groupVendors])
 
   const emitRows = useCallback(
     (nextRows: GroupPricingRow[]) => {
@@ -517,6 +574,8 @@ function GroupPricingTable({
       onChange('GroupRatio', serialized.GroupRatio)
       onChange('UserUsableGroups', serialized.UserUsableGroups)
       onChange('TopupGroupRatio', serialized.TopupGroupRatio)
+      onChange('GroupOrder', serialized.GroupOrder)
+      onChange('GroupVendors', serialized.GroupVendors)
     },
     [onChange]
   )
@@ -552,6 +611,7 @@ function GroupPricingTable({
         topupRatio: '',
         selectable: true,
         description: '',
+        vendorId: 0,
       },
     ])
   }, [emitRows, rows])
@@ -594,6 +654,11 @@ function GroupPricingTable({
                 'All group names live here. Ratio applies when calls are billed as this group; top-up ratio applies to users whose account is in this group.'
               )}
             </CardDescription>
+            <p className='text-muted-foreground mt-2 text-xs'>
+              {t(
+                'Drag groups to set their display order. Clear the search to reorder.'
+              )}
+            </p>
           </div>
           <Button onClick={addRow} size='sm' className='sm:self-start'>
             <Plus className='mr-2 h-4 w-4' />
@@ -626,6 +691,11 @@ function GroupPricingTable({
             )}
           </InputGroup>
           <StaticDataTable
+            reorder={
+              !query
+                ? { onReorder: emitRows, getLabel: (row) => row.name }
+                : undefined
+            }
             tableClassName='min-w-[760px]'
             tableProps={{ 'aria-label': t('Pricing groups') }}
             data={visibleRows}
@@ -738,6 +808,29 @@ function GroupPricingTable({
                       -
                     </span>
                   ),
+              },
+              {
+                id: 'vendor',
+                header: t('Vendor'),
+                className: 'min-w-44',
+                cell: (row) => (
+                  <Combobox
+                    options={[
+                      { value: '0', label: t('Not set') },
+                      ...vendors.map((vendor) => ({
+                        value: String(vendor.id),
+                        label: vendor.name,
+                      })),
+                    ]}
+                    value={String(row.vendorId)}
+                    onValueChange={(value) =>
+                      updateRow(row._id, 'vendorId', Number(value ?? 0))
+                    }
+                    aria-label={t('Vendor for {{group}}', { group: row.name })}
+                    placeholder={t('Select vendor')}
+                    className='w-full'
+                  />
+                ),
               },
               {
                 id: 'actions',

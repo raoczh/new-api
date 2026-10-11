@@ -52,6 +52,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
+import type { PricingVendor } from '@/features/pricing/types'
 
 import {
   SettingsForm,
@@ -67,6 +68,8 @@ import {
 
 type GroupFormValues = {
   GroupRatio: string
+  GroupOrder: string
+  GroupVendors: string
   TopupGroupRatio: string
   UserUsableGroups: string
   GroupGroupRatio: string
@@ -80,12 +83,14 @@ type GroupRatioFormProps = {
   form: UseFormReturn<GroupFormValues>
   onSave: (values: GroupFormValues) => Promise<void>
   isSaving: boolean
+  vendors?: PricingVendor[]
 }
 
 export const GroupRatioForm = memo(function GroupRatioForm({
   form,
   onSave,
   isSaving,
+  vendors,
 }: GroupRatioFormProps) {
   const { t } = useTranslation()
   const values = useWatch({ control: form.control })
@@ -168,6 +173,9 @@ export const GroupRatioForm = memo(function GroupRatioForm({
             section={section}
             onSectionChange={setSection}
             groupRatio={values.GroupRatio ?? ''}
+            groupOrder={values.GroupOrder ?? '[]'}
+            groupVendors={values.GroupVendors ?? '{}'}
+            vendors={vendors}
             topupGroupRatio={values.TopupGroupRatio ?? ''}
             userUsableGroups={values.UserUsableGroups ?? ''}
             groupGroupRatio={values.GroupGroupRatio ?? ''}
@@ -231,6 +239,32 @@ export const GroupRatioForm = memo(function GroupRatioForm({
           />
         ) : (
           <SettingsForm onSubmit={form.handleSubmit(onSave)}>
+            {(['GroupOrder', 'GroupVendors'] as const).map((name) => (
+              <FormField
+                key={name}
+                control={form.control}
+                name={name}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {name === 'GroupOrder'
+                        ? t('Group display order')
+                        : t('Group vendors')}
+                    </FormLabel>
+                    <FormControl>
+                      <JsonCodeEditor
+                        value={field.value}
+                        onChange={field.onChange}
+                        name={field.name}
+                        onBlur={field.onBlur}
+                        textareaRef={field.ref}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ))}
             <FormField
               control={form.control}
               name='GroupRatio'

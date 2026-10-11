@@ -1,12 +1,14 @@
 package perfmetrics
 
 import (
+	"maps"
 	"math"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting"
 )
 
 // StatusHours is the fixed number of hourly cells shown per group.
@@ -89,6 +91,7 @@ func QueryGroupStatus(hours int, groupDescs map[string]string) (GroupStatusResul
 	for name := range groupDescs {
 		names = append(names, name)
 	}
+	names = setting.OrderedGroupNames(names)
 	rows, err := model.GetPerfMetricsGroupRows(queryStart, endTs, names)
 	if err != nil {
 		return GroupStatusResult{}, err
@@ -151,13 +154,13 @@ func QueryGroupStatus(hours int, groupDescs map[string]string) (GroupStatusResul
 		}
 	}
 
-	modelVendors, groupEnabledVendors := pricingVendorIndex()
+	groupVendors := setting.GetGroupVendors()
 	usedVendors := map[int]struct{}{}
 	groups := make([]GroupStatus, 0, len(groupDescs))
-	requestCounts := map[string]int64{}
-	for name, desc := range groupDescs {
-		status := GroupStatus{Group: name, Description: desc, Hourly: []GroupHourPoint{}, Models: []GroupModelStat{}}
+	for _, name := range names {
+		status := GroupStatus{Group: name, Description: groupDescs[name], VendorID: groupVendors[name], Hourly: []GroupHourPoint{}, Models: []GroupModelStat{}}
 		agg := aggregates[name]
+		var requestModels map[string]counters
 		if agg != nil {
 			if agg.total.requestCount > 0 {
 				status.Summary = &GroupSummary{
@@ -168,38 +171,35 @@ func QueryGroupStatus(hours int, groupDescs map[string]string) (GroupStatusResul
 				}
 			}
 			status.Hourly = groupHourly(agg.hours)
-			status.Models = groupModels(agg.models)
+			requestModels = agg.models
 			status.LastSeenTs = agg.lastBucket
-			requestCounts[name] = agg.total.requestCount
 		}
 		if seen, ok := lastSeenByGroup.Load(name); ok {
 			status.LastSeenTs = max(status.LastSeenTs, seen.(int64))
 		}
 		status.SummarySource = "request"
-		mergeGroupProbes(&status, probesByGroup[name], startTs, hourlyStart)
-		// Vendor follows the most requested model; idle groups fall back to
-		// the vendor most of their enabled models belong to.
-		if len(status.Models) > 0 {
-			status.VendorID = modelVendors[status.Models[0].ModelName]
+		mergeGroupProbes(&status, requestModels, probesByGroup[name], startTs, hourlyStart)
+		if status.VendorID != 0 {
+			usedVendors[status.VendorID] = struct{}{}
 		}
-		if status.VendorID == 0 {
-			status.VendorID = mostCommonVendor(groupEnabledVendors[name])
-		}
-		usedVendors[status.VendorID] = struct{}{}
 		groups = append(groups, status)
 	}
-	sort.Slice(groups, func(i, j int) bool {
-		if requestCounts[groups[i].Group] != requestCounts[groups[j].Group] {
-			return requestCounts[groups[i].Group] > requestCounts[groups[j].Group]
-		}
-		return groups[i].Group < groups[j].Group
-	})
 
-	vendors := make([]GroupStatusVendor, 0, len(usedVendors))
+	vendorByID := make(map[int]GroupStatusVendor, len(usedVendors))
 	for _, vendor := range model.GetVendors() {
-		if _, ok := usedVendors[vendor.ID]; ok {
-			vendors = append(vendors, GroupStatusVendor{ID: vendor.ID, Name: vendor.Name, Icon: vendor.Icon})
+		vendorByID[vendor.ID] = GroupStatusVendor{ID: vendor.ID, Name: vendor.Name, Icon: vendor.Icon}
+	}
+	vendors := make([]GroupStatusVendor, 0, len(usedVendors))
+	for id := range usedVendors {
+		vendor, ok := vendorByID[id]
+		if !ok {
+			defaultVendor, found := model.GetDefaultVendorByID(id)
+			if !found {
+				continue
+			}
+			vendor = GroupStatusVendor{ID: defaultVendor.ID, Name: defaultVendor.Name, Icon: defaultVendor.Icon}
 		}
+		vendors = append(vendors, vendor)
 	}
 	sort.Slice(vendors, func(i, j int) bool { return vendors[i].Name < vendors[j].Name })
 
@@ -210,35 +210,6 @@ func QueryGroupStatus(hours int, groupDescs map[string]string) (GroupStatusResul
 		Vendors:     vendors,
 		Groups:      groups,
 	}, nil
-}
-
-// pricingVendorIndex maps each enabled model to its vendor, and each group to
-// the vendors of its enabled models (one entry per model).
-func pricingVendorIndex() (map[string]int, map[string][]int) {
-	modelVendors := map[string]int{}
-	groupVendors := map[string][]int{}
-	for _, pricing := range model.GetPricing() {
-		modelVendors[pricing.ModelName] = pricing.VendorID
-		if pricing.VendorID == 0 {
-			continue
-		}
-		for _, group := range pricing.EnableGroup {
-			groupVendors[group] = append(groupVendors[group], pricing.VendorID)
-		}
-	}
-	return modelVendors, groupVendors
-}
-
-func mostCommonVendor(vendorIDs []int) int {
-	counts := map[int]int{}
-	best := 0
-	for _, id := range vendorIDs {
-		counts[id]++
-		if counts[id] > counts[best] || (counts[id] == counts[best] && id < best) {
-			best = id
-		}
-	}
-	return best
 }
 
 func groupHourly(hours map[int64]map[string]counters) []GroupHourPoint {
@@ -270,10 +241,10 @@ func groupHourly(hours map[int64]map[string]counters) []GroupHourPoint {
 	return points
 }
 
-// mergeGroupProbes fills idle hours with synthetic checks. Real traffic always
-// wins for an hour and for the selected-window summary, so a successful check
-// cannot hide customer failures or skew customer latency/throughput.
-func mergeGroupProbes(status *GroupStatus, probes []model.StatusProbe, startTs, hourlyStart int64) {
+// mergeGroupProbes fills idle hours with synthetic checks and adds models that
+// real traffic did not observe. Real traffic wins for an hour, the window
+// summary, and any model it observed.
+func mergeGroupProbes(status *GroupStatus, requestModels map[string]counters, probes []model.StatusProbe, startTs, hourlyStart int64) {
 	observedHours := map[int64]bool{}
 	for _, point := range status.Hourly {
 		observedHours[point.Ts] = true
@@ -320,6 +291,16 @@ func mergeGroupProbes(status *GroupStatus, probes []model.StatusProbe, startTs, 
 		modelHour.add(value)
 		probeHours[hour][probe.ModelName] = modelHour
 	}
+	modelTotals := maps.Clone(requestModels)
+	if modelTotals == nil {
+		modelTotals = map[string]counters{}
+	}
+	for modelName, value := range models {
+		if _, hasRequests := modelTotals[modelName]; !hasRequests {
+			modelTotals[modelName] = value
+		}
+	}
+	status.Models = groupModels(modelTotals)
 	for _, point := range groupHourly(probeHours) {
 		point.Source = sources[point.Ts]
 		status.Hourly = append(status.Hourly, point)
@@ -331,7 +312,6 @@ func mergeGroupProbes(status *GroupStatus, probes []model.StatusProbe, startTs, 
 			AvgTtftMs:    avg(total.ttftSumMs, total.ttftCount),
 			AvgLatencyMs: avg(total.totalLatencyMs, total.requestCount),
 		}
-		status.Models = groupModels(models)
 		status.SummarySource = summarySource
 	}
 }

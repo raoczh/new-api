@@ -28,6 +28,8 @@ function PricingFixture() {
     GroupRatio: '{"default":1}',
     TopupGroupRatio: '{}',
     UserUsableGroups: '{}',
+    GroupOrder: '["default"]',
+    GroupVendors: '{}',
   })
   return (
     <>
@@ -36,6 +38,9 @@ function PricingFixture() {
         onSectionChange={() => {}}
         defaultUseAutoGroupField={null}
         groupRatio={settings.GroupRatio}
+        groupOrder={settings.GroupOrder}
+        groupVendors={settings.GroupVendors}
+        vendors={[]}
         topupGroupRatio={settings.TopupGroupRatio}
         userUsableGroups={settings.UserUsableGroups}
         groupGroupRatio='{}'
