@@ -341,7 +341,11 @@ func SelectChannelForRequest(c *gin.Context, modelName string, retry *RetryParam
 	usingGroup := retry.TokenGroup
 	var channel *model.Channel
 	var selectGroup string
+	var failedAffinityChannel int
+	var affinityFallbackFilters []dto.ChannelFilter
 	if retry.GetRetry() == 0 {
+		c.Set(ginKeyChannelAffinityFallback, 0)
+		originalFilters := slices.Clone(constraints.Filters)
 		if preferredChannelID, found := GetPreferredChannelByAffinity(c, modelName, usingGroup); found {
 			affinityUsable := false
 			preferred, err := model.CacheGetChannel(preferredChannelID)
@@ -375,12 +379,29 @@ func SelectChannelForRequest(c *gin.Context, modelName string, retry *RetryParam
 			if !affinityUsable && RequestPolicy(c).SessionMode == "strict" {
 				return nil, "", &ChannelSelectError{StatusCode: http.StatusServiceUnavailable, Message: "strict_session_binding_unavailable"}
 			}
+		} else if meta, ok := getChannelAffinityMeta(c); ok && meta.BoundChannelID < 0 {
+			failedAffinityChannel = -meta.BoundChannelID
+			affinityFallbackFilters = originalFilters
 		}
 	}
 
 	if channel == nil {
 		var err error
+		autoGroupIndex := common.GetContextKeyInt(c, constant.ContextKeyAutoGroupIndex)
 		channel, selectGroup, err = CacheGetRandomSatisfiedChannel(retry)
+		if err == nil && channel == nil && failedAffinityChannel > 0 {
+			// Session failure avoidance is a preference. Retain every original
+			// request filter when no group has an eligible replacement channel.
+			constraints.Filters = affinityFallbackFilters
+			if usingGroup == "auto" {
+				common.SetContextKey(c, constant.ContextKeyAutoGroupIndex, autoGroupIndex)
+			}
+			channel, selectGroup, err = CacheGetRandomSatisfiedChannel(retry)
+			if err == nil && channel != nil && channel.Id == failedAffinityChannel {
+				c.Set(ginKeyChannelAffinityFallback, channel.Id)
+				RequestPolicy(c).AddEvent(PolicyEvent{ChannelID: channel.Id, Decision: PolicyDecision{Action: "fallback", Reason: "session_switch_no_alternative", Source: "routing"}})
+			}
+		}
 		if err != nil {
 			showGroup := usingGroup
 			if usingGroup == "auto" {

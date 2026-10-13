@@ -29,6 +29,7 @@ const (
 	ginKeyChannelAffinityMeta       = "channel_affinity_meta"
 	ginKeyChannelAffinityLogInfo    = "channel_affinity_log_info"
 	ginKeyChannelAffinitySkipRetry  = "channel_affinity_skip_retry_on_failure"
+	ginKeyChannelAffinityFallback   = "channel_affinity_fallback_channel"
 
 	channelAffinityCacheNamespace           = "new-api:channel_affinity:v1"
 	channelAffinityUsageCacheStatsNamespace = "new-api:channel_affinity_usage_cache_stats:v1"
@@ -629,8 +630,8 @@ func GetPreferredChannelByAffinity(c *gin.Context, modelName string, usingGroup 
 			meta, _ := getChannelAffinityMeta(c)
 			meta.BoundChannelID = channelID
 			setChannelAffinityContext(c, meta)
-			// Negative entries clear the binding while remembering the channel
-			// that the next request must avoid. Keep the normal routing filters.
+			// Prefer another channel after a failed attempt. The selector may
+			// fall back to this channel if no eligible alternative exists.
 			if channelID < 0 {
 				GetChannelConstraints(c).AddFilter(taskdto.ChannelFilter{Kind: taskdto.FilterExcludeChannels, ExcludeChannelIds: []int{-channelID}})
 				return 0, false
@@ -776,9 +777,9 @@ func RecordChannelAffinity(c *gin.Context, channelID int) {
 		common.SysError("channel affinity cache read before binding failed: " + err.Error())
 		return
 	}
-	if found && current == -channelID {
-		// Distribute records after the handler returns; do not restore the
-		// channel that the handler or an administrator just invalidated.
+	if found && current == -channelID && c.GetInt(ginKeyChannelAffinityFallback) != channelID {
+		// Only a request explicitly routed back because no alternative exists
+		// may restore the failed channel after success. Stale requests cannot.
 		return
 	}
 	if meta, ok := getChannelAffinityMeta(c); ok && found && current != channelID && current != meta.BoundChannelID {

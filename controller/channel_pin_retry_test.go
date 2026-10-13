@@ -57,17 +57,21 @@ func TestLogChannelSwitchRoutingDatabaseMatrix(t *testing.T) {
 				common.MemoryCacheEnabled = cached
 				model.InitChannelCache()
 				for _, mode := range []string{"prefer", "strict"} {
-					for _, scenario := range []string{"automatic", "manual", "legacy log", "with output", "no alternative"} {
+					for _, scenario := range []string{"automatic", "manual", "legacy log", "with output", "no alternative", "timeout without alternative", "manual without alternative", "filtered alternative", "excluded original", "repeated disconnect without alternative", "auto without alternative"} {
 						t.Run(fmt.Sprintf("cache=%t/%s/%s", cached, mode, scenario), func(t *testing.T) {
 							affinity.Rules[0].SessionMode = mode
 							modelName := "switch-test"
-							if scenario == "no alternative" {
+							if scenario == "no alternative" || strings.Contains(scenario, "without alternative") || scenario == "excluded original" {
 								modelName = "lonely-test"
+							}
+							group := "default"
+							if scenario == "auto without alternative" {
+								group = "auto"
 							}
 							seed := newPinRetryContext()
 							seed.Request.Header.Set("X-Session", t.Name())
 							seed.Set("channel_id", 1)
-							_, _ = service.GetPreferredChannelByAffinity(seed, modelName, "default")
+							_, _ = service.GetPreferredChannelByAffinity(seed, modelName, group)
 							service.RecordChannelAffinity(seed, 1)
 							t.Cleanup(func() { service.ClearCurrentChannelAffinityCache(seed) })
 							other := model.NewLogOther()
@@ -77,7 +81,7 @@ func TestLogChannelSwitchRoutingDatabaseMatrix(t *testing.T) {
 							var target service.ChannelAffinitySwitch
 							require.NoError(t, common.Unmarshal(encoded, &target))
 							target.ChannelID = 1
-							if scenario == "manual" || scenario == "legacy log" {
+							if scenario == "manual" || scenario == "legacy log" || scenario == "manual without alternative" {
 								if scenario == "legacy log" {
 									target.CacheKeyHash = ""
 								}
@@ -86,6 +90,10 @@ func TestLogChannelSwitchRoutingDatabaseMatrix(t *testing.T) {
 							} else {
 								status := relaycommon.NewStreamStatus()
 								status.SetEndReason(relaycommon.StreamEndReasonClientGone, context.Canceled)
+								if scenario == "timeout without alternative" {
+									status = relaycommon.NewStreamStatus()
+									status.SetEndReason(relaycommon.StreamEndReasonTimeout, context.DeadlineExceeded)
+								}
 								output := int64(0)
 								if scenario == "with output" {
 									output = 40
@@ -93,24 +101,48 @@ func TestLogChannelSwitchRoutingDatabaseMatrix(t *testing.T) {
 								service.HandleRelayAffinityFailure(seed, &relaycommon.RelayInfo{StreamStatus: status, PerformanceOutputTokens: output}, nil)
 							}
 							service.RecordChannelAffinity(seed, 1)
+							if scenario == "repeated disconnect without alternative" {
+								repeated := newPinRetryContext()
+								repeated.Request.Header.Set("X-Session", t.Name())
+								selected, _, selectErr := service.SelectChannelForRequest(repeated, modelName, &service.RetryParam{Ctx: repeated, TokenGroup: group, ModelName: modelName})
+								require.Nil(t, selectErr)
+								require.Equal(t, 1, selected.Id)
+								repeated.Set("channel_id", selected.Id)
+								status := relaycommon.NewStreamStatus()
+								status.SetEndReason(relaycommon.StreamEndReasonClientGone, context.Canceled)
+								service.HandleRelayAffinityFailure(repeated, &relaycommon.RelayInfo{StreamStatus: status}, nil)
+								service.RecordChannelAffinity(repeated, 1)
+								_, found := service.GetPreferredChannelByAffinity(seed, modelName, group)
+								assert.False(t, found, "another canceled fallback must not restore the binding")
+							}
 							request := newPinRetryContext()
 							request.Request.Body = io.NopCloser(strings.NewReader(fmt.Sprintf(`{"model":%q}`, modelName)))
 							request.Request.Header.Set("Content-Type", "application/json")
 							request.Request.Header.Set("X-Session", t.Name())
-							common.SetContextKey(request, constant.ContextKeyUsingGroup, "default")
+							common.SetContextKey(request, constant.ContextKeyUsingGroup, group)
+							if group == "auto" {
+								common.SetContextKey(request, constant.ContextKeyUserGroup, "default")
+								common.SetContextKey(request, constant.ContextKeyTokenAutoGroups, []string{"default"})
+							}
+							if scenario == "filtered alternative" {
+								service.GetChannelConstraints(request).AddFilter(dto.ChannelFilter{Kind: dto.FilterExcludeChannels, ExcludeChannelIds: []int{2}})
+							}
+							if scenario == "excluded original" {
+								service.GetChannelConstraints(request).AddFilter(dto.ChannelFilter{Kind: dto.FilterExcludeChannels, ExcludeChannelIds: []int{1}})
+							}
 							middleware.Distribute()(request)
-							if scenario == "no alternative" {
+							if scenario == "excluded original" {
 								assert.Equal(t, http.StatusServiceUnavailable, request.Writer.Status())
-								assert.True(t, request.IsAborted())
+								assert.True(t, request.IsAborted(), "fallback must retain explicit request exclusions")
 								return
 							}
 							assert.False(t, request.IsAborted())
 							want := 2
-							if scenario == "with output" {
+							if scenario == "with output" || modelName == "lonely-test" || scenario == "filtered alternative" {
 								want = 1
 							}
 							assert.Equal(t, want, request.GetInt("channel_id"))
-							bound, found := service.GetPreferredChannelByAffinity(request, modelName, "default")
+							bound, found := service.GetPreferredChannelByAffinity(request, modelName, group)
 							assert.True(t, found)
 							assert.Equal(t, want, bound)
 							if scenario == "manual" {

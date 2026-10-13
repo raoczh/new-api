@@ -107,6 +107,7 @@ func HandleRelayAffinityFailure(c *gin.Context, info *relaycommon.RelayInfo, err
 	if !found || channelID <= 0 {
 		return
 	}
+	c.Set(ginKeyChannelAffinityFallback, 0)
 	if current, exists, err := getChannelAffinityCache().Get(key); err == nil && exists && current == -channelID {
 		return
 	}
