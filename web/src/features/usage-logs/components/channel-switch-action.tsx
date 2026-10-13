@@ -25,6 +25,11 @@ import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { hasPermission } from '@/lib/admin-permissions'
 import { handleServerError } from '@/lib/handle-server-error'
 import { ROLE } from '@/lib/roles'
@@ -76,24 +81,44 @@ export function ChannelSwitchAction(props: { log: UsageLog }) {
 
   return (
     <>
-      <Button
-        variant='outline'
-        size='icon-sm'
-        disabled={!available || mutation.isPending}
-        aria-label={t('Switch channel')}
-        title={
-          available
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              className='inline-flex'
+              aria-label={
+                !available
+                  ? t('No session binding is available for this request')
+                  : undefined
+              }
+            />
+          }
+        >
+          <Button
+            variant='outline'
+            size='icon-sm'
+            disabled={!available || mutation.isPending}
+            aria-label={t('Switch channel')}
+            title={
+              available
+                ? t('Clear cache and switch channel')
+                : t('No session binding is available for this request')
+            }
+            onClick={() => setOpen(true)}
+          >
+            <HugeiconsIcon
+              icon={ArrowLeftRightIcon}
+              strokeWidth={2}
+              aria-hidden='true'
+            />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {available
             ? t('Clear cache and switch channel')
-            : t('No session binding is available for this request')
-        }
-        onClick={() => setOpen(true)}
-      >
-        <HugeiconsIcon
-          icon={ArrowLeftRightIcon}
-          strokeWidth={2}
-          aria-hidden='true'
-        />
-      </Button>
+            : t('No session binding is available for this request')}
+        </TooltipContent>
+      </Tooltip>
       <ConfirmDialog
         open={open && canOperate}
         onOpenChange={(value) => {

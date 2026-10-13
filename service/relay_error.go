@@ -30,7 +30,12 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 	if c != nil && c.Writer != nil && c.Writer.Written() && !common.GetContextKeyBool(c, constant.ContextKeyIsWebSocket) {
 		return PolicyDecision{Action: "stop", Reason: "response_started", Source: "system"}
 	}
-	if ShouldSkipRetryAfterChannelAffinityFailure(c) {
+	// The timeout retry switch explicitly allows replay on another channel,
+	// including when the session rule normally requires a strict binding.
+	timeoutRetryEnabled := retryTimes > 0 &&
+		operation_setting.AutomaticRetryTimeoutEnabled &&
+		operation_setting.IsAlwaysSkipRetryStatusCode(err.StatusCode)
+	if ShouldSkipRetryAfterChannelAffinityFailure(c) && !timeoutRetryEnabled {
 		source := RequestPolicy(c).SessionModeSource
 		if source == "" {
 			source = "session_rule"
@@ -88,10 +93,13 @@ func HandleRelayAffinityFailure(c *gin.Context, info *relaycommon.RelayInfo, err
 	if _, pinned, _ := GetChannelConstraints(c).ResolvedPin(); pinned {
 		return
 	}
-	clientGone := info.StreamStatus != nil && info.StreamStatus.EndReason == relaycommon.StreamEndReasonClientGone
+	clientGone := c.Request != nil && c.Request.Context().Err() != nil ||
+		info.StreamStatus != nil && info.StreamStatus.EndReason == relaycommon.StreamEndReasonClientGone
 	timedOut := info.StreamStatus != nil && info.StreamStatus.EndReason == relaycommon.StreamEndReasonTimeout
+	upstreamTimeout := err != nil && operation_setting.AutomaticRetryTimeoutEnabled &&
+		operation_setting.IsAlwaysSkipRetryStatusCode(err.StatusCode)
 	transportCanceled := err != nil && err.GetErrorCode() == types.ErrorCodeDoRequestFailed && errors.Is(err, context.Canceled)
-	if !clientGone && !timedOut && !transportCanceled {
+	if !clientGone && !timedOut && !upstreamTimeout && !transportCanceled {
 		return
 	}
 	key, ttl, found := getChannelAffinityContext(c)
@@ -106,7 +114,15 @@ func HandleRelayAffinityFailure(c *gin.Context, info *relaycommon.RelayInfo, err
 		logger.LogError(c, "channel affinity switch failed: "+err.Error())
 		return
 	}
-	RequestPolicy(c).AddEvent(PolicyEvent{ChannelID: channelID, Decision: PolicyDecision{Action: "switch", Reason: "canceled_before_output", Source: "system"}})
+	if meta, found := getChannelAffinityMeta(c); found {
+		meta.BoundChannelID = -channelID
+		setChannelAffinityContext(c, meta)
+	}
+	decision := PolicyDecision{Action: "switch", Reason: "canceled_before_output", Source: "system"}
+	if upstreamTimeout {
+		decision.Reason, decision.Source = "timeout_retry_enabled", "global"
+	}
+	RequestPolicy(c).AddEvent(PolicyEvent{ChannelID: channelID, Decision: decision})
 }
 
 func ProcessChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError, relayInfo *relaycommon.RelayInfo) {

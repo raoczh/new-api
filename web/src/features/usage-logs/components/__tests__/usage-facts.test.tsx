@@ -64,7 +64,11 @@ function makeLog(other: LogOtherData): UsageLog {
   }
 }
 
-function renderDetails(other: LogOtherData, promptTokens = 0): QueryClient {
+function renderDetails(
+  other: LogOtherData,
+  promptTokens = 0,
+  isAdmin = false
+): QueryClient {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -80,7 +84,7 @@ function renderDetails(other: LogOtherData, promptTokens = 0): QueryClient {
     <QueryClientProvider client={queryClient}>
       <DetailsDialog
         log={{ ...makeLog(other), prompt_tokens: promptTokens }}
-        isAdmin={false}
+        isAdmin={isAdmin}
         isRoot={false}
         open
         onOpenChange={() => undefined}
@@ -93,6 +97,40 @@ function renderDetails(other: LogOtherData, promptTokens = 0): QueryClient {
 function rowValue(label: string): string | null {
   return screen.getByText(label).nextElementSibling?.textContent ?? null
 }
+
+test.each(['openai', 'anthropic', 'gemini'])(
+  'labels estimated %s billing usage as an estimate',
+  (provider) => {
+    const queryClient = renderDetails(
+      {
+        admin_info: {
+          usage_billing_path: `billing-usage-${provider}-estimated`,
+        },
+      },
+      98527,
+      true
+    )
+    expect(
+      screen.getByText(`Estimated Usage (billing-usage-${provider}-estimated)`)
+    ).toBeVisible()
+    expect(
+      screen.queryByText(
+        `Upstream Response (billing-usage-${provider}-estimated)`
+      )
+    ).not.toBeInTheDocument()
+    queryClient.clear()
+  }
+)
+
+test('shows that an empty failed request has no reported usage', () => {
+  const queryClient = renderDetails(
+    { admin_info: { usage_billing_path: 'none' } },
+    0,
+    true
+  )
+  expect(screen.getByText('No Usage Reported')).toBeVisible()
+  queryClient.clear()
+})
 
 test('shows the recorded request and response models in log details', () => {
   const queryClient = renderDetails({

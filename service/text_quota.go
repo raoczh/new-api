@@ -72,7 +72,9 @@ type textQuotaSummary struct {
 // surcharge (e.g. /v1/alpha/search returns no usage but bills one web_search
 // call), so token count alone is not sufficient to decide.
 func (s *textQuotaSummary) hasBillableUsage() bool {
-	return s.FixedPriceBilling || s.TotalTokens > 0 || !s.ToolCallSurchargeQuota.IsZero()
+	return s.FixedPriceBilling || s.TotalTokens > 0 || s.CacheTokens > 0 ||
+		s.CacheCreationTokens > 0 || s.CacheCreationTokens5m > 0 || s.CacheCreationTokens1h > 0 ||
+		!s.ToolCallSurchargeQuota.IsZero()
 }
 
 func cacheWriteTokensTotal(summary textQuotaSummary) int {
@@ -401,6 +403,31 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	}
 
 	adminRejectReason := common.GetContextKeyString(ctx, constant.ContextKeyAdminRejectReason)
+	// Missing/estimated prompt tokens alone do not prove that an interrupted
+	// request consumed anything upstream. Do not evaluate even fixed prices for
+	// that request; settlement below returns its reservation and records the failure.
+	unreportedFailedUsage := false
+	if relayInfo.IsStream && relayInfo.StreamStatus != nil {
+		outcome := relayInfo.StreamStatus.OutcomeSnapshot()
+		failed := (outcome.EndReason != relaycommon.StreamEndReasonNone || outcome.Response != relaycommon.ResponseOutcomeUnknown) &&
+			outcome.Response != relaycommon.ResponseOutcomeCompleted &&
+			(outcome.Response != relaycommon.ResponseOutcomeUnknown || !relayInfo.StreamStatus.IsNormalEnd() ||
+				outcome.ExpectsTerminal && outcome.EndReason != relaycommon.StreamEndReasonNone)
+		if failed {
+			estimated := common.GetContextKeyBool(ctx, constant.ContextKeyLocalCountTokens)
+			if originUsage != nil && originUsage.BillingUsage != nil {
+				estimated = originUsage.BillingUsage.Estimated
+			}
+			unreportedFailedUsage = billingUsage == nil || billingUsage.CompletionTokens == 0 &&
+				(billingUsage.PromptTokens == 0 || estimated) &&
+				billingUsage.PromptTokensDetails.CachedTokens == 0 &&
+				billingUsage.PromptTokensDetails.CacheCreationTokensTotal() == 0 &&
+				billingUsage.ClaudeCacheCreation5mTokens == 0 && billingUsage.ClaudeCacheCreation1hTokens == 0
+		}
+	}
+	if unreportedFailedUsage {
+		billingUsage = &dto.Usage{UsageSemantic: usageSemanticFromUsage(relayInfo, billingUsage)}
+	}
 	summary := calculateTextQuotaSummary(ctx, relayInfo, billingUsage)
 
 	var tieredResult *billingexpr.TieredResult
@@ -413,7 +440,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if billingUsage == nil && snap != nil && billingexpr.UsesFixedPricingByHash(snap.ExprString, snap.ExprHash) {
 		billingUsage = &dto.Usage{PromptTokens: summary.PromptTokens, CompletionTokens: summary.CompletionTokens, TotalTokens: summary.TotalTokens}
 	}
-	if billingUsage != nil {
+	if billingUsage != nil && !unreportedFailedUsage {
 		var tieredUsedVars map[string]bool
 		if snap := relayInfo.TieredBillingSnapshot; snap != nil {
 			tieredUsedVars = billingexpr.UsedVarsByHash(snap.ExprString, snap.ExprHash)
@@ -491,6 +518,9 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		other.SetPublic("usage_semantic", "openai")
 	}
 	appendUsageBillingPathForLog(other, common.GetContextKeyBool(ctx, constant.ContextKeyLocalCountTokens), originUsage)
+	if unreportedFailedUsage {
+		other.SetAdmin("usage_billing_path", usageBillingPathNone)
+	}
 	if adminRejectReason != "" {
 		other.SetAdmin("reject_reason", adminRejectReason)
 	}

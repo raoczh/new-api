@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	kitdto "github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -187,6 +189,19 @@ func TestDecideRelayRetryReasons(t *testing.T) {
 		{name: "timeout retry enabled", err: upstream(http.StatusGatewayTimeout), retries: 1, setup: func(c *gin.Context) {
 			operation_setting.AutomaticRetryTimeoutEnabled = true
 		}, want: PolicyDecision{Action: "retry", Reason: "timeout_retry_enabled", Source: "global"}},
+		{name: "timeout retry overrides strict session", err: upstream(524), retries: 1, setup: func(c *gin.Context) {
+			operation_setting.AutomaticRetryTimeoutEnabled = true
+			c.Set(ginKeyChannelAffinitySkipRetry, true)
+			RequestPolicy(c).SessionModeSource = "session_rule"
+		}, want: PolicyDecision{Action: "retry", Reason: "timeout_retry_enabled", Source: "global"}},
+		{name: "timeout retry cannot replay a disconnected client", err: upstream(524), retries: 1, setup: func(c *gin.Context) {
+			operation_setting.AutomaticRetryTimeoutEnabled = true
+			c.Set(ginKeyChannelAffinitySkipRetry, true)
+			RequestPolicy(c).SessionModeSource = "session_rule"
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil).WithContext(ctx)
+		}, want: PolicyDecision{Action: "stop", Reason: "client_gone", Source: "system"}},
 		{name: "timeout retry enabled respects budget", err: upstream(524), retries: 0, setup: func(c *gin.Context) {
 			operation_setting.AutomaticRetryTimeoutEnabled = true
 		}, want: PolicyDecision{Action: "stop", Reason: "attempt_budget_exhausted", Source: "global"}},
@@ -214,6 +229,117 @@ func TestDecideRelayRetryReasons(t *testing.T) {
 			assert.Equal(t, tc.want, decision)
 			assert.Equal(t, tc.want.Action == "retry", ShouldRetryRelayError(c, tc.err, tc.retries))
 		})
+	}
+}
+
+func TestTimeoutRelaySessionSwitching(t *testing.T) {
+	affinity := operation_setting.GetChannelAffinitySetting()
+	previousAffinity := *affinity
+	previousTimeoutRetry := operation_setting.AutomaticRetryTimeoutEnabled
+	previousRedis := common.RedisEnabled
+	common.RedisEnabled = false
+	t.Cleanup(func() {
+		*affinity = previousAffinity
+		operation_setting.AutomaticRetryTimeoutEnabled = previousTimeoutRetry
+		common.RedisEnabled = previousRedis
+	})
+
+	for _, protocol := range []struct{ name, model, path, keyPath, body string }{
+		{"Claude", "claude-test", "/v1/messages", "metadata.user_id", `{"metadata":{"user_id":"private-timeout-session"}}`},
+		{"GPT", "gpt-test", "/v1/responses", "prompt_cache_key", `{"prompt_cache_key":"private-timeout-session"}`},
+	} {
+		for _, tc := range []struct {
+			name                                     string
+			status                                   int
+			enabled, canceled, pinned, newer, manual bool
+			output                                   int64
+			wantSwitch                               bool
+		}{
+			{name: "504", status: http.StatusGatewayTimeout, enabled: true, wantSwitch: true},
+			{name: "524", status: 524, enabled: true, wantSwitch: true},
+			{name: "524 after client disconnect", status: 524, enabled: true, canceled: true, wantSwitch: true},
+			{name: "client disconnect before stream starts", status: http.StatusInternalServerError, canceled: true, wantSwitch: true},
+			{name: "timeout switch disabled", status: 524},
+			{name: "manual switch from log", status: 524, manual: true, wantSwitch: true},
+			{name: "output already received", status: 524, enabled: true, output: 40},
+			{name: "fixed channel", status: 524, enabled: true, pinned: true},
+			{name: "newer session binding", status: 524, enabled: true, newer: true},
+		} {
+			t.Run(protocol.name+"/"+tc.name, func(t *testing.T) {
+				operation_setting.AutomaticRetryTimeoutEnabled = tc.enabled
+				*affinity = operation_setting.ChannelAffinitySetting{
+					Enabled: true, SwitchOnSuccess: true, DefaultTTLSeconds: 60,
+					Rules: []operation_setting.ChannelAffinityRule{{
+						Name: t.Name(), ModelRegex: []string{"^" + protocol.model + "$"}, PathRegex: []string{protocol.path},
+						KeySources:  []operation_setting.ChannelAffinityKeySource{{Type: "gjson", Path: protocol.keyPath}},
+						SessionMode: "strict", IncludeRuleName: true, IncludeUsingGroup: true,
+					}},
+				}
+				c, _ := gin.CreateTestContext(httptest.NewRecorder())
+				ctx, cancel := context.WithCancel(context.Background())
+				t.Cleanup(cancel)
+				c.Request = httptest.NewRequest(http.MethodPost, protocol.path, strings.NewReader(protocol.body)).WithContext(ctx)
+				_, found := GetPreferredChannelByAffinity(c, protocol.model, "default")
+				require.False(t, found)
+				c.Set("channel_id", 7)
+				MarkChannelAffinityUsed(c, "default", 7)
+				RecordChannelAffinity(c, 7)
+				t.Cleanup(func() { ClearCurrentChannelAffinityCache(c) })
+				_, found = GetPreferredChannelByAffinity(c, protocol.model, "default")
+				require.True(t, found)
+				key, _, found := getChannelAffinityContext(c)
+				require.True(t, found)
+				if tc.canceled {
+					cancel()
+				}
+				if tc.pinned {
+					GetChannelConstraints(c).AddPin(dto.ChannelPin{ChannelId: 7, Source: dto.PinSourceToken, Rank: dto.PinRankToken})
+				}
+				if tc.newer {
+					require.NoError(t, getChannelAffinityCache().SetWithTTL(key, 8, time.Minute))
+				}
+				apiErr := types.NewOpenAIError(errors.New("upstream timeout"), types.ErrorCodeBadResponseStatusCode, tc.status)
+				HandleRelayAffinityFailure(c, &relaycommon.RelayInfo{PerformanceOutputTokens: tc.output}, apiErr)
+
+				other := model.NewLogOther()
+				AppendRelayLogAdminInfo(c, nil, other)
+				encoded, err := common.Marshal(other.Snapshot()["admin_info"].(map[string]any)["channel_affinity"])
+				require.NoError(t, err)
+				assert.NotContains(t, string(encoded), "private-timeout-session")
+				var target ChannelAffinitySwitch
+				require.NoError(t, common.Unmarshal(encoded, &target))
+				assert.Equal(t, t.Name(), target.RuleName)
+				require.Len(t, target.KeyFP, 8, "both protocols must provide the binding used by the log switch button")
+				target.ChannelID = 7
+				if tc.manual {
+					require.NoError(t, SwitchChannelAffinityFromLog(target))
+				}
+				RecordChannelAffinity(c, 7)
+				next, _ := gin.CreateTestContext(httptest.NewRecorder())
+				next.Request = httptest.NewRequest(http.MethodPost, protocol.path, strings.NewReader(protocol.body))
+				channelID, bound := GetPreferredChannelByAffinity(next, protocol.model, "default")
+				if tc.wantSwitch {
+					assert.False(t, bound)
+					assert.Zero(t, channelID)
+					assert.Contains(t, GetChannelConstraints(next).Filters, dto.ChannelFilter{Kind: dto.FilterExcludeChannels, ExcludeChannelIds: []int{7}})
+					if !tc.canceled && !tc.manual {
+						assert.Equal(t, "retry", DecideRelayRetry(c, apiErr, 1).Action)
+						c.Set("channel_id", 8)
+						RecordChannelAffinity(c, 8)
+						channelID, bound = GetPreferredChannelByAffinity(next, protocol.model, "default")
+						assert.True(t, bound)
+						assert.Equal(t, 8, channelID, "a successful timeout retry must bind the replacement channel")
+					}
+					return
+				}
+				assert.True(t, bound)
+				want := 7
+				if tc.newer {
+					want = 8
+				}
+				assert.Equal(t, want, channelID)
+			})
+		}
 	}
 }
 

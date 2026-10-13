@@ -6,6 +6,7 @@ import (
 )
 
 const (
+	usageBillingPathNone               = "none"
 	usageBillingPathLocal              = "local"
 	usageBillingPathUpstream           = "upstream"
 	usageBillingPathOpenAI             = "billing-usage-openai"

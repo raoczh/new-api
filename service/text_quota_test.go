@@ -102,6 +102,12 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 	const imageExpression = `tier("standard", p * 5 + cr * 1.25 + img * 8 + img_cr * 2 + c * 30)`
 	imageUsage := &dto.Usage{PromptTokens: 1000, CompletionTokens: 100, TotalTokens: 1100,
 		PromptTokensDetails: dto.InputTokenDetails{CachedTokens: 300, ImageTokens: 600, CachedTokensDetails: &dto.CachedTokenDetails{ImageTokens: common.GetPointer(200)}}}
+	estimatedClaudeUsage := &dto.Usage{PromptTokens: 98527, TotalTokens: 98527,
+		BillingUsage: dto.NewClaudeMessagesBillingUsage(&dto.ClaudeUsage{InputTokens: 98527})}
+	estimatedClaudeUsage.BillingUsage.Estimated = true
+	partialClaudeUsage := &dto.Usage{PromptTokens: 100, CompletionTokens: 20, TotalTokens: 120,
+		BillingUsage: dto.NewClaudeMessagesBillingUsage(&dto.ClaudeUsage{InputTokens: 100, OutputTokens: 20})}
+	partialClaudeUsage.BillingUsage.Estimated = true
 	operation_setting.SetToolPriceForTest("fixed_billing_tool", 4)
 	t.Cleanup(func() { operation_setting.DeleteToolPriceForTest("fixed_billing_tool") })
 	for index, tc := range []struct {
@@ -115,7 +121,17 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 		want                                      int
 		unit                                      billingexpr.BillingUnit
 		requestedImages, actualImages             int
+		end                                       relaycommon.StreamEndReason
+		noCharge                                  bool
+		legacy                                    bool
 	}{
+		{name: "client gone without output refunds estimated prompt", expression: `tier("standard", p * 4 + c * 20)`, estimate: 98527, stream: true, usage: estimatedClaudeUsage, end: relaycommon.StreamEndReasonClientGone, noCharge: true},
+		{name: "timeout without output refunds estimated prompt", expression: `tier("standard", p * 4 + c * 20)`, estimate: 98527, stream: true, usage: estimatedClaudeUsage, end: relaycommon.StreamEndReasonTimeout, noCharge: true},
+		{name: "client gone without usage refunds fixed price", expression: flat, stream: true, end: relaycommon.StreamEndReasonClientGone, noCharge: true},
+		{name: "client gone retains actual upstream usage", expression: `tier("standard", p * 4 + c * 20)`, stream: true, usage: &dto.Usage{BillingUsage: dto.NewClaudeMessagesBillingUsage(&dto.ClaudeUsage{InputTokens: 100})}, end: relaycommon.StreamEndReasonClientGone, want: 200, unit: billingexpr.BillingUnitToken},
+		{name: "client gone retains upstream cache only usage", expression: `tier("standard", p * 4 + c * 20)`, stream: true, usage: &dto.Usage{BillingUsage: dto.NewClaudeMessagesBillingUsage(&dto.ClaudeUsage{CacheReadInputTokens: 50})}, end: relaycommon.StreamEndReasonClientGone, want: 100, unit: billingexpr.BillingUnitToken},
+		{name: "client gone without output refunds legacy estimate", expression: flat, estimate: 98527, stream: true, usage: &dto.Usage{PromptTokens: 98527, TotalTokens: 98527}, end: relaycommon.StreamEndReasonClientGone, noCharge: true, legacy: true},
+		{name: "client gone after output retains estimated usage", expression: `tier("standard", p * 4 + c * 20)`, stream: true, usage: partialClaudeUsage, end: relaycommon.StreamEndReasonClientGone, want: 400, unit: billingexpr.BillingUnitToken},
 		{name: "missing usage charges once", expression: flat, want: 5000, unit: billingexpr.BillingUnitRequest},
 		{name: "zero usage charges once", expression: flat, usage: &dto.Usage{}, want: 5000, unit: billingexpr.BillingUnitRequest},
 		{name: "stream charges once", expression: flat, stream: true, usage: &dto.Usage{PromptTokens: 100, CompletionTokens: 20, TotalTokens: 120}, want: 5000, unit: billingexpr.BillingUnitRequest},
@@ -177,6 +193,11 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 			snapshot.EstimatedImageCount = trace.ImageCount
 			info := &relaycommon.RelayInfo{UserId: user.Id, TokenId: token.Id, TokenKey: token.Key, ChannelMeta: &relaycommon.ChannelMeta{ChannelId: channel.Id}, OriginModelName: "fixed-test", UsingGroup: "default", UserGroup: "default", UserSetting: dto.UserSetting{BillingPreference: "wallet_only"}, ForcePreConsume: true, StartTime: time.Now(), IsStream: tc.stream, RelayFormat: types.RelayFormatOpenAI, PriceData: hosttypes.PriceData{GroupRatioInfo: hosttypes.GroupRatioInfo{GroupRatio: group}}, TieredBillingSnapshot: snapshot, BillingRequestInput: request}
 			info.SetEstimatePromptTokens(tc.estimate)
+			if tc.end != "" {
+				info.StreamStatus = relaycommon.NewStreamStatus()
+				info.StreamStatus.SetEndReason(tc.end, nil)
+				info.StreamStatus.RequireTerminal()
+			}
 			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 			ctx.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
 			if tc.expression == imageExpression {
@@ -224,6 +245,12 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 					}
 				} else {
 					info.UpdateImageCount(int64(tc.actualImages))
+					if tc.legacy {
+						info.TieredBillingSnapshot = nil
+						info.PriceData.ModelRatio = 1
+						info.PriceData.CompletionRatio = 1
+						common.SetContextKey(ctx, constant.ContextKeyLocalCountTokens, true)
+					}
 					if tc.tool {
 						info.ResponsesUsageInfo = &relaycommon.ResponsesUsageInfo{BuiltInTools: map[string]*relaycommon.BuildInToolInfo{"fixed_billing_tool": {CallCount: 1}}}
 					}
@@ -241,10 +268,21 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 					require.NoError(t, logDB.Where("user_id = ?", user.Id).Take(&log).Error)
 					assert.Equal(t, tc.want, log.Quota)
 					assert.Equal(t, tc.stream, log.IsStream)
-					assert.NotContains(t, log.Content, "无法扣费")
+					if tc.noCharge {
+						assert.Contains(t, log.Content, "无法扣费")
+						assert.Zero(t, log.PromptTokens)
+						assert.Zero(t, log.CompletionTokens)
+					} else {
+						assert.NotContains(t, log.Content, "无法扣费")
+					}
 					var other map[string]any
 					require.NoError(t, common.UnmarshalJsonStr(log.Other, &other))
-					assert.Equal(t, string(tc.unit), other["billing_unit"])
+					if tc.noCharge {
+						assert.NotContains(t, other, "billing_unit")
+						assert.Equal(t, "none", other["admin_info"].(map[string]any)["usage_billing_path"])
+					} else {
+						assert.Equal(t, string(tc.unit), other["billing_unit"])
+					}
 					if tc.requestedImages > 0 {
 						count := tc.actualImages
 						if count == 0 {
@@ -290,8 +328,14 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 			assert.Equal(t, startingQuota-tc.want, token.RemainQuota)
 			assert.Equal(t, tc.want, user.UsedQuota)
 			assert.Equal(t, tc.want, token.UsedQuota)
+			require.NoError(t, db.First(&channel, channel.Id).Error)
+			assert.Equal(t, int64(tc.want), channel.UsedQuota)
 			if !tc.refund && !tc.insufficient {
-				assert.Equal(t, 1, user.RequestCount)
+				if tc.noCharge {
+					assert.Zero(t, user.RequestCount)
+				} else {
+					assert.Equal(t, 1, user.RequestCount)
+				}
 			}
 		})
 	}

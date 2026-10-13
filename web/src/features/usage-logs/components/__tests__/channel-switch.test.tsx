@@ -143,6 +143,19 @@ test('disables switching when the log has no session binding', () => {
   expect(screen.getByRole('button', { name: 'Switch channel' })).toBeDisabled()
 })
 
+test('shows the missing session binding reason when hovering a disabled switch', async () => {
+  const user = userEvent.setup()
+  renderAction({ ...log, model_name: 'claude-sonnet-4', other: '{}' })
+  const button = screen.getByRole('button', { name: 'Switch channel' })
+  expect(button).toBeDisabled()
+  await user.hover(
+    screen.getByLabelText('No session binding is available for this request')
+  )
+  expect(
+    await screen.findByText('No session binding is available for this request')
+  ).toBeVisible()
+})
+
 test('confirms switching, prevents duplicate submissions, and reports success', async () => {
   const user = userEvent.setup()
   let finish!: (value: { data: { success: boolean } }) => void

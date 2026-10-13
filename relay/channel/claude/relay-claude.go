@@ -239,10 +239,14 @@ func countClaudeStreamBillableTools(c *gin.Context, info *relaycommon.RelayInfo,
 }
 
 func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, claudeInfo *ClaudeResponseInfo) {
-	if claudeInfo.Usage.PromptTokens == 0 {
-		//上游出错
+	// An interrupted empty stream has no response to estimate. Keep any usage
+	// actually received from message_start, including input/cache consumption.
+	incomplete := !claudeInfo.Done
+	if info.StreamStatus != nil {
+		incomplete = info.StreamStatus.ResponseOutcome() != string(relaycommon.ResponseOutcomeCompleted)
 	}
-	if claudeInfo.Usage.CompletionTokens == 0 || !claudeInfo.Done {
+	emptyInterrupted := incomplete && claudeInfo.ResponseText.Len() == 0 && claudeInfo.Usage.CompletionTokens == 0
+	if !emptyInterrupted && (claudeInfo.Usage.CompletionTokens == 0 || !claudeInfo.Done) {
 		if common.DebugEnabled {
 			common.SysLog("claude response usage is not complete, maybe upstream error")
 		}
@@ -260,7 +264,9 @@ func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, clau
 	if claudeInfo.Usage != nil {
 		claudeInfo.Usage.UsageSemantic = "anthropic"
 	}
-	relayconvert.FinalizeClaudeStreamBillingUsage(claudeInfo)
+	if !emptyInterrupted {
+		relayconvert.FinalizeClaudeStreamBillingUsage(claudeInfo)
+	}
 
 	if info.RelayFormat == types.RelayFormatClaude {
 		//

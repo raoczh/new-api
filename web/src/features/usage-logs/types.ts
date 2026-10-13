@@ -106,6 +106,7 @@ export interface ChannelAffinitySwitchRequest {
 }
 
 export const USAGE_BILLING_PATH = {
+  NONE: 'none',
   LOCAL: 'local',
   UPSTREAM: 'upstream',
   OPENAI: 'billing-usage-openai',

@@ -6,10 +6,12 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/relayconvert"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +19,53 @@ import (
 
 func commonPointer[T any](value T) *T {
 	return &value
+}
+
+func TestInterruptedClaudeStreamBilling(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		input      int
+		cache      int
+		output     string
+		delta      bool
+		wantPrompt int
+		wantLocal  bool
+	}{
+		{name: "empty stream has no billable estimate"},
+		{name: "empty final delta has no billable estimate", delta: true},
+		{name: "upstream input remains authoritative", input: 100, wantPrompt: 100},
+		{name: "upstream cache remains authoritative", cache: 50},
+		{name: "partial output retains estimated usage", output: "partial answer", wantPrompt: 98527, wantLocal: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			ctx.Request = httptest.NewRequest("POST", "/v1/messages", nil)
+			info := &relaycommon.RelayInfo{RelayFormat: types.RelayFormatClaude, ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "claude-sonnet-4"}, StreamStatus: relaycommon.NewStreamStatus()}
+			info.SetEstimatePromptTokens(98527)
+			info.StreamStatus.RequireTerminal()
+			info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, nil)
+			response := &ClaudeResponseInfo{Usage: &dto.Usage{}}
+			if tc.input > 0 || tc.cache > 0 {
+				require.True(t, FormatClaudeResponseInfo(&dto.ClaudeResponse{Type: "message_start", Message: &dto.ClaudeMediaMessage{Usage: &dto.ClaudeUsage{InputTokens: tc.input, CacheReadInputTokens: tc.cache}}}, nil, response))
+			}
+			if tc.delta {
+				require.True(t, FormatClaudeResponseInfo(&dto.ClaudeResponse{Type: "message_delta", Usage: &dto.ClaudeUsage{}}, nil, response))
+			}
+			response.ResponseText.WriteString(tc.output)
+			HandleStreamFinalResponse(ctx, info, response)
+			assert.Equal(t, tc.wantPrompt, response.Usage.PromptTokens)
+			assert.Equal(t, tc.cache, response.Usage.PromptTokensDetails.CachedTokens)
+			assert.Equal(t, tc.wantLocal, common.GetContextKeyBool(ctx, constant.ContextKeyLocalCountTokens))
+			if tc.wantLocal {
+				assert.Positive(t, response.Usage.CompletionTokens)
+			} else {
+				assert.Zero(t, response.Usage.CompletionTokens)
+				if response.Usage.BillingUsage != nil {
+					assert.False(t, response.Usage.BillingUsage.Estimated)
+				}
+			}
+		})
+	}
 }
 
 func TestResponseOpenAI2ClaudeToolUseInputIsObject(t *testing.T) {
