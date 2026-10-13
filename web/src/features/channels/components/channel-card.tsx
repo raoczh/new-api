@@ -42,9 +42,11 @@ const SENSITIVE_MASK = '••••'
 function ChannelCardComponent({
   row,
   isSelected,
+  groupRatios,
 }: {
   row: Row<Channel>
   isSelected: boolean
+  groupRatios?: Record<string, number>
 }) {
   const { t } = useTranslation()
   const { sensitiveVisible } = useChannels()
@@ -158,6 +160,7 @@ function ChannelCardComponent({
                   key={g}
                   group={g}
                   label={sensitiveVisible ? undefined : SENSITIVE_MASK}
+                  ratio={sensitiveVisible ? groupRatios?.[g] : undefined}
                   size='sm'
                 />
               ))}

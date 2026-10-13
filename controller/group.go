@@ -12,15 +12,17 @@ import (
 )
 
 func GetGroups(c *gin.Context) {
+	groupRatios := ratio_setting.GetGroupRatioCopy()
 	groupNames := make([]string, 0)
-	for groupName := range ratio_setting.GetGroupRatioCopy() {
+	for groupName := range groupRatios {
 		groupNames = append(groupNames, groupName)
 	}
 	groupNames = setting.OrderedGroupNames(groupNames)
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    groupNames,
+		"success":     true,
+		"message":     "",
+		"data":        groupNames,
+		"group_ratio": groupRatios,
 	})
 }
 

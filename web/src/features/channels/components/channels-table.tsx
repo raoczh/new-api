@@ -35,6 +35,7 @@ import {
   useDebouncedColumnFilter,
   useDataTable,
 } from '@/components/data-table'
+import { GroupMultiplierBadge } from '@/components/group-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -214,8 +215,12 @@ export function ChannelsTable() {
       (groupsData?.data || []).map((g) => ({
         label: g,
         value: g,
+        suffix:
+          sensitiveVisible && groupsData?.group_ratio?.[g] != null ? (
+            <GroupMultiplierBadge ratio={groupsData.group_ratio[g]} />
+          ) : undefined,
       })),
-    [groupsData]
+    [groupsData, sensitiveVisible]
   )
 
   // Fetch channels data
@@ -309,7 +314,10 @@ export function ChannelsTable() {
   const typeCounts = data?.data?.type_counts
 
   // Columns configuration
-  const columns = useChannelsColumns({ enableSelection: batchMode })
+  const columns = useChannelsColumns({
+    enableSelection: batchMode,
+    groupRatios: groupsData?.group_ratio,
+  })
 
   // React Table instance
   const { table } = useDataTable({
@@ -424,7 +432,11 @@ export function ChannelsTable() {
       enableCardView
       viewModeStorageKey={CHANNELS_VIEW_MODE_STORAGE_KEY}
       renderCard={(row, { isSelected }) => (
-        <ChannelCard row={row} isSelected={isSelected} />
+        <ChannelCard
+          row={row}
+          isSelected={isSelected}
+          groupRatios={groupsData?.group_ratio}
+        />
       )}
       cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'
       applyHeaderSize

@@ -40,6 +40,7 @@ type FilterDef = {
     icon?: React.ComponentType<{ className?: string }>
     iconNode?: React.ReactNode
     count?: number
+    suffix?: React.ReactNode
   }[]
   singleSelect?: boolean
 }

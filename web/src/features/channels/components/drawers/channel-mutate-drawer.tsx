@@ -63,6 +63,7 @@ import {
 } from '@/components/drawer-layout'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
+import { GroupMultiplierBadge } from '@/components/group-badge'
 import { JsonCodeEditor } from '@/components/json-code-editor'
 import { JsonEditor } from '@/components/json-editor'
 import { LearnMore } from '@/components/learn-more'
@@ -745,6 +746,10 @@ export function ChannelMutateDrawer({
     return [...allGroups].map((group) => ({
       value: group,
       label: group,
+      suffix:
+        groupsData?.group_ratio?.[group] != null ? (
+          <GroupMultiplierBadge ratio={groupsData.group_ratio[group]} />
+        ) : undefined,
     }))
   }, [groupsData, currentGroups])
 

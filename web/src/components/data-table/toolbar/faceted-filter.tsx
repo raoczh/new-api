@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type Column } from '@tanstack/react-table'
+import type { Column } from '@tanstack/react-table'
 import { Check as CheckIcon, PlusCircle as PlusCircledIcon } from 'lucide-react'
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -49,6 +49,7 @@ type DataTableFacetedFilterProps<TData, TValue> = {
     icon?: React.ComponentType<{ className?: string }>
     iconNode?: React.ReactNode
     count?: number
+    suffix?: React.ReactNode
   }[]
   /** Enable single select mode (only one option can be selected at a time) */
   singleSelect?: boolean
@@ -112,7 +113,15 @@ function DataTableFacetedFilterInner<TData, TValue>({
                       key={option.value}
                       className='rounded-sm px-1 font-normal'
                     >
-                      {t(option.label)}
+                      <span className='truncate'>{t(option.label)}</span>
+                      {option.suffix && (
+                        <>
+                          {' '}
+                          <span className='inline-flex shrink-0'>
+                            {option.suffix}
+                          </span>
+                        </>
+                      )}
                     </Badge>
                   ))
               )}
@@ -128,6 +137,34 @@ function DataTableFacetedFilterInner<TData, TValue>({
             <CommandGroup>
               {options.map((option) => {
                 const isSelected = selectedValues.has(option.value)
+                const facetCount = facets?.get(option.value)
+                let optionIcon: React.ReactNode = null
+                if (option.iconNode) {
+                  optionIcon = (
+                    <span className='text-muted-foreground flex size-4 items-center justify-center'>
+                      {option.iconNode}
+                    </span>
+                  )
+                } else if (option.icon) {
+                  const Icon = option.icon
+                  optionIcon = <Icon className='text-muted-foreground size-4' />
+                }
+
+                let countContent: React.ReactNode = null
+                if (typeof option.count === 'number') {
+                  countContent = (
+                    <span className='text-muted-foreground ms-auto flex h-4 min-w-4 items-center justify-center font-mono text-xs'>
+                      {option.count}
+                    </span>
+                  )
+                } else if (facetCount) {
+                  countContent = (
+                    <span className='ms-auto flex h-4 w-4 items-center justify-center font-mono text-xs'>
+                      {facetCount}
+                    </span>
+                  )
+                }
+
                 return (
                   <CommandItem
                     key={option.value}
@@ -143,28 +180,21 @@ function DataTableFacetedFilterInner<TData, TValue>({
                     >
                       <CheckIcon className={cn('text-background h-4 w-4')} />
                     </div>
-                    {option.iconNode ? (
-                      <span className='text-muted-foreground flex size-4 items-center justify-center'>
-                        {option.iconNode}
+                    {optionIcon}
+                    <span className='flex min-w-0 flex-1 items-center gap-1'>
+                      <span
+                        className='min-w-0 truncate'
+                        title={t(option.label)}
+                      >
+                        {t(option.label)}
                       </span>
-                    ) : option.icon ? (
-                      <option.icon className='text-muted-foreground size-4' />
-                    ) : null}
-                    <span
-                      className='min-w-0 flex-1 truncate'
-                      title={t(option.label)}
-                    >
-                      {t(option.label)}
+                      {option.suffix && (
+                        <span className='inline-flex shrink-0'>
+                          {option.suffix}
+                        </span>
+                      )}
                     </span>
-                    {typeof option.count === 'number' ? (
-                      <span className='text-muted-foreground ms-auto flex h-4 min-w-4 items-center justify-center font-mono text-xs'>
-                        {option.count}
-                      </span>
-                    ) : facets?.get(option.value) ? (
-                      <span className='ms-auto flex h-4 w-4 items-center justify-center font-mono text-xs'>
-                        {facets.get(option.value)}
-                      </span>
-                    ) : null}
+                    {countContent}
                   </CommandItem>
                 )
               })}
@@ -209,5 +239,5 @@ function getNextSelectedValues(
     nextSelectedValues.add(optionValue)
   }
 
-  return Array.from(nextSelectedValues)
+  return [...nextSelectedValues]
 }

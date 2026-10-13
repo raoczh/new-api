@@ -52,6 +52,8 @@ export type Option = {
    * Decorative only: it never changes the accessible name.
    */
   icon?: React.ReactNode
+  /** Content rendered after the label in the dropdown and selected chip. */
+  suffix?: React.ReactNode
 }
 
 interface MultiSelectProps {
@@ -162,6 +164,14 @@ export function MultiSelect(props: MultiSelectProps) {
     const map = new Map<string, React.ReactNode>()
     for (const option of props.options) {
       if (option.icon) map.set(option.value, option.icon)
+    }
+    return map
+  }, [props.options])
+
+  const suffixMap = React.useMemo(() => {
+    const map = new Map<string, React.ReactNode>()
+    for (const option of props.options) {
+      if (option.suffix) map.set(option.value, option.suffix)
     }
     return map
   }, [props.options])
@@ -330,6 +340,7 @@ export function MultiSelect(props: MultiSelectProps) {
                   const label = labelMap.get(value) ?? value
                   const hint = hintMap.get(value)
                   const icon = iconMap.get(value)
+                  const suffix = suffixMap.get(value)
                   return (
                     <ComboboxChip key={value}>
                       {icon && (
@@ -354,6 +365,12 @@ export function MultiSelect(props: MultiSelectProps) {
                         </button>
                       ) : (
                         <span className='max-w-[16rem] truncate'>{label}</span>
+                      )}
+                      {suffix && (
+                        <>
+                          {' '}
+                          <span className='inline-flex shrink-0'>{suffix}</span>
+                        </>
                       )}
                       {hint && (
                         <span
@@ -424,6 +441,7 @@ export function MultiSelect(props: MultiSelectProps) {
               const label = labelMap.get(item) ?? item
               const hint = hintMap.get(item)
               const icon = iconMap.get(item)
+              const suffix = suffixMap.get(item)
               return (
                 <ComboboxItem
                   key={item}
@@ -456,6 +474,12 @@ export function MultiSelect(props: MultiSelectProps) {
                         </span>
                       )}
                       <span className='truncate'>{label}</span>
+                      {suffix && (
+                        <>
+                          {' '}
+                          <span className='inline-flex shrink-0'>{suffix}</span>
+                        </>
+                      )}
                       {hint && (
                         <span
                           aria-hidden='true'

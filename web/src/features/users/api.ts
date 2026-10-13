@@ -159,7 +159,9 @@ export async function resetUserTwoFA(id: number): Promise<ApiResponse> {
 /**
  * Get all available groups
  */
-export async function getGroups(): Promise<ApiResponse<string[]>> {
+export async function getGroups(): Promise<
+  ApiResponse<string[]> & { group_ratio?: Record<string, number> }
+> {
   const res = await api.get('/api/group/')
   return res.data
 }

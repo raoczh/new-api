@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
+import { GroupMultiplierBadge } from '@/components/group-badge'
 import { MultiSelect } from '@/components/multi-select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -78,6 +79,10 @@ export function TagBatchEditDialog({
     return [...allGroups].map((group) => ({
       value: group,
       label: group,
+      suffix:
+        groupsData?.group_ratio?.[group] != null ? (
+          <GroupMultiplierBadge ratio={groupsData.group_ratio[group]} />
+        ) : undefined,
     }))
   }, [groupsData, groups])
 
