@@ -117,7 +117,9 @@ export function ApiKeysQuickTutorial() {
             role='link'
             variant='outline'
             size='xs'
-            render={<Link to='/docs' hash='cc-switch' />}
+            render={
+              <Link to='/docs/$' params={{ _splat: 'config/ccswitch' }} />
+            }
           >
             <ExternalLink data-icon='inline-start' />
             {t('Detailed tutorial')}

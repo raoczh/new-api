@@ -6961,6 +6961,13 @@
     "Zhipu": "智谱",
     "Zhipu GLM": "智谱GLM",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Documentation menu": "文档目录",
+    "On this page": "在本页上",
+    "Pagination": "翻页",
+    "Open a support ticket": "提交工单",
+    "Documentation page not found": "未找到该文档页面",
+    "This page may have moved. Pick a page from the menu, or start from the introduction.": "该页面可能已移动。请从目录中选择页面，或从介绍页开始。",
+    "Back to the introduction": "返回介绍页"
   }
 }

@@ -6961,6 +6961,13 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Documentation menu": "Menu de la documentation",
+    "On this page": "Sur cette page",
+    "Pagination": "Pagination",
+    "Open a support ticket": "Ouvrir un ticket d’assistance",
+    "Documentation page not found": "Page de documentation introuvable",
+    "This page may have moved. Pick a page from the menu, or start from the introduction.": "Cette page a peut-être été déplacée. Choisissez une page dans le menu ou commencez par l’introduction.",
+    "Back to the introduction": "Retour à l’introduction"
   }
 }

@@ -21,16 +21,59 @@ export type DocLanguage = 'en' | 'zh'
 
 export type Copy = Record<DocLanguage, string>
 
-export type Block = {
-  type: 'p' | 'list' | 'code'
-  text?: Copy
-  items?: Copy[]
-  code?: string
+/** Console pages the documentation may link to directly. */
+export type AppRoute =
+  | '/keys'
+  | '/wallet'
+  | '/pricing'
+  | '/status-monitor'
+  | '/usage-logs'
+  | '/tickets'
+  | '/playground'
+
+export type CodeSample = { label: string; code: string }
+
+/**
+ * Text values may wrap `inline code` in backticks; the renderer turns those
+ * spans into <code> elements.
+ */
+export type Block =
+  | { type: 'p'; text: Copy }
+  | { type: 'steps'; items: Copy[] }
+  | { type: 'bullets'; items: Copy[] }
+  | { type: 'code'; code: string; label?: string }
+  | { type: 'tabs'; samples: CodeSample[] }
+  | { type: 'table'; head: Copy[]; rows: Copy[][] }
+  | { type: 'note'; text: Copy; tone?: 'warning' }
+  | { type: 'docLinks'; items: Array<{ slug: string; text: Copy }> }
+  | { type: 'appLinks'; items: Array<{ to: AppRoute; text: Copy }> }
+  /** The operator's configured contact methods, or a ticket fallback. */
+  | { type: 'contact' }
+
+export type Section = { id: string; title: Copy; blocks: Block[] }
+
+/** `slug` is the path after /docs/; the introduction uses an empty slug. */
+export type DocPage = {
+  slug: string
+  title: Copy
+  summary: Copy
+  sections: Section[]
 }
 
-export type Topic = { id: string; title: Copy; blocks: Block[] }
+export type DocGroup = { id: string; title: Copy; pages: DocPage[] }
 
-export type Chapter = { id: string; title: Copy; topics: Topic[] }
+/** Addresses every page interpolates into its instructions. */
+export type DocUrls = {
+  /** Site root, used by Anthropic- and Gemini-style clients. */
+  site: string
+  /** OpenAI-compatible base URL: the site root plus /v1. */
+  api: string
+}
+
+/** A value that reads the same in every documentation language. */
+export function both(text: string): Copy {
+  return { en: text, zh: text }
+}
 
 /**
  * Map an interface language to the language the documentation is written in.

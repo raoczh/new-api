@@ -6961,6 +6961,13 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "Documentation menu": "ドキュメントメニュー",
+    "On this page": "このページの内容",
+    "Pagination": "ページ送り",
+    "Open a support ticket": "サポートチケットを作成",
+    "Documentation page not found": "ドキュメントページが見つかりません",
+    "This page may have moved. Pick a page from the menu, or start from the introduction.": "このページは移動した可能性があります。メニューからページを選ぶか、紹介ページから始めてください。",
+    "Back to the introduction": "紹介ページに戻る"
   }
 }

@@ -1,5 +1,8 @@
 const FALLBACK_SITE_URL = 'https://api.tokencome.org'
 
+/** Support address shown when the operator has not configured any contact. */
+export const FALLBACK_CONTACT_EMAIL = 'tokencome@163.com'
+
 export function resolveSiteUrl(configuredAddress: string | undefined): string {
   if (!configuredAddress?.trim()) return FALLBACK_SITE_URL
 
