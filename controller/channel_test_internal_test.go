@@ -169,7 +169,7 @@ func testModelTestRecords(t *testing.T, dialect, dsn string) {
 				assert.Equal(t, "gpt-4o-mini", log.ModelName)
 				assert.Equal(t, channel.Id, log.ChannelId)
 				assert.Equal(t, user.Id, log.UserId)
-				assert.Equal(t, "分组自动探测", log.TokenName)
+				assert.Equal(t, "Group auto probe", log.TokenName)
 				if tc.fail {
 					assert.Zero(t, log.Quota, "failed probes have no upstream usage to settle")
 				} else {
@@ -178,7 +178,7 @@ func testModelTestRecords(t *testing.T, dialect, dsn string) {
 				assert.NotEmpty(t, log.RequestId)
 				assert.Equal(t, tc.expectedType, log.Type)
 				if tc.fail {
-					assert.Contains(t, log.Content, "分组自动探测失败")
+					assert.Contains(t, log.Content, "Group auto probe failed")
 					assert.Zero(t, log.PromptTokens)
 					assert.Zero(t, log.CompletionTokens)
 				} else {
@@ -913,5 +913,5 @@ func TestTestAllChannelsRejectsExistingActiveTask(t *testing.T) {
 
 	require.Equal(t, http.StatusConflict, recorder.Code)
 	require.Contains(t, recorder.Body.String(), existing.TaskID)
-	require.Contains(t, recorder.Body.String(), "已有通道测试任务正在运行或等待中")
+	require.Contains(t, recorder.Body.String(), "A channel test task is already running or queued")
 }

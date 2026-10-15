@@ -66,6 +66,7 @@ export function ApiKeyGroupEditableCell(props: ApiKeyGroupEditableCellProps) {
         model_limits_enabled: latest.model_limits_enabled,
         model_limits: latest.model_limits || '',
         allow_ips: latest.allow_ips || '',
+        allow_user_quota_query: !!latest.allow_user_quota_query,
         group: nextGroup,
         // Matches the drawer: switching to Auto follows the global order with
         // cross-group retry on; the backend clears both for other groups.

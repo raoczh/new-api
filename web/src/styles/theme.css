@@ -19,7 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans:
+  --font-sans: var(--font-ui-sans);
+  --font-public-sans:
     'Public Sans Variable', 'Public Sans', 'PingFang SC', 'Microsoft YaHei',
     'Noto Sans CJK SC', system-ui, sans-serif;
   /* Editorial serif token — the body face used by the `serif` font axis
@@ -102,11 +103,12 @@ For commercial licensing, please contact support@quantumnous.com
   --tc-brand-accent: #087b8b;
   /* Static build-channel fallback consumed when JS hasn't booted yet. */
   --app-rev: '2k6e8r7p';
-  /* Currently active body font. The font axis swaps this between
-   * `--font-sans` and `--font-serif` via `[data-theme-font='...']` blocks
-   * in theme-presets.css. Default mirrors `--font-sans` so behavior is
-   * identical when no font preference is set. */
-  --font-body: var(--font-sans);
+  /* Auto starts with the Token Come body stack, including before JS applies
+   * the saved preference. Explicit Sans selects Public Sans in theme-presets.css. */
+  --font-ui-sans:
+    'Public Sans Variable', 'Public Sans', 'PingFang SC', 'Microsoft YaHei',
+    'Noto Sans CJK SC', system-ui, sans-serif;
+  --font-body: var(--font-ui-sans);
   --background: #f6f8f9;
   --foreground: #182126;
   --card: #ffffff;

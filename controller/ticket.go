@@ -12,7 +12,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 
@@ -64,12 +63,12 @@ func CreateTicket(c *gin.Context) {
 	}
 	title := strings.TrimSpace(req.Title)
 	if title == "" || utf8.RuneCountInString(title) > ticketTitleMaxLength {
-		common.ApiErrorI18n(c, i18n.MsgTicketTitleLength)
+		common.ApiErrorT(c, "Ticket title length must be between 1 and 100")
 		return
 	}
 	content := strings.TrimSpace(req.Content)
 	if content == "" || utf8.RuneCountInString(content) > ticketContentMaxLength {
-		common.ApiErrorI18n(c, i18n.MsgTicketContentLength)
+		common.ApiErrorT(c, "Ticket content length must be between 1 and 5000")
 		return
 	}
 	ticket, err := model.CreateTicketWithAttachments(c.GetInt("id"), c.GetString("username"), title, content, attachments)
@@ -115,7 +114,7 @@ func listTickets(c *gin.Context, ownerId int) {
 func getTicketDetail(c *gin.Context, ownerId int) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		common.ApiErrorT(c, "Invalid parameters")
 		return
 	}
 	ticket, messages, err := model.GetTicket(id, ownerId)
@@ -132,7 +131,7 @@ func getTicketDetail(c *gin.Context, ownerId int) {
 func replyTicket(c *gin.Context, ownerId int, isAdmin bool) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		common.ApiErrorT(c, "Invalid parameters")
 		return
 	}
 	content, attachments, err := parseTicketReplyRequest(c)
@@ -142,7 +141,7 @@ func replyTicket(c *gin.Context, ownerId int, isAdmin bool) {
 	}
 	content = strings.TrimSpace(content)
 	if content == "" || utf8.RuneCountInString(content) > ticketContentMaxLength {
-		common.ApiErrorI18n(c, i18n.MsgTicketContentLength)
+		common.ApiErrorT(c, "Ticket content length must be between 1 and 5000")
 		return
 	}
 	message := &model.TicketMessage{
@@ -169,12 +168,12 @@ func GetTicketAttachmentByAdmin(c *gin.Context) {
 func getTicketAttachment(c *gin.Context, ownerId int) {
 	ticketId, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		common.ApiErrorT(c, "Invalid parameters")
 		return
 	}
 	attachmentId, err := strconv.Atoi(c.Param("attachmentId"))
 	if err != nil {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		common.ApiErrorT(c, "Invalid parameters")
 		return
 	}
 	if _, _, err := model.GetTicket(ticketId, ownerId); err != nil {
@@ -189,7 +188,7 @@ func getTicketAttachment(c *gin.Context, ownerId int) {
 	path := model.TicketAttachmentPath(attachment)
 	if _, err := os.Stat(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			common.ApiErrorI18n(c, i18n.MsgNotFound)
+			common.ApiErrorT(c, "Not found")
 			return
 		}
 		common.ApiError(c, err)
@@ -292,11 +291,11 @@ func parseTicketAttachments(c *gin.Context) ([]model.TicketAttachmentInput, erro
 func respondTicketUploadError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, errTicketAttachmentTooLarge), errors.Is(err, model.ErrTicketAttachmentTooLarge):
-		common.ApiErrorI18n(c, i18n.MsgTicketAttachmentTooLarge)
+		common.ApiErrorT(c, "Each attachment must be 2 MB or smaller")
 	case errors.Is(err, errTicketAttachmentCount):
-		common.ApiErrorI18n(c, i18n.MsgTicketAttachmentCount)
+		common.ApiErrorT(c, "You can upload up to 5 attachments")
 	default:
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		common.ApiErrorT(c, "Invalid parameters")
 	}
 }
 
@@ -318,7 +317,7 @@ func attachmentNames(attachments []model.TicketAttachmentInput) []string {
 func closeTicket(c *gin.Context, ownerId int) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		common.ApiErrorT(c, "Invalid parameters")
 		return
 	}
 	if err := model.CloseTicket(id, ownerId); err != nil {
@@ -331,9 +330,9 @@ func closeTicket(c *gin.Context, ownerId int) {
 func respondTicketError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, model.ErrTicketNotFound):
-		common.ApiErrorI18n(c, i18n.MsgTicketNotFound)
+		common.ApiErrorT(c, "Ticket not found")
 	case errors.Is(err, model.ErrTicketClosed):
-		common.ApiErrorI18n(c, i18n.MsgTicketClosed)
+		common.ApiErrorT(c, "Ticket is closed")
 	default:
 		common.ApiError(c, err)
 	}

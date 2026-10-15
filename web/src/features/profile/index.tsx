@@ -25,7 +25,7 @@ import {
   CardStaggerItem,
 } from '@/components/page-transition'
 import { TitledCard } from '@/components/ui/titled-card'
-import { AccessTokenCard } from '@/features/security/components/access-token-card'
+import { AccessTokensCard } from '@/features/security/components/access-tokens-card'
 import { AccountActionCard } from '@/features/security/components/account-action-card'
 import { AccountBindings } from '@/features/security/components/account-bindings'
 import { LoginSessionsCard } from '@/features/security/components/login-sessions-card'
@@ -66,7 +66,10 @@ export function Profile() {
           <CardStaggerItem>
             <div className='grid gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.46fr)] xl:items-start'>
               <div className='min-w-0 space-y-4 sm:space-y-6'>
-                <section aria-labelledby='profile-settings' className='space-y-3'>
+                <section
+                  aria-labelledby='profile-settings'
+                  className='space-y-3'
+                >
                   <h3 id='profile-settings' className='text-sm font-semibold'>
                     {t('Profile Settings')}
                   </h3>
@@ -85,7 +88,10 @@ export function Profile() {
                   aria-labelledby='security-authentication'
                   className='space-y-3'
                 >
-                  <h3 id='security-authentication' className='text-sm font-semibold'>
+                  <h3
+                    id='security-authentication'
+                    className='text-sm font-semibold'
+                  >
                     {t('Login & Authentication')}
                   </h3>
                   <AccountActionCard
@@ -104,20 +110,29 @@ export function Profile() {
                     disableHoverEffect
                   >
                     {profile && (
-                      <AccountBindings profile={profile} onUpdate={refreshProfile} />
+                      <AccountBindings
+                        profile={profile}
+                        onUpdate={refreshProfile}
+                      />
                     )}
                   </TitledCard>
                 </section>
 
-                <section aria-labelledby='security-access' className='space-y-3'>
+                <section
+                  aria-labelledby='security-access'
+                  className='space-y-3'
+                >
                   <h3 id='security-access' className='text-sm font-semibold'>
                     {t('Sessions & Access')}
                   </h3>
                   <LoginSessionsCard />
-                  <AccessTokenCard />
+                  <AccessTokensCard />
                 </section>
 
-                <section aria-labelledby='security-account' className='space-y-3'>
+                <section
+                  aria-labelledby='security-account'
+                  className='space-y-3'
+                >
                   <h3 id='security-account' className='text-sm font-semibold'>
                     {t('Account Actions')}
                   </h3>
@@ -139,14 +154,20 @@ export function Profile() {
                 {canConfigureSidebar && <SidebarModulesCard />}
 
                 <div className='space-y-3'>
-                  <h3 id='security-verification' className='text-sm font-semibold'>
+                  <h3
+                    id='security-verification'
+                    className='text-sm font-semibold'
+                  >
                     {t('Security verification')}
                   </h3>
                   <PasskeyCard loading={loading} />
                   <TwoFACard loading={loading} />
                 </div>
 
-                <section aria-labelledby='security-privacy' className='space-y-3'>
+                <section
+                  aria-labelledby='security-privacy'
+                  className='space-y-3'
+                >
                   <h3 id='security-privacy' className='text-sm font-semibold'>
                     {t('Privacy')}
                   </h3>

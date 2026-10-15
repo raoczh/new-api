@@ -26,12 +26,12 @@ describe('pricing model group order', () => {
 
   it('orders configured groups first and preserves the selected name or price sort inside them', () => {
     expect(
-      sortModels(models, SORT_OPTIONS.PRICE_LOW, ['default', 'premium']).map(
+      sortModels(models, SORT_OPTIONS.REQUEST_PRICE_LOW, ['default', 'premium']).map(
         (item) => item.model_name
       )
     ).toEqual(['beta', 'multi', 'alpha', 'zeta'])
     expect(
-      sortModels(models, SORT_OPTIONS.PRICE_HIGH, ['default', 'premium']).map(
+      sortModels(models, SORT_OPTIONS.REQUEST_PRICE_HIGH, ['default', 'premium']).map(
         (item) => item.model_name
       )
     ).toEqual(['alpha', 'multi', 'beta', 'zeta'])

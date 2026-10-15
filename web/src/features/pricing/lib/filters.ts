@@ -22,9 +22,17 @@ import {
   QUOTA_TYPES,
   QUOTA_TYPE_VALUES,
   ENDPOINT_TYPES,
+  type SortOption,
 } from '../constants'
 import type { PricingModel } from '../types'
-import { hasTaskUsageSchema } from './dynamic-price'
+import {
+  getCardExamplePrice,
+  getDynamicPricingSummary,
+  hasTaskUsageSchema,
+  isUnconfiguredTaskUsageModel,
+} from './dynamic-price'
+import { isTokenBasedModel } from './model-helpers'
+import { calculateTokenPrice } from './price'
 
 // ----------------------------------------------------------------------------
 // Filter Utilities
@@ -105,11 +113,51 @@ export function filterByEndpointType(
   )
 }
 
+type SortPriceKind = 'input' | 'output' | 'request'
+
+const PRICE_SORTS: Partial<
+  Record<SortOption, { kind: SortPriceKind; dir: 1 | -1 }>
+> = {
+  [SORT_OPTIONS.INPUT_PRICE_LOW]: { kind: 'input', dir: 1 },
+  [SORT_OPTIONS.INPUT_PRICE_HIGH]: { kind: 'input', dir: -1 },
+  [SORT_OPTIONS.OUTPUT_PRICE_LOW]: { kind: 'output', dir: 1 },
+  [SORT_OPTIONS.OUTPUT_PRICE_HIGH]: { kind: 'output', dir: -1 },
+  [SORT_OPTIONS.REQUEST_PRICE_LOW]: { kind: 'request', dir: 1 },
+  [SORT_OPTIONS.REQUEST_PRICE_HIGH]: { kind: 'request', dir: -1 },
+}
+
 /**
- * Get model price for sorting
+ * Base USD price shown on the model card: input/output per 1M tokens, request
+ * per call (task models use their first usage example). Undefined when the
+ * model has no price of that kind.
  */
-function getModelPrice(model: PricingModel): number {
-  return model.quota_type === 0 ? model.model_ratio : model.model_price || 0
+function getSortPrice(
+  model: PricingModel,
+  kind: SortPriceKind
+): number | undefined {
+  if (kind === 'request') {
+    const example = getCardExamplePrice(model, { tokenUnit: 'M' })
+    if (example) return example.total
+  }
+  const summary = getDynamicPricingSummary(model, { tokenUnit: 'M' })
+  if (kind === 'request') {
+    if (summary) {
+      return summary.entries.find(
+        (entry) => entry.field === 'fixedPrice' || entry.field === 'modelPrice'
+      )?.value
+    }
+    return isTokenBasedModel(model) ? undefined : model.model_price
+  }
+  if (summary) {
+    const field = kind === 'input' ? 'inputPrice' : 'outputPrice'
+    return summary.entries.find(
+      (entry) => entry.field === field && entry.unit === 'token'
+    )?.value
+  }
+  if (!isTokenBasedModel(model) || isUnconfiguredTaskUsageModel(model)) {
+    return undefined
+  }
+  return calculateTokenPrice(model, kind, 1)
 }
 
 /**
@@ -122,18 +170,22 @@ export function sortModels(
 ): PricingModel[] {
   const sorted = [...models]
 
-  const getSortValue = (model: PricingModel) => {
-    if (sortBy === SORT_OPTIONS.PRICE_LOW) return getModelPrice(model)
-    if (sortBy === SORT_OPTIONS.PRICE_HIGH) return -getModelPrice(model)
-    return (model.model_name || '').toLocaleLowerCase()
-  }
+  const priceSort = PRICE_SORTS[sortBy as SortOption]
+  // Extracting the price parses the billing expression, so compute once
+  const price = priceSort
+    ? new Map(sorted.map((m) => [m, getSortPrice(m, priceSort.kind)]))
+    : undefined
   const compareWithinGroup = (a: PricingModel, b: PricingModel) => {
-    const aValue = getSortValue(a)
-    const bValue = getSortValue(b)
-    if (typeof aValue === 'number' && typeof bValue === 'number') {
-      return aValue - bValue
+    if (priceSort && price) {
+      const priceA = price.get(a)
+      const priceB = price.get(b)
+      // Models without this kind of price stay last in both directions
+      if (priceA === undefined || priceB === undefined) {
+        return Number(priceA === undefined) - Number(priceB === undefined)
+      }
+      return priceSort.dir * (priceA - priceB)
     }
-    return String(aValue).localeCompare(String(bValue))
+    return (a.model_name || '').localeCompare(b.model_name || '')
   }
 
   const ranks = new Map(groupOrder.map((group, index) => [group, index]))

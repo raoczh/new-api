@@ -45,13 +45,13 @@ func TestTurnstileVerificationRejectsFailuresAndBoundsRequests(t *testing.T) {
 		message string
 	}{
 		{name: "valid token", body: `{"success":true}`, status: http.StatusOK, allowed: true},
-		{name: "expired or replayed token", body: `{"success":false,"error-codes":["timeout-or-duplicate"]}`, status: http.StatusOK, message: "Turnstile 校验失败"},
-		{name: "invalid secret", body: `{"success":false,"error-codes":["invalid-input-secret"]}`, status: http.StatusOK, message: "Turnstile 校验失败"},
+		{name: "expired or replayed token", body: `{"success":false,"error-codes":["timeout-or-duplicate"]}`, status: http.StatusOK, message: "Turnstile verification failed"},
+		{name: "invalid secret", body: `{"success":false,"error-codes":["invalid-input-secret"]}`, status: http.StatusOK, message: "Turnstile verification failed"},
 		{name: "upstream HTTP failure", body: `{"success":true}`, status: http.StatusServiceUnavailable, message: "HTTP 503"},
 		{name: "malformed response", body: `invalid`, status: http.StatusOK, message: "invalid"},
 		{name: "stalled siteverify", stall: true, message: "Turnstile siteverify request failed"},
 		{name: "canceled request", stall: true, cancel: true, message: "context canceled"},
-		{name: "missing token", missing: true, message: "Turnstile token 为空"},
+		{name: "missing token", missing: true, message: "Turnstile token is empty"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0

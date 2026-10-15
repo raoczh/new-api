@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useNavigate, useRouter } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,28 @@ export function GeneralError({
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { history } = useRouter()
+  useEffect(() => {
+    if (
+      !(error instanceof Error) ||
+      (error.name !== 'ChunkLoadError' &&
+        !/^Loading (CSS )?chunk .+ failed\./.test(error.message))
+    ) {
+      return
+    }
+
+    // Recover only when the failed route is displayed, never on intent preload.
+    // Keep the marker across reloads so a persistent failure shows this page.
+    try {
+      const key = `tanstack_router_reload:${error.message}`
+      if (sessionStorage.getItem(key)) return
+      sessionStorage.setItem(key, '1')
+    } catch {
+      // Without a persistent marker, reloading could loop indefinitely.
+      return
+    }
+    window.location.reload()
+  }, [error])
+
   const status = getHttpStatus(error)
   const isRateLimited = status === 429
   const title = isRateLimited
@@ -62,9 +85,9 @@ export function GeneralError({
       )}
     >
       <div className='bg-card m-auto flex w-full max-w-2xl flex-col items-center justify-center gap-3 rounded-xl border px-5 py-12 text-center'>
-        {!minimal && (
+        {!minimal && status !== undefined && (
           <h1 className='text-brand font-mono text-7xl leading-tight font-medium tracking-tight'>
-            {status ?? 500}
+            {status}
           </h1>
         )}
         <span className='font-medium'>{title}</span>
