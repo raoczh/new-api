@@ -78,7 +78,7 @@ describe('documentation site address', () => {
     'http://127.0.0.1:3000',
     'not a URL',
   ])('uses the public fallback for %s', (input) => {
-    expect(resolveSiteUrl(input)).toBe('https://api.tokencome.org')
+    expect(resolveSiteUrl(input)).toBe('https://tokencome.org')
   })
 })
 
@@ -119,7 +119,7 @@ it('falls back to the default email and a ticket link when no contact method is 
     createElement(UsageDocs, { slug: 'guides/error-handling' })
   )
   expect(view.container.textContent).toContain(
-    'https://api.tokencome.org/v1/chat/completions'
+    'https://tokencome.org/v1/chat/completions'
   )
   expect(
     screen.queryByRole('heading', { name: 'Contact Information' })

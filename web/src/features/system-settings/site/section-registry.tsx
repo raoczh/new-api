@@ -38,6 +38,7 @@ const SITE_SECTIONS = [
       <SystemInfoSection
         defaultValues={{
           SystemName: settings.SystemName,
+          SystemChineseName: settings.SystemChineseName,
           Logo: settings.Logo,
           Footer: settings.Footer,
           About: settings.About,

@@ -48,6 +48,7 @@ import { isValidTaskPublicAddress } from './task-public-address'
 
 const _systemInfoSchema = z.object({
   SystemName: z.string().min(1),
+  SystemChineseName: z.string().optional(),
   ServerAddress: z.string().optional(),
   TaskPublicAddress: z.string().refine(isValidTaskPublicAddress),
   Logo: z.string().url().optional().or(z.literal('')),
@@ -73,6 +74,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
 
   const normalizedDefaults: SystemInfoFormValues = {
     SystemName: normalizeValue(defaultValues.SystemName),
+    SystemChineseName: normalizeValue(defaultValues.SystemChineseName),
     ServerAddress: normalizeValue(defaultValues.ServerAddress),
     TaskPublicAddress: normalizeValue(defaultValues.TaskPublicAddress),
     Logo: normalizeValue(defaultValues.Logo),
@@ -85,6 +87,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     SystemName: z.string().min(1, {
       error: () => t('System name is required'),
     }),
+    SystemChineseName: z.string().max(32).optional(),
     ServerAddress: z.string().optional(),
     TaskPublicAddress: z.string().refine(isValidTaskPublicAddress, {
       error: () =>
@@ -109,6 +112,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
       onSubmit: async (_data, changedFields) => {
         for (const [key, value] of Object.entries(changedFields)) {
           let v = normalizeValue(value)
+          if (key === 'SystemChineseName') v = v.trim()
           if (key === 'ServerAddress' || key === 'TaskPublicAddress') {
             v = v.replace(/\/+$/, '')
           }
@@ -146,6 +150,25 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                     </FormControl>
                     <FormDescription>
                       {t('The name displayed across the application')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='SystemChineseName'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Chinese Brand Name')}</FormLabel>
+                    <FormControl>
+                      <Input placeholder={t('Optional')} {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Shown beside the system name in the logo lockup and page title. Leave empty to hide it.'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

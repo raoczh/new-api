@@ -71,8 +71,13 @@ if (!rootElement) {
 ;(function initSystemBranding() {
   try {
     if (typeof window === 'undefined' || typeof document === 'undefined') return
-    const apply = (name: string) => {
-      const brandedTitle = `${name} · 渡康`
+    const apply = (status: Record<string, unknown>) => {
+      const name = status.system_name as string | undefined
+      if (!name) return
+      const chineseName = (
+        status.system_chinese_name as string | undefined
+      )?.trim()
+      const brandedTitle = chineseName ? `${name} · ${chineseName}` : name
       document.title = brandedTitle
       const metaTitle = document.querySelector(
         'meta[name="title"]'
@@ -81,7 +86,7 @@ if (!rootElement) {
     }
     // Cache-first
     const cached = readCachedStatus()
-    if (cached?.system_name) apply(cached.system_name as string)
+    if (cached) apply(cached)
     if (cached?.logo) applyFaviconToDom(cached.logo as string)
 
     // Background refresh through the shared cache. This primes ['status']
@@ -91,7 +96,7 @@ if (!rootElement) {
     queryClient
       .ensureQueryData(statusQueryOptions)
       .then((s) => {
-        if (s?.system_name) apply(s.system_name as string)
+        if (s) apply(s)
         if (s?.logo) applyFaviconToDom(s.logo as string)
       })
       .catch(() => {

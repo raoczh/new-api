@@ -87,6 +87,7 @@ export function PublicHeader(props: PublicHeaderProps) {
   const isDesktop = useMediaQuery('(min-width: 1024px)')
   const [previousIsDesktop, setPreviousIsDesktop] = useState(isDesktop)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
   const [authPromptTarget, setAuthPromptTarget] =
     useState<AuthPromptTarget | null>(null)
   const [authPromptSecondsLeft, setAuthPromptSecondsLeft] =
@@ -129,14 +130,22 @@ export function PublicHeader(props: PublicHeaderProps) {
   let authContent = (
     <Button
       size='sm'
-      className='h-8 rounded-lg px-3.5 text-xs font-medium'
+      className='tc-nav-cta h-8 rounded-full px-4 text-xs font-medium'
       render={<Link to='/sign-in' />}
     >
       {t('Sign in')}
     </Button>
   )
   if (isAuthenticated) authContent = <ProfileDropdown />
-  if (loading) authContent = <Skeleton className='h-8 w-20 rounded-lg' />
+  if (loading) authContent = <Skeleton className='h-8 w-20 rounded-full' />
+
+  // Condense the bar into a floating surface once the page scrolls.
+  useEffect(() => {
+    const update = () => setScrolled(window.scrollY > 8)
+    update()
+    window.addEventListener('scroll', update, { passive: true })
+    return () => window.removeEventListener('scroll', update)
+  }, [])
 
   useEffect(() => {
     if (!authPromptTarget) return
@@ -203,12 +212,13 @@ export function PublicHeader(props: PublicHeaderProps) {
     <Sheet open={mobileOpen && !isDesktop} onOpenChange={setMobileOpen}>
       <header
         className={cn(
-          'tc-public-header fixed inset-x-0 top-0 z-40 border-b bg-background/95 backdrop-blur-xl',
+          'tc-public-header fixed inset-x-0 top-0 z-40',
           props.className
         )}
+        data-scrolled={scrolled ? '' : undefined}
       >
-        <div className='mx-auto max-w-[1600px] px-4 sm:px-6'>
-          <nav className='flex h-16 items-center justify-between gap-3'>
+        <div className='tc-nav-shell'>
+          <nav className='tc-nav-bar'>
             {/* Logo */}
             <div className='@container/system-brand flex min-w-0 flex-1 items-center gap-2 lg:min-w-48'>
               <Link
@@ -224,53 +234,55 @@ export function PublicHeader(props: PublicHeaderProps) {
             </div>
 
             {/* Desktop nav */}
-            <div className='hidden min-w-0 items-center gap-0.5 lg:flex'>
-              {links.map((link) => {
-                const isActive = pathname === link.href
-                if (link.external) {
+            <div className='hidden min-w-0 items-center gap-1 lg:flex'>
+              <div className='tc-nav-links'>
+                {links.map((link) => {
+                  const isActive =
+                    pathname === link.href ||
+                    (link.href !== '/' && pathname.startsWith(`${link.href}/`))
+                  if (link.external) {
+                    return (
+                      <a
+                        key={`${link.title}:${link.href}`}
+                        href={link.href}
+                        title={t(link.title)}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        aria-disabled={link.disabled}
+                        tabIndex={link.disabled ? -1 : undefined}
+                        onClick={(event) => handleNavLinkClick(event, link)}
+                        className={cn(
+                          'tc-nav-link',
+                          link.disabled && 'pointer-events-none opacity-50'
+                        )}
+                      >
+                        {t(link.title)}
+                      </a>
+                    )
+                  }
                   return (
-                    <a
+                    <Link
                       key={`${link.title}:${link.href}`}
-                      href={link.href}
+                      to={link.href}
                       title={t(link.title)}
-                      target='_blank'
-                      rel='noopener noreferrer'
-                      aria-disabled={link.disabled}
-                      tabIndex={link.disabled ? -1 : undefined}
+                      disabled={link.disabled}
                       onClick={(event) => handleNavLinkClick(event, link)}
+                      aria-current={isActive ? 'page' : undefined}
                       className={cn(
-                        'text-muted-foreground hover:text-foreground min-w-0 truncate rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-200',
+                        'tc-nav-link',
                         link.disabled && 'pointer-events-none opacity-50'
                       )}
                     >
                       {t(link.title)}
-                    </a>
+                    </Link>
                   )
-                }
-                return (
-                  <Link
-                    key={`${link.title}:${link.href}`}
-                    to={link.href}
-                    title={t(link.title)}
-                    disabled={link.disabled}
-                    onClick={(event) => handleNavLinkClick(event, link)}
-                    className={cn(
-                      'min-w-0 truncate rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-200',
-                      isActive
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-muted-foreground hover:text-foreground',
-                      link.disabled && 'pointer-events-none opacity-50'
-                    )}
-                  >
-                    {t(link.title)}
-                  </Link>
-                )
-              })}
+                })}
+              </div>
 
               {(showLanguageSwitcher ||
                 showThemeSwitch ||
                 showNotifications) && (
-                <div className='bg-border/40 mx-2 h-4 w-px' />
+                <div className='bg-border/60 mx-2 h-4 w-px' />
               )}
 
               {showLanguageSwitcher && <LanguageSwitcher />}
@@ -290,7 +302,7 @@ export function PublicHeader(props: PublicHeaderProps) {
 
               {showAuthButtons && (
                 <>
-                  <div className='bg-border/40 mx-1 h-4 w-px' />
+                  <div className='bg-border/60 mx-1.5 h-4 w-px' />
                   {authContent}
                 </>
               )}
@@ -338,12 +350,11 @@ export function PublicHeader(props: PublicHeaderProps) {
         <div className='flex min-h-0 flex-1 flex-col justify-between gap-8 overflow-y-auto px-6 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]'>
           <nav className='flex flex-col gap-1'>
             {links.map((link) => {
-              const isActive = pathname === link.href
+              const isActive =
+                pathname === link.href ||
+                (link.href !== '/' && pathname.startsWith(`${link.href}/`))
               const linkClassName = cn(
-                'flex min-w-0 items-center rounded-lg px-3 py-3 text-sm font-medium hover:bg-accent',
-                isActive
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground',
+                'tc-nav-sheet-link',
                 link.disabled && 'pointer-events-none opacity-50'
               )
               if (link.external) {
@@ -367,6 +378,7 @@ export function PublicHeader(props: PublicHeaderProps) {
                   key={`${link.title}:${link.href}`}
                   to={link.href}
                   disabled={link.disabled}
+                  aria-current={isActive ? 'page' : undefined}
                   onClick={(event) => handleNavLinkClick(event, link, true)}
                   className={linkClassName}
                 >
@@ -396,7 +408,7 @@ export function PublicHeader(props: PublicHeaderProps) {
               <Link
                 to={isAuthenticated ? '/dashboard' : '/sign-in'}
                 onClick={() => setMobileOpen(false)}
-                className='bg-foreground text-background inline-flex h-10 items-center justify-center rounded-lg text-sm font-medium transition-opacity hover:opacity-90 active:opacity-80'
+                className='bg-foreground text-background inline-flex h-11 items-center justify-center rounded-full text-sm font-medium transition-opacity hover:opacity-90 active:opacity-80'
               >
                 {isAuthenticated ? t('Go to Dashboard') : t('Sign in')}
               </Link>

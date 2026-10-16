@@ -40,6 +40,8 @@ export interface CurrencyConfig {
 
 export interface SystemConfig {
   systemName: string
+  /** Optional Chinese brand name shown beside the system name */
+  systemChineseName: string
   logo: string
   footerHtml?: string
   demoSiteEnabled?: boolean
@@ -74,6 +76,7 @@ export const useSystemConfigStore = create<SystemConfigState>()(
     (set) => ({
       config: {
         systemName: DEFAULT_SYSTEM_NAME,
+        systemChineseName: '',
         logo: DEFAULT_LOGO,
         currency: { ...DEFAULT_CURRENCY_CONFIG },
       },

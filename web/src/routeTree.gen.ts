@@ -36,6 +36,7 @@ import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as AuthenticatedChat2linkRouteImport } from './routes/_authenticated/chat2link'
 import { Route as AuthenticatedSystemSettingsRouteRouteImport } from './routes/_authenticated/system-settings/route'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
+import { Route as CapabilitiesIndexRouteImport } from './routes/capabilities/index'
 import { Route as DocsIndexRouteImport } from './routes/docs/index'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
@@ -217,6 +218,11 @@ const AuthenticatedSystemSettingsRouteRoute =
 const AboutIndexRoute = AboutIndexRouteImport.update({
   id: '/about/',
   path: '/about/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CapabilitiesIndexRoute = CapabilitiesIndexRouteImport.update({
+  id: '/capabilities/',
+  path: '/capabilities/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsIndexRoute = DocsIndexRouteImport.update({
@@ -524,6 +530,7 @@ export interface FileRoutesByFullPath {
   '/docs/$': typeof DocsSplatRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
+  '/capabilities/': typeof CapabilitiesIndexRoute
   '/docs/': typeof DocsIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
@@ -598,6 +605,7 @@ export interface FileRoutesByTo {
   '/docs/$': typeof DocsSplatRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about': typeof AboutIndexRoute
+  '/capabilities': typeof CapabilitiesIndexRoute
   '/docs': typeof DocsIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
@@ -676,6 +684,7 @@ export interface FileRoutesById {
   '/docs/$': typeof DocsSplatRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
+  '/capabilities/': typeof CapabilitiesIndexRoute
   '/docs/': typeof DocsIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
@@ -753,6 +762,7 @@ export interface FileRouteTypes {
     | '/docs/$'
     | '/oauth/$provider'
     | '/about/'
+    | '/capabilities/'
     | '/docs/'
     | '/pricing/'
     | '/rankings/'
@@ -827,6 +837,7 @@ export interface FileRouteTypes {
     | '/docs/$'
     | '/oauth/$provider'
     | '/about'
+    | '/capabilities'
     | '/docs'
     | '/pricing'
     | '/rankings'
@@ -904,6 +915,7 @@ export interface FileRouteTypes {
     | '/docs/$'
     | '/oauth/$provider'
     | '/about/'
+    | '/capabilities/'
     | '/docs/'
     | '/pricing/'
     | '/rankings/'
@@ -973,6 +985,7 @@ export interface RootRouteChildren {
   DocsSplatRoute: typeof DocsSplatRoute
   OauthProviderRoute: typeof OauthProviderRoute
   AboutIndexRoute: typeof AboutIndexRoute
+  CapabilitiesIndexRoute: typeof CapabilitiesIndexRoute
   DocsIndexRoute: typeof DocsIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
@@ -1170,6 +1183,13 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about/'
       preLoaderRoute: typeof AboutIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/capabilities/': {
+      id: '/capabilities/'
+      path: '/capabilities'
+      fullPath: '/capabilities/'
+      preLoaderRoute: typeof CapabilitiesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs/': {
@@ -1681,6 +1701,7 @@ const rootRouteChildren: RootRouteChildren = {
   DocsSplatRoute: DocsSplatRoute,
   OauthProviderRoute: OauthProviderRoute,
   AboutIndexRoute: AboutIndexRoute,
+  CapabilitiesIndexRoute: CapabilitiesIndexRoute,
   DocsIndexRoute: DocsIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,

@@ -26,7 +26,7 @@ import type { GroupHourPoint, GroupStatus, GroupStatusVendor } from '../types'
  * - operational: >= 90%
  * - degraded: >= 70%
  * - outage: below 70%
- * - stale: had samples earlier in the window but none in the latest 24 hours
+ * - stale: had samples earlier in the window but none in the hourly cells
  * - pending: no samples at all
  */
 export type GroupHealth =
@@ -121,6 +121,32 @@ export function matchesGroupSearch(group: GroupStatus, query: string): boolean {
     group.group.toLowerCase().includes(needle) ||
     group.description.toLowerCase().includes(needle)
   )
+}
+
+/**
+ * Finer color grades for hourly cells, worst first. Steps at or above 90%
+ * stay green, 70%-90% go yellow to orange, and below 70% are red, so the
+ * scale refines GROUP_HEALTH_CONFIG without crossing its boundaries.
+ */
+export const HOUR_CELL_SCALE = [
+  { min: 0, label: '<50%', className: 'bg-red-700' },
+  { min: 50, label: '≥50%', className: 'bg-red-500' },
+  { min: 70, label: '≥70%', className: 'bg-orange-500' },
+  { min: 80, label: '≥80%', className: 'bg-amber-500' },
+  { min: 85, label: '≥85%', className: 'bg-yellow-400' },
+  { min: 90, label: '≥90%', className: 'bg-lime-400' },
+  { min: 95, label: '≥95%', className: 'bg-lime-500' },
+  { min: 97, label: '≥97%', className: 'bg-emerald-400' },
+  { min: 99, label: '≥99%', className: 'bg-emerald-500' },
+  { min: 100, label: '100%', className: 'bg-emerald-600' },
+] as const
+
+export function getHourCellClass(rate: number): string {
+  let className: string = HOUR_CELL_SCALE[0].className
+  for (const step of HOUR_CELL_SCALE) {
+    if (rate >= step.min) className = step.className
+  }
+  return className
 }
 
 /** One slot per hour; slots without traffic stay undefined. */

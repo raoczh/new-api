@@ -17,53 +17,56 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { ArrowRight } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { AnimateInView } from '@/components/animate-in-view'
 import { Button } from '@/components/ui/button'
+import { useSystemConfig } from '@/hooks/use-system-config'
+
+import { useGatewayFacts } from '../../hooks'
 
 interface CTAProps {
-  className?: string
   isAuthenticated?: boolean
 }
 
 export function CTA(props: CTAProps) {
   const { t } = useTranslation()
-
-  if (props.isAuthenticated) {
-    return null
-  }
+  const { systemName } = useSystemConfig()
+  const facts = useGatewayFacts()
+  const showSignUp = !props.isAuthenticated && facts.registerEnabled
 
   return (
-    <section className='tc-editorial-section tc-home-cta'>
-      <AnimateInView className='tc-home-cta-inner' animation='scale-in'>
-        <h2 className='text-3xl leading-tight font-semibold tracking-tight md:text-5xl'>
-          {t('Ready to simplify')}
-          <br />
-          <span>{t('your AI integration?')}</span>
-        </h2>
-        <p className='max-w-md text-sm leading-relaxed opacity-75 md:text-base'>
-          {t(
-            'Deploy your own gateway and start routing requests through your configured upstream services.'
-          )}
-        </p>
-        <div className='flex flex-wrap items-center gap-3'>
-          <Button
-            variant='secondary'
-            className='group h-11 rounded-sm px-6'
-            render={<Link to='/sign-up' />}
-          >
-            {t('Get Started')}
-            <ArrowRight className='ml-1 size-3.5 transition-transform duration-200 group-hover:translate-x-0.5' />
-          </Button>
-          <Button
-            variant='ghost'
-            className='text-background hover:text-foreground h-11 rounded-sm px-6'
-            render={<Link to='/pricing' />}
-          >
-            {t('View Pricing')}
-          </Button>
+    <section className='tc-landing-container pb-24'>
+      <AnimateInView animation='scale-in' className='tc-closing'>
+        <div className='relative flex flex-col items-start gap-6 md:max-w-2xl'>
+          <h2 className='tc-landing-title'>
+            {t('Ship with every model through {{name}}', { name: systemName })}
+          </h2>
+          <p className='text-base leading-relaxed opacity-70 md:text-lg'>
+            {t(
+              'Create a key, change the Base URL and make your first call in minutes.'
+            )}
+          </p>
+          <div className='flex flex-wrap gap-3'>
+            <Button
+              size='lg'
+              variant='secondary'
+              className='h-12 rounded-full px-6'
+              render={<Link to={showSignUp ? '/sign-up' : '/dashboard'} />}
+            >
+              {showSignUp ? t('Get Started') : t('Go to Dashboard')}
+              <ArrowUpRight className='size-4' aria-hidden='true' />
+            </Button>
+            <Button
+              size='lg'
+              variant='ghost'
+              className='h-12 rounded-full px-5 hover:bg-white/10 hover:text-current'
+              render={<Link to='/pricing' />}
+            >
+              {t('View Pricing')}
+            </Button>
+          </div>
         </div>
       </AnimateInView>
     </section>

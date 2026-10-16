@@ -36,15 +36,12 @@ import { cn } from '@/lib/utils'
 
 import { GroupDetailSheet } from './components/group-detail-sheet'
 import { VendorSection } from './components/vendor-section'
-import {
-  DEFAULT_STATUS_MONITOR_WINDOW,
-  STATUS_MONITOR_WINDOWS,
-  type StatusMonitorWindow,
-} from './constants'
+import { STATUS_MONITOR_WINDOW_HOURS } from './constants'
 import { useGroupStatus } from './hooks/use-group-status'
 import {
   GROUP_HEALTH_CONFIG,
   groupByVendor,
+  HOUR_CELL_SCALE,
   matchesGroupSearch,
   type GroupHealth,
 } from './lib/status'
@@ -56,13 +53,10 @@ const LEGEND: GroupHealth[] = ['operational', 'degraded', 'outage', 'pending']
 export function StatusMonitor() {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-  const [hours, setHours] = useState<StatusMonitorWindow>(
-    DEFAULT_STATUS_MONITOR_WINDOW
-  )
   const [vendorTab, setVendorTab] = useState(ALL_VENDORS)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<GroupStatus | null>(null)
-  const query = useGroupStatus(hours)
+  const query = useGroupStatus(STATUS_MONITOR_WINDOW_HOURS)
   const data = query.data?.data
 
   const sections = useMemo(
@@ -88,10 +82,7 @@ export function StatusMonitor() {
     (sum, section) => sum + section.groups.length,
     0
   )
-  const windowLabel = t(
-    STATUS_MONITOR_WINDOWS.find((option) => option.value === hours)?.labelKey ??
-      'Last 24 hours'
-  )
+  const windowLabel = t('Last 7 days')
   const updatedAt = query.dataUpdatedAt
     ? new Intl.DateTimeFormat(locale, {
         hour: '2-digit',
@@ -133,7 +124,7 @@ export function StatusMonitor() {
 
   return (
     <PublicLayout showMainContainer={false}>
-      <main className='mx-auto flex w-full max-w-[1920px] flex-col gap-5 px-4 pt-24 pb-8 sm:px-6 lg:px-8'>
+      <main className='mx-auto flex w-full max-w-[1440px] flex-col gap-5 px-4 pt-24 pb-8 sm:px-6 lg:px-8'>
         <div className='flex flex-wrap items-center justify-between gap-3'>
           <h1 className='text-xl font-semibold'>{t('Status Monitor')}</h1>
           <div className='flex flex-wrap items-center gap-2'>
@@ -144,29 +135,9 @@ export function StatusMonitor() {
               />
               {t('Updated at')} {updatedAt}
             </span>
-            <div
-              className='bg-muted/60 inline-flex h-8 rounded-lg border p-0.5'
-              role='group'
-              aria-label={t('Time range')}
-            >
-              {STATUS_MONITOR_WINDOWS.map((option) => (
-                <Button
-                  key={option.value}
-                  type='button'
-                  onClick={() => setHours(option.value)}
-                  aria-pressed={hours === option.value}
-                  variant='ghost'
-                  className={cn(
-                    'h-auto shrink-0 rounded-md px-3 text-xs font-medium',
-                    hours === option.value
-                      ? 'text-foreground bg-background shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {t(option.labelKey)}
-                </Button>
-              ))}
-            </div>
+            <span className='bg-muted/60 text-muted-foreground inline-flex h-8 items-center rounded-lg border px-3 text-xs font-medium'>
+              {windowLabel}
+            </span>
             <Button
               variant='outline'
               size='sm'
@@ -218,20 +189,35 @@ export function StatusMonitor() {
                   groups: visibleGroupCount,
                 })}
               </span>
-              <ul className='flex items-center gap-3'>
-                {LEGEND.map((health) => (
-                  <li key={health} className='flex items-center gap-1.5'>
-                    <span
-                      className={cn(
-                        'size-1.5 rounded-full',
-                        GROUP_HEALTH_CONFIG[health].dotClass
-                      )}
-                      aria-hidden='true'
-                    />
-                    {t(GROUP_HEALTH_CONFIG[health].labelKey)}
-                  </li>
-                ))}
-              </ul>
+              <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
+                <ul className='flex items-center gap-3'>
+                  {LEGEND.map((health) => (
+                    <li key={health} className='flex items-center gap-1.5'>
+                      <span
+                        className={cn(
+                          'size-1.5 rounded-full',
+                          GROUP_HEALTH_CONFIG[health].dotClass
+                        )}
+                        aria-hidden='true'
+                      />
+                      {t(GROUP_HEALTH_CONFIG[health].labelKey)}
+                    </li>
+                  ))}
+                </ul>
+                <div className='flex items-center gap-1.5 tabular-nums'>
+                  <span>{HOUR_CELL_SCALE[0].label}</span>
+                  <span className='flex gap-px' aria-hidden='true'>
+                    {HOUR_CELL_SCALE.map((step) => (
+                      <span
+                        key={step.label}
+                        title={step.label}
+                        className={cn('h-3 w-2 rounded-[1px]', step.className)}
+                      />
+                    ))}
+                  </span>
+                  <span>{HOUR_CELL_SCALE.at(-1)?.label}</span>
+                </div>
+              </div>
             </div>
             {content}
           </div>

@@ -30,6 +30,7 @@ import { formatNumber, formatTimestampRelative } from '@/lib/format'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
+import { STATUS_MONITOR_HOURLY_CELLS } from '../constants'
 import { formatLatencySeconds } from '../lib/format'
 import { getGroupHealth, GROUP_HEALTH_CONFIG } from '../lib/status'
 import type { GroupStatus, GroupStatusVendor } from '../types'
@@ -50,7 +51,7 @@ export const GroupStatusCard = memo(function GroupStatusCard(
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const config = GROUP_HEALTH_CONFIG[getGroupHealth(props.group)]
   const latest = props.group.hourly.at(-1)
-  const icon = props.vendor?.icon ? getLobeIcon(props.vendor.icon, 24) : null
+  const icon = props.vendor?.icon ? getLobeIcon(props.vendor.icon, 22) : null
   const rate = props.group.summary?.success_rate ?? Number.NaN
   let summarySource = t('Request observation')
   if (props.group.summary_source === 'auto_probe') {
@@ -71,11 +72,11 @@ export const GroupStatusCard = memo(function GroupStatusCard(
   }
 
   return (
-    <article className='bg-card hover:border-primary/40 flex min-h-72 min-w-0 flex-col gap-5 rounded-2xl border p-5 transition-colors'>
+    <article className='bg-card hover:border-primary/40 flex min-w-0 flex-col gap-4 rounded-xl border p-5 transition-colors'>
       <div className='flex items-start justify-between gap-3'>
         <div className='flex min-w-0 items-center gap-3'>
           <span
-            className='bg-muted flex size-11 shrink-0 items-center justify-center rounded-xl'
+            className='bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg'
             aria-hidden='true'
           >
             {icon ?? <Layers className='text-muted-foreground size-5' />}
@@ -99,8 +100,8 @@ export const GroupStatusCard = memo(function GroupStatusCard(
           {t(config.labelKey)}
         </span>
       </div>
-      <dl className='grid grid-cols-2 gap-3'>
-        <div className='bg-muted/50 min-w-0 rounded-xl px-3 py-3'>
+      <dl className='grid grid-cols-2 gap-2.5'>
+        <div className='bg-muted/50 min-w-0 rounded-lg px-3 py-2.5'>
           <dt className='text-muted-foreground flex items-center gap-1.5 text-xs'>
             <Gauge className='size-3.5' aria-hidden='true' />
             {t('Latency short')}
@@ -116,7 +117,7 @@ export const GroupStatusCard = memo(function GroupStatusCard(
             )}
           </dd>
         </div>
-        <div className='bg-muted/50 min-w-0 rounded-xl px-3 py-3'>
+        <div className='bg-muted/50 min-w-0 rounded-lg px-3 py-2.5'>
           <dt className='text-muted-foreground flex items-center gap-1.5 text-xs'>
             <Layers className='size-3.5' aria-hidden='true' />
             {t('Group ratio')}
@@ -129,7 +130,7 @@ export const GroupStatusCard = memo(function GroupStatusCard(
         </div>
       </dl>
       <div className='flex items-center justify-between gap-2 border-b pb-3 text-xs'>
-        <div className='text-muted-foreground space-y-1'>
+        <div className='text-muted-foreground space-y-0.5'>
           <p>
             {t('Availability')} · {props.windowLabel}
           </p>
@@ -150,11 +151,13 @@ export const GroupStatusCard = memo(function GroupStatusCard(
       </div>
       <div className='mt-auto space-y-2'>
         <div className='text-muted-foreground flex items-center justify-between gap-2 text-xs'>
-          <span>{t('Last 24 hours')}</span>
+          <span>
+            {t('Last {{hours}} hours', { hours: STATUS_MONITOR_HOURLY_CELLS })}
+          </span>
           <span>{lastObserved}</span>
         </div>
         <HourlyStatusBar group={props.group} hourlyStart={props.hourlyStart} />
-        <div className='text-muted-foreground flex items-center justify-between gap-2 text-xs'>
+        <div className='text-muted-foreground flex items-center justify-between gap-2 text-[11px]'>
           <span>{t('Past')}</span>
           <span>{t('Now')}</span>
         </div>
@@ -162,7 +165,7 @@ export const GroupStatusCard = memo(function GroupStatusCard(
       <Button
         variant='ghost'
         size='sm'
-        className='text-muted-foreground -mt-2 justify-between'
+        className='text-muted-foreground -mx-2 -mb-1 justify-between'
         onClick={() => props.onOpenDetails(props.group)}
       >
         {t('Show model breakdown')}

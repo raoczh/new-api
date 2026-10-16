@@ -16,210 +16,157 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Link } from '@tanstack/react-router'
 import {
-  Shield,
-  Code,
-  Gauge,
-  DollarSign,
-  Users,
-  HeartHandshake,
+  ArrowRight,
+  BarChart3,
+  KeyRound,
+  Layers,
+  Route,
+  Wallet,
 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AnimateInView } from '@/components/animate-in-view'
+import { getLobeIcon } from '@/lib/lobe-icon'
+import { cn } from '@/lib/utils'
 
-interface FeaturesProps {
-  className?: string
+import { SectionHeading } from '../section-heading'
+
+interface BentoCardProps {
+  className: string
+  icon: ReactNode
+  title: string
+  description: string
+  delay?: number
+  children?: ReactNode
 }
 
-export function Features(_props: FeaturesProps) {
+function BentoCard(props: BentoCardProps) {
+  return (
+    <AnimateInView
+      delay={props.delay}
+      className={cn(
+        'tc-landing-card tc-landing-card-hover tc-bento-item',
+        props.className
+      )}
+    >
+      <span className='tc-landing-icon'>{props.icon}</span>
+      <div className='flex flex-col gap-2'>
+        <h3 className='text-lg font-semibold tracking-tight'>{props.title}</h3>
+        <p className='text-muted-foreground text-sm leading-relaxed'>
+          {props.description}
+        </p>
+      </div>
+      {props.children}
+    </AnimateInView>
+  )
+}
+
+const PROTOCOLS = [
+  { icon: 'OpenAI', name: 'OpenAI', path: '/v1/chat/completions' },
+  { icon: 'Claude.Color', name: 'Claude', path: '/v1/messages' },
+  { icon: 'Gemini.Color', name: 'Gemini', path: '/v1beta/models' },
+] as const
+
+const USAGE_BARS = [38, 62, 48, 80, 56, 92, 70] as const
+
+export function Features() {
   const { t } = useTranslation()
 
-  const features = [
-    {
-      id: 'fast',
-      num: '01',
-      title: t('Unified model access'),
-      desc: t('Connect multiple providers through compatible API routes.'),
-      visual: (
-        <div className='mt-4 grid grid-cols-3 gap-2'>
-          {['OpenAI', 'Claude', 'Gemini', 'DeepSeek', 'Qwen', 'Llama'].map(
-            (name) => (
-              <div
-                key={name}
-                className='border-border/30 bg-muted/20 text-muted-foreground flex items-center justify-center rounded-lg border px-3 py-2 text-xs transition-colors duration-300 hover:border-blue-500/30 hover:bg-blue-500/5'
-              >
-                {name}
-              </div>
-            )
-          )}
-        </div>
-      ),
-    },
-    {
-      id: 'secure',
-      num: '02',
-      title: t('Secure & Reliable'),
-      desc: t(
-        'Enterprise-grade security with comprehensive permission management'
-      ),
-      visual: (
-        <div className='mt-4 flex items-center justify-center'>
-          <div className='relative'>
-            <div className='flex size-16 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/5'>
-              <Shield
-                className='size-7 text-emerald-500/70'
-                strokeWidth={1.5}
-              />
-            </div>
-            <div className='absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-emerald-500'>
-              <svg
-                className='size-2.5 text-white'
-                fill='none'
-                viewBox='0 0 24 24'
-                stroke='currentColor'
-                strokeWidth={3}
-              >
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  d='m4.5 12.75 6 6 9-13.5'
-                />
-              </svg>
-            </div>
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: 'global',
-      num: '03',
-      title: t('Routing controls'),
-      desc: t('Configure channels, balance requests, and inspect usage.'),
-      visual: (
-        <div className='mt-4 space-y-2'>
-          {[t('Load Balancing'), t('Rate Limiting'), t('Cost Tracking')].map(
-            (step, i) => (
-              <div key={step} className='flex items-center gap-2'>
-                <div
-                  className={`flex size-6 items-center justify-center rounded-full text-[10px] font-bold ${
-                    i === 1
-                      ? 'text-brand border border-blue-500/30 bg-blue-500/20'
-                      : 'border-border/40 bg-muted text-muted-foreground border'
-                  }`}
-                >
-                  {i + 1}
-                </div>
-                <div className='bg-border/40 h-px flex-1' />
-                <span className='text-muted-foreground text-xs'>{step}</span>
-              </div>
-            )
-          )}
-        </div>
-      ),
-    },
-    {
-      id: 'developer',
-      num: '04',
-      title: t('Developer Friendly'),
-      desc: t('Compatible API routes for common AI application workflows'),
-      visual: (
-        <div className='mt-4 flex items-center gap-3'>
-          <div className='flex -space-x-2'>
-            {['API', 'SDK', 'CLI', 'Docs'].map((n) => (
-              <div
-                key={n}
-                className='border-background from-muted to-muted/60 text-muted-foreground flex size-8 items-center justify-center rounded-full border-2 bg-gradient-to-br text-[9px] font-bold'
-              >
-                {n}
-              </div>
-            ))}
-          </div>
-          <div className='text-muted-foreground flex items-center gap-1.5 text-xs'>
-            <Code className='text-brand size-3.5' />
-            {t('Multi-protocol Compatible')}
-          </div>
-        </div>
-      ),
-    },
-  ]
-
-  const additionalFeatures = [
-    {
-      icon: <Gauge className='size-5' strokeWidth={1.5} />,
-      title: t('High Performance'),
-      desc: t('Support for high concurrency with automatic load balancing'),
-    },
-    {
-      icon: <DollarSign className='size-5' strokeWidth={1.5} />,
-      title: t('Transparent Billing'),
-      desc: t('Pay-as-you-go with real-time usage monitoring'),
-    },
-    {
-      icon: <Users className='size-5' strokeWidth={1.5} />,
-      title: t('Team Collaboration'),
-      desc: t('Multi-user management with flexible permission allocation'),
-    },
-    {
-      icon: <HeartHandshake className='size-5' strokeWidth={1.5} />,
-      title: t('Open Source'),
-      desc: t('Community driven, self-hosted, and extensible'),
-    },
-  ]
-
   return (
-    <section className='tc-editorial-section'>
-      <div className='tc-features-layout'>
-        <AnimateInView className='tc-section-intro'>
-          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
-            {t('Core Features')}
-          </p>
-          <h2 className='text-3xl leading-tight font-semibold tracking-tight md:text-5xl'>
-            {t('Built for developers,')}
-            <br />
-            {t('designed for scale')}
-          </h2>
+    <section className='tc-landing-section'>
+      <div className='tc-landing-container flex flex-col gap-14'>
+        <SectionHeading
+          eyebrow={t('Capabilities')}
+          title={t('Everything between your app and the model')}
+          description={t(
+            'Access, routing, billing and observability live in one place, so your code only talks to one endpoint.'
+          )}
+        />
+        <div className='tc-bento'>
+          <BentoCard
+            className='tc-bento-wide'
+            icon={<Layers />}
+            title={t('Native protocols, one Base URL')}
+            description={t(
+              'Call OpenAI, Claude and Gemini style APIs with their own SDKs. Only the Base URL and key change.'
+            )}
+          >
+            <div className='tc-bento-visual grid gap-2'>
+              {PROTOCOLS.map((protocol) => (
+                <div
+                  key={protocol.name}
+                  className='flex items-center gap-3 font-mono text-xs'
+                >
+                  {getLobeIcon(protocol.icon, 18)}
+                  <span className='w-14 font-sans font-medium'>
+                    {protocol.name}
+                  </span>
+                  <span className='text-muted-foreground truncate'>
+                    {protocol.path}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </BentoCard>
+          <BentoCard
+            className='tc-bento-narrow'
+            delay={80}
+            icon={<Route />}
+            title={t('Smart routing')}
+            description={t(
+              'Weight channels, set priorities and retry failed calls on another channel automatically.'
+            )}
+          />
+          <BentoCard
+            className='tc-bento-third'
+            delay={60}
+            icon={<KeyRound />}
+            title={t('Scoped API keys')}
+            description={t(
+              'Limit each key by model, quota, expiry and IP so every project gets only what it needs.'
+            )}
+          />
+          <BentoCard
+            className='tc-bento-third'
+            delay={120}
+            icon={<Wallet />}
+            title={t('Transparent billing')}
+            description={t(
+              'Prices are listed per model and every request is charged from your balance by actual usage.'
+            )}
+          />
+          <BentoCard
+            className='tc-bento-third'
+            delay={180}
+            icon={<BarChart3 />}
+            title={t('Usage you can audit')}
+            description={t(
+              'Each call is logged with model, tokens, cost and latency for review and export.'
+            )}
+          >
+            <div className='tc-bento-visual flex h-20 items-end gap-1.5'>
+              {USAGE_BARS.map((height, index) => (
+                <span
+                  key={height}
+                  className='flex-1 rounded-sm bg-(--tc-brand-accent)'
+                  style={{ height: `${height}%`, opacity: 0.25 + index * 0.1 }}
+                />
+              ))}
+            </div>
+          </BentoCard>
+        </div>
+        <AnimateInView className='flex justify-center'>
+          <Link
+            to='/capabilities'
+            className='text-foreground/80 hover:text-foreground inline-flex items-center gap-1.5 text-sm font-medium transition-colors'
+          >
+            {t('Explore all capabilities')}
+            <ArrowRight className='size-4' aria-hidden='true' />
+          </Link>
         </AnimateInView>
-
-        <div className='tc-feature-register'>
-          {features.map((f, i) => (
-            <AnimateInView
-              key={f.id}
-              delay={i * 100}
-              animation='scale-in'
-              className='tc-feature-row'
-            >
-              <span className='tc-feature-number' aria-hidden='true'>
-                {f.num}
-              </span>
-              <div>
-                <h3 className='mb-3 text-lg font-semibold'>{f.title}</h3>
-                <p className='text-muted-foreground text-sm leading-relaxed'>
-                  {f.desc}
-                </p>
-              </div>
-              <div className='tc-feature-visual'>{f.visual}</div>
-            </AnimateInView>
-          ))}
-        </div>
-
-        {/* Additional features row */}
-        <div className='tc-feature-notes'>
-          {additionalFeatures.map((f, i) => (
-            <AnimateInView
-              key={f.title}
-              delay={i * 100}
-              animation='fade-up'
-              className='flex flex-col items-start'
-            >
-              <div className='text-brand mb-5'>{f.icon}</div>
-              <h3 className='mb-1.5 text-sm font-semibold'>{f.title}</h3>
-              <p className='text-muted-foreground max-w-[200px] text-xs leading-relaxed'>
-                {f.desc}
-              </p>
-            </AnimateInView>
-          ))}
-        </div>
       </div>
     </section>
   )

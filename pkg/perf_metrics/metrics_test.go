@@ -280,14 +280,19 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			// pending with no summary, and the inactive group stays hidden.
 			status, err := QueryGroupStatus(24, map[string]string{"a": "Group A", "b": "Group B", "idle": "Idle"})
 			require.NoError(t, err)
-			assert.Equal(t, start, status.HourlyStart)
+			hourlyStart, _ := queryWindow(now, StatusHours)
+			assert.Equal(t, hourlyStart, status.HourlyStart)
 			require.Len(t, status.Groups, 3)
 			groupA, groupB, idle := status.Groups[0], status.Groups[1], status.Groups[2]
 			assert.Equal(t, "a", groupA.Group)
 			assert.Equal(t, "Group A", groupA.Description)
 			require.NotNil(t, groupA.Summary)
 			assert.Equal(t, GroupSummary{SuccessRate: 99.01, AvgTtftMs: 100, AvgLatencyMs: 990, AvgTps: 5}, *groupA.Summary)
-			assert.Equal(t, []GroupHourPoint{{Ts: hour, SuccessRate: 99.01, AvgTtftMs: 100, TopModel: "test-model", Source: "request", SampleCount: 101, AvgLatencyMs: 990}}, groupA.Hourly)
+			// The hourly cells reach back before the 24-hour summary window.
+			assert.Equal(t, []GroupHourPoint{
+				{Ts: start - 3600, SuccessRate: 0, TopModel: "test-model", Source: "request", SampleCount: 100},
+				{Ts: hour, SuccessRate: 99.01, AvgTtftMs: 100, TopModel: "test-model", Source: "request", SampleCount: 101, AvgLatencyMs: 990},
+			}, groupA.Hourly)
 			require.Len(t, groupA.Models, 2)
 			assert.Equal(t, "test-model", groupA.Models[0].ModelName)
 			assert.Equal(t, 0.0, groupA.Models[1].SuccessRate)
@@ -323,10 +328,10 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			require.Len(t, modelsByName, len(groupA.Models)+1)
 			assert.Equal(t, groupA.Models[0], modelsByName["test-model"], "request stats should take precedence when both sources observe a model")
 			assert.Equal(t, GroupModelStat{ModelName: "probe-only-model", SuccessRate: 100, AvgLatencyMs: 600}, modelsByName["probe-only-model"])
-			require.Len(t, withProbes.Groups[0].Hourly, 2)
-			assert.Equal(t, groupA.Hourly[0], withProbes.Groups[0].Hourly[0])
-			assert.Equal(t, "auto_probe", withProbes.Groups[0].Hourly[1].Source)
-			assert.Equal(t, int64(1), withProbes.Groups[0].Hourly[1].SampleCount)
+			require.Len(t, withProbes.Groups[0].Hourly, 3)
+			assert.Equal(t, groupA.Hourly, withProbes.Groups[0].Hourly[:2])
+			assert.Equal(t, "auto_probe", withProbes.Groups[0].Hourly[2].Source)
+			assert.Equal(t, int64(1), withProbes.Groups[0].Hourly[2].SampleCount)
 			assert.Equal(t, "mixed_tests", withProbes.Groups[2].Hourly[0].Source)
 			assert.Equal(t, 50.0, withProbes.Groups[2].Summary.SuccessRate)
 			assert.Equal(t, hour+2, withProbes.Groups[2].LastSeenTs)

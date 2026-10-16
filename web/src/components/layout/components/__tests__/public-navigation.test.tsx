@@ -106,9 +106,13 @@ afterEach(() => {
   localStorage.clear()
 })
 
-it('pairs the configured site identity with the fixed Chinese brand name', async () => {
+it('pairs the configured site identity with the configured Chinese brand name', async () => {
   const logo = 'https://img.tokencome.org/logo.png'
-  useSystemConfigStore.getState().setConfig({ systemName: 'Token Come', logo })
+  useSystemConfigStore.getState().setConfig({
+    systemName: 'Token Come',
+    systemChineseName: '渡康',
+    logo,
+  })
   useSystemConfigStore.getState().setLoadedLogoUrl(logo)
   await renderHeader()
   const header = screen.getByRole('banner')
@@ -117,6 +121,36 @@ it('pairs the configured site identity with the fixed Chinese brand name', async
   expect(within(header).getAllByRole('img')).toHaveLength(1)
   expect(within(header).getByRole('img')).toHaveAttribute('src', logo)
 })
+
+it('omits the Chinese brand name when none is configured', async () => {
+  useSystemConfigStore.getState().setConfig({ systemName: 'Token Come' })
+  await renderHeader()
+  const header = screen.getByRole('banner')
+  expect(within(header).getByText('Token Come')).toBeVisible()
+  expect(within(header).queryByText('渡康')).not.toBeInTheDocument()
+})
+
+it.each([
+  ['shows', {}, true],
+  ['hides', { capabilities: false }, false],
+] as const)(
+  '%s the capabilities link from the header navigation setting',
+  async (_name, modules, visible) => {
+    queryClient.setQueryData(['status'], {
+      system_name: 'New API',
+      HeaderNavModules: JSON.stringify(modules),
+    })
+    await renderHeader()
+    const link = within(screen.getByRole('navigation')).queryByRole('link', {
+      name: 'Product Capabilities',
+    })
+    if (!visible) {
+      expect(link).not.toBeInTheDocument()
+      return
+    }
+    expect(link).toHaveAttribute('href', '/capabilities')
+  }
+)
 
 it('opens usage documentation in the current site despite an old external docs link', async () => {
   queryClient.setQueryData(['status'], {

@@ -11,8 +11,9 @@ import (
 	"github.com/QuantumNous/new-api/setting"
 )
 
-// StatusHours is the fixed number of hourly cells shown per group.
-const StatusHours = 24
+// StatusHours is the fixed number of hourly cells shown per group; it must
+// match STATUS_MONITOR_HOURLY_CELLS in the web status monitor.
+const StatusHours = 60
 
 // lastSeenByGroup keeps the precise unix time of the latest sample per group
 // on this node; the stored hourly buckets only give hour resolution.

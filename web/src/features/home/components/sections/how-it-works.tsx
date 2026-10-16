@@ -16,72 +16,61 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Settings, Zap, BarChart3 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { AnimateInView } from '@/components/animate-in-view'
+
+import { SectionHeading } from '../section-heading'
 
 export function HowItWorks() {
   const { t } = useTranslation()
 
   const steps = [
     {
-      num: '1',
-      title: t('Configure'),
-      desc: t(
-        'Add your API keys, set up channels and configure access permissions'
-      ),
-      icon: <Settings className='size-6' strokeWidth={1.5} />,
+      title: t('Create an account'),
+      description: t('Sign up and open the console in under a minute.'),
     },
     {
-      num: '2',
-      title: t('Connect'),
-      desc: t(
-        'Connect through OpenAI, Claude, Gemini, and other compatible API routes'
-      ),
-      icon: <Zap className='size-6' strokeWidth={1.5} />,
+      title: t('Add balance'),
+      description: t('Top up once; every model draws from the same balance.'),
     },
     {
-      num: '3',
-      title: t('Monitor'),
-      desc: t('Track usage, costs and performance with real-time analytics'),
-      icon: <BarChart3 className='size-6' strokeWidth={1.5} />,
+      title: t('Create an API key'),
+      description: t('Scope it by model, quota and expiry for each project.'),
+    },
+    {
+      title: t('Change the Base URL'),
+      description: t(
+        'Point your SDK or tool at this gateway and start calling models.'
+      ),
     },
   ]
 
   return (
-    <section className='tc-editorial-section bg-card border-y'>
-      <div className='mx-auto max-w-[1440px]'>
-        <AnimateInView className='mb-10 text-start'>
-          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
-            {t('How It Works')}
-          </p>
-          <h2 className='text-2xl font-bold tracking-tight md:text-3xl'>
-            {t('Three steps to get started')}
-          </h2>
-        </AnimateInView>
-
-        <div className='tc-journey'>
-          {steps.map((step, i) => (
+    <section className='tc-landing-section bg-muted/30 border-y'>
+      <div className='tc-landing-container flex flex-col gap-14'>
+        <SectionHeading
+          eyebrow={t('How It Works')}
+          title={t('From sign-up to first call in four steps')}
+        />
+        <ol className='tc-steps'>
+          {steps.map((step, index) => (
             <AnimateInView
-              key={step.num}
-              delay={i * 150}
-              animation='fade-up'
-              className='tc-journey-step'
+              as='li'
+              key={step.title}
+              delay={index * 80}
+              className='tc-landing-card flex flex-col gap-3 p-6'
             >
-              <div className='mb-8 flex items-start justify-between gap-4'>
-                <span className='tc-journey-number' aria-hidden='true'>
-                  0{step.num}
-                </span>
-                <span className='text-muted-foreground'>{step.icon}</span>
-              </div>
-              <h3 className='mb-2 text-base font-semibold'>{step.title}</h3>
-              <p className='text-muted-foreground max-w-[240px] text-sm leading-relaxed'>
-                {step.desc}
+              <span className='tc-step-index'>
+                {String(index + 1).padStart(2, '0')}
+              </span>
+              <h3 className='font-semibold tracking-tight'>{step.title}</h3>
+              <p className='text-muted-foreground text-sm leading-relaxed'>
+                {step.description}
               </p>
             </AnimateInView>
           ))}
-        </div>
+        </ol>
       </div>
     </section>
   )

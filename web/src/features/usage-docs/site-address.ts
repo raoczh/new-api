@@ -1,4 +1,4 @@
-const FALLBACK_SITE_URL = 'https://api.tokencome.org'
+const FALLBACK_SITE_URL = 'https://tokencome.org'
 
 /** Support address shown when the operator has not configured any contact. */
 export const FALLBACK_CONTACT_EMAIL = 'tokencome@163.com'

@@ -27,6 +27,7 @@ export type HeaderNavModulesConfig = {
   pricing: HeaderNavAccessConfig
   rankings: HeaderNavAccessConfig
   statusMonitor: HeaderNavAccessConfig
+  capabilities: boolean
   docs: boolean
   about: boolean
   [key: string]: boolean | HeaderNavAccessConfig
@@ -51,6 +52,7 @@ export const HEADER_NAV_DEFAULT: HeaderNavModulesConfig = {
     requireAuth: false,
   },
   statusMonitor: { enabled: true, requireAuth: false },
+  capabilities: true,
   docs: true,
   about: true,
 }

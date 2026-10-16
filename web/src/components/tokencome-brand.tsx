@@ -73,6 +73,7 @@ export function TokenComeBridge(props: { className?: string }) {
 export function TokenComeBrand(props: TokenComeBrandProps) {
   const config = useSystemConfig()
   const name = props.name || config.systemName
+  const chineseName = config.systemChineseName?.trim()
   return (
     <span
       className={cn(
@@ -80,7 +81,7 @@ export function TokenComeBrand(props: TokenComeBrandProps) {
         props.compact && 'tc-brand-compact',
         props.className
       )}
-      aria-label={`${name} · 渡康`}
+      aria-label={chineseName ? `${name} · ${chineseName}` : name}
     >
       <span className='tc-site-logo'>
         {props.logo ?? (
@@ -100,9 +101,11 @@ export function TokenComeBrand(props: TokenComeBrandProps) {
           <span className='tc-brand-name truncate' title={name}>
             {name}
           </span>
-          <span className='tc-brand-chinese' lang='zh-CN'>
-            渡康
-          </span>
+          {chineseName && (
+            <span className='tc-brand-chinese' lang='zh-CN'>
+              {chineseName}
+            </span>
+          )}
         </span>
       )}
     </span>

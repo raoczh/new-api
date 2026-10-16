@@ -30,6 +30,7 @@ export type HeaderNavModules = {
   pricing: ModuleAccess
   rankings: ModuleAccess
   statusMonitor: ModuleAccess
+  capabilities: boolean
   docs: boolean
   about: boolean
   [key: string]: boolean | ModuleAccess
@@ -41,6 +42,7 @@ const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
   pricing: { enabled: true, requireAuth: false },
   rankings: { enabled: true, requireAuth: false },
   statusMonitor: { enabled: true, requireAuth: false },
+  capabilities: true,
   docs: true,
   about: true,
 }
@@ -198,6 +200,24 @@ export async function getModuleAccessForGuard(
     return getModuleAccessFromStatus(status, module)
   } catch {
     return { enabled: false, requireAuth: true }
+  }
+}
+
+/**
+ * Resolve an on/off header page (such as `capabilities`) for a route guard.
+ *
+ * These pages are public marketing content with no backend gate, so a failed
+ * status read keeps the page reachable instead of redirecting.
+ */
+export async function isHeaderNavPageEnabledForGuard(
+  queryClient: QueryClient,
+  key: 'capabilities'
+): Promise<boolean> {
+  try {
+    const status = await queryClient.fetchQuery(statusQueryOptions)
+    return parseHeaderNavModulesFromStatus(status)[key] !== false
+  } catch {
+    return true
   }
 }
 

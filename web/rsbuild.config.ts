@@ -64,7 +64,8 @@ export default defineConfig(({ envMode }) => {
     },
     html: {
       template: './index.html',
-      favicon: './public/favicon.ico',
+      // Shown until the configured system logo replaces it at runtime.
+      favicon: 'https://img.tokencome.org/logo.png',
     },
     server: {
       host: '0.0.0.0',

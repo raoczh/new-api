@@ -24,13 +24,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { getSuccessRateDotClass } from '@/features/performance-metrics/lib/format'
 import { toIntlLocale } from '@/i18n/languages'
 import { cn } from '@/lib/utils'
 
+import { STATUS_MONITOR_HOURLY_CELLS } from '../constants'
 import { formatHourRange, formatLatencySeconds } from '../lib/format'
 import {
   buildHourlySlots,
+  getHourCellClass,
   getRateHealth,
   GROUP_HEALTH_CONFIG,
 } from '../lib/status'
@@ -60,10 +61,11 @@ export function HourlyStatusBar(props: HourlyStatusBarProps) {
   return (
     <div
       role='group'
-      aria-label={t('24-hour success rate timeline for {{group}}', {
+      aria-label={t('{{hours}}-hour success rate timeline for {{group}}', {
+        hours: STATUS_MONITOR_HOURLY_CELLS,
         group: props.group.description || props.group.group,
       })}
-      className={cn('flex h-8 items-stretch gap-[3px]', props.className)}
+      className={cn('flex h-7 items-stretch gap-[2px]', props.className)}
     >
       {slots.map((slot) => {
         const health = slot.point
@@ -81,9 +83,9 @@ export function HourlyStatusBar(props: HourlyStatusBarProps) {
                   tabIndex={0}
                   aria-label={`${formatHourRange(slot.ts, locale)}: ${t(config.labelKey)}`}
                   className={cn(
-                    'min-w-0 flex-1 rounded-[2px] transition-opacity hover:opacity-75',
+                    'min-w-0 flex-1 rounded-[1px] transition-opacity hover:opacity-75',
                     slot.point
-                      ? getSuccessRateDotClass(slot.point.success_rate)
+                      ? getHourCellClass(slot.point.success_rate)
                       : 'bg-muted-foreground/15'
                   )}
                 />

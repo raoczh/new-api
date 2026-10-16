@@ -51,6 +51,7 @@ import {
 const headerNavSchema = z.object({
   home: z.boolean(),
   console: z.boolean(),
+  capabilities: z.boolean(),
   pricingEnabled: z.boolean(),
   pricingRequireAuth: z.boolean(),
   rankingsEnabled: z.boolean(),
@@ -96,6 +97,10 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
   statusMonitorRequireAuth:
     config.statusMonitor?.requireAuth ??
     HEADER_NAV_DEFAULT.statusMonitor.requireAuth,
+  capabilities:
+    config.capabilities === undefined
+      ? HEADER_NAV_DEFAULT.capabilities
+      : Boolean(config.capabilities),
   docs:
     config.docs === undefined ? HEADER_NAV_DEFAULT.docs : Boolean(config.docs),
   about:
@@ -126,6 +131,7 @@ export function HeaderNavigationSection({
       ...config,
       home: values.home,
       console: values.console,
+      capabilities: values.capabilities,
       docs: values.docs,
       about: values.about,
       pricing: {
@@ -173,6 +179,11 @@ export function HeaderNavigationSection({
       key: 'console',
       title: t('Console'),
       description: t('User dashboard and quota controls.'),
+    },
+    {
+      key: 'capabilities',
+      title: t('Product Capabilities'),
+      description: t('Product capabilities page for visitors.'),
     },
     {
       key: 'docs',

@@ -60,7 +60,7 @@ function ChineseContent({
       <p>
         Token
         Come（渡康）运营方（「我们」）重视您的隐私。本政策说明您使用本网站（含
-        api.tokencome.org 及我们实际提供服务的相关域名，下称「网站」）和 API
+        tokencome.org 及我们实际提供服务的相关域名，下称「网站」）和 API
         中转 /
         聚合服务（下称「服务」）时，我们如何收集、使用、保存和披露个人信息，以及您可以作出的选择。本政策未定义的用语，适用《服务条款》。
       </p>
@@ -292,7 +292,7 @@ function EnglishContent({
       <p>
         Token Come ("we," "us," or "our") values your privacy. This policy
         explains how we collect, use, store, and disclose personal information
-        when you use our website (including api.tokencome.org and related
+        when you use our website (including tokencome.org and related
         domains where we provide services, "Website") and API
         gateway/aggregation services ("Services"), and the choices you can make.
         Terms not defined here have the meanings given in our Terms of Service.

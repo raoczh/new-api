@@ -98,7 +98,7 @@ it('drops private group data immediately when the viewer changes to an anonymous
 })
 
 describe('group monitor cards', () => {
-  it('uses spacious cards with at most three desktop columns and preserves pending states', () => {
+  it('uses compact cards with at most three desktop columns and preserves pending states', () => {
     render(
       <VendorSection
         section={{
@@ -107,12 +107,13 @@ describe('group monitor cards', () => {
           groups: [group],
         }}
         hourlyStart={start}
-        windowLabel='Last 24 hours'
+        windowLabel='Last 7 days'
         onOpenDetails={vi.fn()}
       />
     )
     const card = screen.getByRole('article')
-    expect(card).toHaveClass('min-h-72', 'min-w-0')
+    expect(card).toHaveClass('min-w-0', 'p-5')
+    expect(card).not.toHaveClass('min-h-72')
     expect(card.parentElement).toHaveClass(
       'grid-cols-1',
       'md:grid-cols-2',
@@ -122,6 +123,7 @@ describe('group monitor cards', () => {
     expect(screen.getByText('Awaiting observation')).toBeVisible()
     expect(screen.getByText('0.35x')).toBeVisible()
     expect(screen.queryByText('100.00%')).not.toBeInTheDocument()
+    expect(screen.getByText('Last 60 hours')).toBeVisible()
   })
 
   it('opens model details by keyboard and keeps long group names contained', async () => {
@@ -155,7 +157,7 @@ describe('group monitor cards', () => {
       ...group,
       hourly: [
         {
-          ts: start + 23 * 3600,
+          ts: start + 59 * 3600,
           success_rate: 100,
           avg_ttft_ms: 300,
           avg_latency_ms: 1200,
@@ -221,12 +223,39 @@ describe('group monitor cards', () => {
         />
       )
       const timeline = screen.getByRole('group')
-      expect(timeline.children).toHaveLength(24)
+      expect(timeline.children).toHaveLength(60)
       expect(timeline.children[0]).toHaveAttribute('data-source', source)
       expect(timeline.children[1]).toHaveAttribute('data-health', 'pending')
       await user.tab()
       expect(await screen.findByRole('tooltip')).toHaveTextContent(label)
       expect(screen.getByRole('tooltip')).toHaveTextContent('gpt-test')
+    }
+  )
+
+  it.each([
+    [100, 'bg-emerald-600'],
+    [99.5, 'bg-emerald-500'],
+    [96, 'bg-lime-500'],
+    [87, 'bg-yellow-400'],
+    [72, 'bg-orange-500'],
+    [20, 'bg-red-700'],
+  ])(
+    'colors an hourly cell at %s%% with the matching finer grade',
+    (rate, className) => {
+      render(
+        <HourlyStatusBar
+          group={{
+            ...group,
+            hourly: [
+              { ts: start, success_rate: rate, avg_ttft_ms: 0, top_model: 'm' },
+            ],
+          }}
+          hourlyStart={start}
+        />
+      )
+      const timeline = screen.getByRole('group')
+      expect(timeline.children[0]).toHaveClass(className)
+      expect(timeline.children[1]).toHaveClass('bg-muted-foreground/15')
     }
   )
 })

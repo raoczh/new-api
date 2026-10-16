@@ -53,7 +53,7 @@ describe('getGroupHealth', () => {
     expect(getGroupHealth(makeGroup({}))).toBe('pending')
   })
 
-  it('returns stale when samples exist only outside the 24 hourly cells', () => {
+  it('returns stale when samples exist only outside the hourly cells', () => {
     expect(getGroupHealth(makeGroup({ summary }))).toBe('stale')
   })
 
@@ -95,17 +95,17 @@ describe('getGroupHealth', () => {
 })
 
 describe('buildHourlySlots', () => {
-  it('returns 24 hourly slots with gaps left empty for hours without traffic', () => {
+  it('returns 60 hourly slots with gaps left empty for hours without traffic', () => {
     const point = {
-      ts: HOUR_START + 23 * 3600,
+      ts: HOUR_START + 59 * 3600,
       success_rate: 100,
       avg_ttft_ms: 1,
       top_model: 'm',
     }
     const slots = buildHourlySlots(HOUR_START, [point])
-    expect(slots).toHaveLength(24)
+    expect(slots).toHaveLength(60)
     expect(slots[0]).toEqual({ ts: HOUR_START, point: undefined })
-    expect(slots[23].point).toBe(point)
+    expect(slots[59].point).toBe(point)
   })
 })
 
