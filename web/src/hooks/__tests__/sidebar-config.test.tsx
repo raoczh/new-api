@@ -105,6 +105,60 @@ describe('status monitor navigation settings', () => {
   })
 })
 
+describe('workbench navigation settings', () => {
+  it.each([
+    undefined,
+    { chat: { enabled: true, playground: true, chat: true } },
+  ])(
+    'hides workbench tools by default and removes legacy chat entries (%j)',
+    (admin) => {
+      const { result } = sidebarFor(admin)
+      expect(result.current.map((group) => group.id)).not.toContain('workbench')
+      expect(result.current.map((group) => group.id)).not.toContain('chat')
+      expect(
+        result.current.flatMap((group) => group.items).map((item) => item.title)
+      ).not.toContain('Playground')
+    }
+  )
+
+  it('shows only enabled tools between General and Personal and preserves settings when saved', () => {
+    const config = parseSidebarModulesAdmin(
+      '{"chat":{"enabled":true,"chat":true}}'
+    )
+    config.workbench = { enabled: true, chat: true, image: true, video: false }
+    const saved = parseSidebarModulesAdmin(serializeSidebarModulesAdmin(config))
+    expect(saved.chat).toBeUndefined()
+    const { result } = sidebarFor(saved)
+    const groups = result.current.map((group) => group.id)
+    expect(groups.indexOf('workbench')).toBe(groups.indexOf('general') + 1)
+    expect(groups.indexOf('personal')).toBe(groups.indexOf('workbench') + 1)
+    expect(
+      result.current.find((group) => group.id === 'workbench')?.items
+    ).toMatchObject([
+      { title: 'AI Chat', url: '/playground' },
+      { title: 'Image Studio', url: '/workbench/image' },
+    ])
+  })
+
+  it('allows personal preferences to hide tools without enabling admin-disabled tools', () => {
+    const { result } = sidebarFor(
+      { workbench: { enabled: true, chat: true, image: false, video: true } },
+      { workbench: { enabled: true, chat: false, image: true, video: true } }
+    )
+    expect(
+      result.current.find((group) => group.id === 'workbench')?.items
+    ).toMatchObject([{ title: 'Video Studio', url: '/workbench/video' }])
+  })
+
+  it('keeps the whole workbench hidden when its section is disabled', () => {
+    const { result } = sidebarFor(
+      { workbench: { enabled: false, chat: true, image: true, video: true } },
+      { workbench: { enabled: true, chat: true, image: true, video: true } }
+    )
+    expect(result.current.map((group) => group.id)).not.toContain('workbench')
+  })
+})
+
 describe('security sidebar visibility', () => {
   it('old configurations show Security & Access immediately after Profile and keep API Keys', () => {
     const { result } = sidebarFor(

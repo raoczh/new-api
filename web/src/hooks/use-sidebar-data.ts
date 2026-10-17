@@ -22,12 +22,12 @@ import {
   ClipboardList,
   CreditCard,
   FileText,
-  FlaskConical,
+  Image,
   Key,
   LayoutDashboard,
   ListTodo,
   LifeBuoy,
-  MessageSquare,
+  MessageCircle,
   MessagesSquare,
   PlugZap,
   Radio,
@@ -37,6 +37,7 @@ import {
   Ticket,
   User,
   Users,
+  Video,
   Wallet,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -55,22 +56,6 @@ export function useSidebarData(): SidebarData {
 
   return {
     navGroups: [
-      {
-        id: 'chat',
-        title: t('Chat'),
-        items: [
-          {
-            title: t('Playground'),
-            url: '/playground',
-            icon: FlaskConical,
-          },
-          {
-            title: t('Chat'),
-            icon: MessageSquare,
-            type: 'chat-presets',
-          },
-        ],
-      },
       {
         id: 'general',
         title: t('General'),
@@ -106,6 +91,27 @@ export function useSidebarData(): SidebarData {
             activeUrls: ['/usage-logs/drawing'],
             configUrls: ['/usage-logs/drawing', '/usage-logs/task'],
             icon: ListTodo,
+          },
+        ],
+      },
+      {
+        id: 'workbench',
+        title: t('Workbench'),
+        items: [
+          {
+            title: t('AI Chat'),
+            url: '/playground',
+            icon: MessageCircle,
+          },
+          {
+            title: t('Image Studio'),
+            url: '/workbench/image',
+            icon: Image,
+          },
+          {
+            title: t('Video Studio'),
+            url: '/workbench/video',
+            icon: Video,
           },
         ],
       },

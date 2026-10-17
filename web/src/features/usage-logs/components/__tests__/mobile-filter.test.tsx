@@ -23,6 +23,7 @@ import {
   createRoute,
   createRouter,
   RouterProvider,
+  useSearch,
 } from '@tanstack/react-router'
 import { getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import {
@@ -58,14 +59,24 @@ beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
 })
 
+function latestStatsParams() {
+  const calls = vi
+    .mocked(api.get)
+    .mock.calls.filter(([url]) => url.includes('/stat?'))
+  return new URL(calls.at(-1)?.[0] ?? '/', 'http://localhost').searchParams
+}
+
 function Fixture() {
+  const initialSearch = useSearch({
+    from: '/_authenticated/usage-logs/$section',
+  })
   const table = useReactTable({
     data: [],
     columns: [],
     getCoreRowModel: getCoreRowModel(),
   })
   return (
-    <UsageLogsProvider>
+    <UsageLogsProvider initialSearch={initialSearch}>
       <CommonLogsFilterBar table={table} />
     </UsageLogsProvider>
   )
@@ -126,6 +137,7 @@ afterEach(async () => {
 
 it('applies the selected mobile date range directly and resets pagination while retaining filters', async () => {
   const router = await renderMobileFilter()
+  const initialHref = router.state.location.href
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: /^\d{4}-\d{2}/ }))
   fireEvent.change(screen.getByLabelText('Start Time'), {
@@ -136,18 +148,19 @@ it('applies the selected mobile date range directly and resets pagination while 
   })
   await user.click(screen.getByRole('button', { name: 'Confirm' }))
   await waitFor(() =>
-    expect(router.state.location.search).toMatchObject({
-      page: 1,
+    expect(Object.fromEntries(latestStatsParams())).toMatchObject({
       group: 'default',
-      type: ['2'],
-      startTime: new Date('2026-09-07T09:30').getTime(),
-      endTime: new Date('2026-09-08T17:45').getTime(),
+      type: '2',
+      start_timestamp: String(new Date('2026-09-07T09:30').getTime() / 1000),
+      end_timestamp: String(new Date('2026-09-08T17:45').getTime() / 1000),
     })
   )
+  expect(router.state.location.href).toBe(initialHref)
 })
 
 it('applies mobile drawer filters only when Search is pressed', async () => {
   const router = await renderMobileFilter()
+  const initialHref = router.state.location.href
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Filter' }))
   const dialog = await screen.findByRole('dialog', { name: 'Filter' })
@@ -155,19 +168,17 @@ it('applies mobile drawer filters only when Search is pressed', async () => {
     within(dialog).getByPlaceholderText('Model Name'),
     'gemini-3.7-flash'
   )
-  expect(router.state.location.search).not.toHaveProperty('model')
+  expect(latestStatsParams().get('model_name')).toBeNull()
   await user.click(within(dialog).getByRole('button', { name: 'Search' }))
   await waitFor(() =>
-    expect(router.state.location.search).toMatchObject({
-      page: 1,
-      model: 'gemini-3.7-flash',
-    })
+    expect(latestStatsParams().get('model_name')).toBe('gemini-3.7-flash')
   )
   await waitFor(() =>
     expect(
       screen.queryByRole('dialog', { name: 'Filter' })
     ).not.toBeInTheDocument()
   )
+  expect(router.state.location.href).toBe(initialHref)
 })
 
 it('keeps all quick actions visible without opening a menu', async () => {

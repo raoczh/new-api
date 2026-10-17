@@ -17,7 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react'
 
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
@@ -26,6 +33,23 @@ import type { ChannelAffinityInfo } from '../types'
 
 export type LogsViewScope = 'all' | 'self'
 export type LogsViewAccess = 'self' | 'admin' | 'root'
+
+export type UsageLogSearchParams = {
+  page?: number
+  pageSize?: number
+  type?: string[]
+  filter?: string
+  model?: string
+  token?: string
+  channel?: string
+  group?: string
+  username?: string
+  requestId?: string
+  upstreamRequestId?: string
+  startTime?: number
+  endTime?: number
+  [key: string]: unknown
+}
 
 export function resolveLogsViewAccess(
   role: number,
@@ -48,13 +72,18 @@ interface UsageLogsContextValue {
   setSensitiveVisible: (visible: boolean) => void
   viewScope: LogsViewScope
   setViewScope: (scope: LogsViewScope) => void
+  searchParams: UsageLogSearchParams
+  setSearchParams: Dispatch<SetStateAction<UsageLogSearchParams>>
 }
 
 const UsageLogsContext = createContext<UsageLogsContextValue | undefined>(
   undefined
 )
 
-export function UsageLogsProvider({ children }: { children: ReactNode }) {
+export function UsageLogsProvider(props: {
+  children: ReactNode
+  initialSearch?: UsageLogSearchParams
+}) {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [userInfoDialogOpen, setUserInfoDialogOpen] = useState(false)
   const [affinityTarget, setAffinityTarget] =
@@ -62,6 +91,9 @@ export function UsageLogsProvider({ children }: { children: ReactNode }) {
   const [affinityDialogOpen, setAffinityDialogOpen] = useState(false)
   const [sensitiveVisible, setSensitiveVisible] = useState(true)
   const [viewScope, setViewScope] = useState<LogsViewScope>('all')
+  const [searchParams, setSearchParams] = useState<UsageLogSearchParams>(
+    () => props.initialSearch ?? {}
+  )
 
   return (
     <UsageLogsContext.Provider
@@ -78,9 +110,11 @@ export function UsageLogsProvider({ children }: { children: ReactNode }) {
         setSensitiveVisible,
         viewScope,
         setViewScope,
+        searchParams,
+        setSearchParams,
       }}
     >
-      {children}
+      {props.children}
     </UsageLogsContext.Provider>
   )
 }

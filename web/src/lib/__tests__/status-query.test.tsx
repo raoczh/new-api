@@ -25,6 +25,7 @@ import { useStatus } from '@/hooks/use-status'
 import { api } from '@/lib/api'
 import {
   getModuleAccessForGuard,
+  isSidebarModuleEnabledForGuard,
   type HeaderNavModule,
 } from '@/lib/nav-modules'
 import {
@@ -181,6 +182,68 @@ describe('shared status query deduplication', () => {
 })
 
 describe('module guard status freshness', () => {
+  test.each(['cold', 'stale'] as const)(
+    'loads workbench settings before deciding navigation with a %s cache',
+    async (cacheState) => {
+      const queryClient = createQueryClient()
+      if (cacheState === 'stale') {
+        queryClient.setQueryData(
+          STATUS_QUERY_KEY,
+          {},
+          {
+            updatedAt: Date.now() - 600_000,
+          }
+        )
+      }
+      apiClient.get = async (url) => {
+        statusRequests.push(url)
+        return {
+          data: {
+            success: true,
+            data: {
+              SidebarModulesAdmin: JSON.stringify({
+                workbench: {
+                  enabled: true,
+                  chat: true,
+                  image: false,
+                  video: true,
+                },
+              }),
+            },
+          },
+        }
+      }
+      expect(
+        await Promise.all(
+          ['chat', 'image', 'video'].map((module) =>
+            isSidebarModuleEnabledForGuard(queryClient, 'workbench', module)
+          )
+        )
+      ).toEqual([true, false, true])
+      expect(statusRequests).toEqual(['/api/status'])
+
+      apiClient.get = async () => ({ data: { success: true, data: {} } })
+      await queryClient.invalidateQueries({ queryKey: STATUS_QUERY_KEY })
+      expect(
+        await isSidebarModuleEnabledForGuard(queryClient, 'workbench', 'chat')
+      ).toBe(false)
+    }
+  )
+
+  test.each(['missing', 'failed'] as const)(
+    'keeps workbench hidden when status is %s',
+    async (statusState) => {
+      const queryClient = createQueryClient()
+      apiClient.get = async () => {
+        if (statusState === 'failed') throw new Error('Status unavailable')
+        return { data: { success: true, data: {} } }
+      }
+      expect(
+        await isSidebarModuleEnabledForGuard(queryClient, 'workbench', 'chat')
+      ).toBe(false)
+    }
+  )
+
   test.each([
     {
       module: 'statusMonitor',

@@ -37,10 +37,11 @@ type SidebarModulesUserConfig = SidebarModulesAdminConfig | null
  * Default sidebar modules configuration
  */
 const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
-  chat: {
-    enabled: true,
-    playground: true,
-    chat: true,
+  workbench: {
+    enabled: false,
+    chat: false,
+    image: false,
+    video: false,
   },
   console: {
     enabled: true,
@@ -96,7 +97,9 @@ const mergeWithDefaultSidebarModules = (
  * Mapping from URL to configuration keys
  */
 const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
-  '/playground': { section: 'chat', module: 'playground' },
+  '/playground': { section: 'workbench', module: 'chat' },
+  '/workbench/image': { section: 'workbench', module: 'image' },
+  '/workbench/video': { section: 'workbench', module: 'video' },
   '/dashboard': { section: 'console', module: 'detail' },
   '/dashboard/overview': { section: 'console', module: 'detail' },
   '/dashboard/models': { section: 'console', module: 'detail' },
@@ -135,7 +138,9 @@ function parseSidebarConfig(
 
   try {
     const parsed = JSON.parse(value) as SidebarModulesAdminConfig
-    return mergeWithDefaultSidebarModules(parsed)
+    const withoutLegacyChat = { ...parsed }
+    delete withoutLegacyChat.chat
+    return mergeWithDefaultSidebarModules(withoutLegacyChat)
   } catch {
     // eslint-disable-next-line no-console
     console.error('Failed to parse sidebar modules configuration')

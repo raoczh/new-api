@@ -25,7 +25,7 @@ import { DataTablePage, useDataTable } from '@/components/data-table'
 import { ErrorState } from '@/components/error-state'
 import { useModelPricing } from '@/features/model-pricing/api'
 import { useMediaQuery } from '@/hooks'
-import { useTableUrlState } from '@/hooks/use-table-url-state'
+import { useTableState } from '@/hooks/use-table-state'
 import {
   getServerMessage,
   requireServerSuccess,
@@ -55,9 +55,8 @@ export function ModelsTable() {
     pagination,
     onPaginationChange,
     ensurePageInRange,
-  } = useTableUrlState({
-    search: route.useSearch(),
-    navigate: route.useNavigate(),
+  } = useTableState({
+    initialSearch: route.useSearch(),
     pagination: {
       defaultPage: 1,
       defaultPageSize: isMobile ? 10 : DEFAULT_PAGE_SIZE,

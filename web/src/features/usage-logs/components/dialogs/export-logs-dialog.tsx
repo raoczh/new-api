@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { getRouteApi } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -37,9 +36,8 @@ import {
 } from '../../lib/export'
 import { buildApiParams, getDefaultTimeRange } from '../../lib/utils'
 import { CompactDateTimeRangePicker } from '../compact-date-time-range-picker'
-import { useLogsViewScope } from '../usage-logs-provider'
+import { useLogsViewScope, useUsageLogsContext } from '../usage-logs-provider'
 
-const route = getRouteApi('/_authenticated/usage-logs/$section')
 const DAY_MS = 24 * 60 * 60 * 1000
 const DEFAULT_MAX_RANGE_DAYS = 365
 
@@ -50,7 +48,7 @@ const DEFAULT_MAX_RANGE_DAYS = 365
  */
 export function ExportLogsDialog() {
   const { t } = useTranslation()
-  const searchParams = route.useSearch()
+  const { searchParams } = useUsageLogsContext()
   const { canManageScope, isAdminView } = useLogsViewScope()
   const { status } = useStatus()
   const [open, setOpen] = useState(false)

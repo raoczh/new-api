@@ -34,7 +34,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useMediaQuery } from '@/hooks'
-import { useTableUrlState } from '@/hooks/use-table-url-state'
+import { useTableState } from '@/hooks/use-table-state'
 import { handleServerError } from '@/lib/handle-server-error'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
@@ -65,9 +65,8 @@ export function DeploymentsTable() {
     pagination,
     onPaginationChange,
     ensurePageInRange,
-  } = useTableUrlState({
-    search: route.useSearch(),
-    navigate: route.useNavigate(),
+  } = useTableState({
+    initialSearch: route.useSearch(),
     pagination: {
       pageKey: 'dPage',
       pageSizeKey: 'dPageSize',

@@ -150,8 +150,9 @@ export function ModelsFilter(props: ModelsFilterProps) {
     value: Date | string | undefined
   ) => {
     setFilters((prev) => ({ ...prev, [field]: value }))
-    if (field === 'start_timestamp' || field === 'end_timestamp')
+    if (field === 'start_timestamp' || field === 'end_timestamp') {
       setSelectedRange(null)
+    }
   }
 
   const handleQuickRange = (days: number) => {
@@ -179,7 +180,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
       title={t(props.titleKey ?? 'Model Analytics Filters')}
       description={t(
         props.descriptionKey ??
-          'Filter the model analytics view by time range and user.'
+          'Filter the model analytics view by time range, model, and user.'
       )}
       contentClassName='max-sm:h-dvh max-sm:w-screen max-sm:max-w-none max-sm:rounded-none max-sm:p-4 sm:max-w-lg'
       contentHeight='min(48vh, 460px)'
@@ -257,12 +258,10 @@ export function ModelsFilter(props: ModelsFilterProps) {
           <div className='grid gap-2'>
             <Label htmlFor='time_granularity'>{t('Time Granularity')}</Label>
             <Select
-              items={[
-                ...TIME_GRANULARITY_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: t(option.label),
-                })),
-              ]}
+              items={TIME_GRANULARITY_OPTIONS.map((option) => ({
+                value: option.value,
+                label: t(option.label),
+              }))}
               value={filters.time_granularity}
               onValueChange={(value) =>
                 handleChange('time_granularity', value as TimeGranularity)
@@ -281,6 +280,16 @@ export function ModelsFilter(props: ModelsFilterProps) {
                 </SelectGroup>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className='grid gap-2'>
+            <Label htmlFor='model_name'>{t('Model')}</Label>
+            <Input
+              id='model_name'
+              placeholder={t('Filter by model')}
+              value={filters.model_name ?? ''}
+              onChange={(e) => handleChange('model_name', e.target.value)}
+            />
           </div>
 
           {/* Admin-only fields */}

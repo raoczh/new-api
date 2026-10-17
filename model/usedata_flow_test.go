@@ -1,11 +1,114 @@
 package model
 
 import (
+	"os"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
+
+func TestDashboardModelFilterDatabaseMatrix(t *testing.T) {
+	for _, dialect := range []string{"sqlite", "mysql", "postgres"} {
+		t.Run(dialect, func(t *testing.T) {
+			var driver gorm.Dialector
+			switch dialect {
+			case "sqlite":
+				driver = sqlite.Open(":memory:")
+			case "mysql":
+				dsn := os.Getenv("TEST_MYSQL_DSN")
+				if dsn == "" {
+					t.Skip("TEST_MYSQL_DSN not configured")
+				}
+				driver = mysql.Open(dsn)
+			case "postgres":
+				dsn := os.Getenv("TEST_POSTGRES_DSN")
+				if dsn == "" {
+					t.Skip("TEST_POSTGRES_DSN not configured")
+				}
+				driver = postgres.Open(dsn)
+			}
+			db, err := gorm.Open(driver, &gorm.Config{})
+			require.NoError(t, err)
+			sqlDB, err := db.DB()
+			require.NoError(t, err)
+			sqlDB.SetMaxOpenConns(1)
+			previousDB := DB
+			DB = db
+			t.Cleanup(func() {
+				DB = previousDB
+				assert.NoError(t, db.Migrator().DropTable(&QuotaData{}))
+				assert.NoError(t, sqlDB.Close())
+			})
+			require.NoError(t, db.AutoMigrate(&QuotaData{}))
+			var version string
+			versionQuery := "SELECT version()"
+			if dialect == "sqlite" {
+				versionQuery = "SELECT sqlite_version()"
+			}
+			require.NoError(t, db.Raw(versionQuery).Scan(&version).Error)
+			t.Logf("database version: %s", version)
+
+			// Two rows for the same model and timestamp must aggregate; the other
+			// user, model, and time range make each filter independently observable.
+			rows := []QuotaData{
+				{UserID: 1, Username: "alice", ModelName: "gpt-alpha", UseGroup: "default", CreatedAt: 1000, Count: 2},
+				{UserID: 1, Username: "alice", ModelName: "gpt-alpha", UseGroup: "default", CreatedAt: 1000, Count: 3},
+				{UserID: 1, Username: "alice", ModelName: "claude-beta", UseGroup: "default", CreatedAt: 1000, Count: 7},
+				{UserID: 2, Username: "bob", ModelName: "gpt-alpha", UseGroup: "default", CreatedAt: 1000, Count: 11},
+				{UserID: 1, Username: "alice", ModelName: "gpt-alpha", UseGroup: "default", CreatedAt: 3000, Count: 13},
+			}
+			require.NoError(t, db.Create(&rows).Error)
+
+			for _, tc := range []struct {
+				name      string
+				modelName string
+				username  string
+				userID    int
+				role      int
+				wantCount int
+			}{
+				{"self substring", "alpha", "bob", 1, common.RoleCommonUser, 5},
+				{"self empty", "", "", 1, common.RoleCommonUser, 12},
+				{"admin combined", "gpt", "alice", 0, common.RoleAdminUser, 5},
+				{"admin all users", "alpha", "", 0, common.RoleAdminUser, 16},
+				{"root combined", "gpt-alpha", "alice", 0, common.RoleRootUser, 5},
+				{"root empty", "", "", 0, common.RoleRootUser, 23},
+				{"no match", "missing", "", 0, common.RoleRootUser, 0},
+				{"quoted input", "' OR 1=1 --", "", 1, common.RoleCommonUser, 0},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					var standard []*QuotaData
+					var queryErr error
+					if tc.role >= common.RoleAdminUser {
+						standard, queryErr = GetAllQuotaDates(900, 2000, tc.username, tc.modelName)
+					} else {
+						standard, queryErr = GetQuotaDataByUserId(tc.userID, tc.modelName, 900, 2000)
+					}
+					require.NoError(t, queryErr)
+					standardCount := 0
+					for _, row := range standard {
+						standardCount += row.Count
+					}
+					assert.Equal(t, tc.wantCount, standardCount, "standard dashboard")
+
+					flow, queryErr := GetFlowQuotaData(900, 2000, tc.username, tc.modelName, tc.userID, tc.role)
+					require.NoError(t, queryErr)
+					flowCount := 0
+					for _, row := range flow {
+						flowCount += row.Count
+					}
+					assert.Equal(t, tc.wantCount, flowCount, "flow dashboard")
+				})
+			}
+		})
+	}
+}
 
 func seedFlowQuotaData(t *testing.T, quotaData QuotaData) {
 	t.Helper()
@@ -87,7 +190,7 @@ func TestGetFlowQuotaDataUsesQuotaDataRoleSpecificDimensions(t *testing.T) {
 		TokenUsed: 999,
 	})
 
-	rootRows, err := GetFlowQuotaData(900, 2000, "", 0, common.RoleRootUser)
+	rootRows, err := GetFlowQuotaData(900, 2000, "", "", 0, common.RoleRootUser)
 	require.NoError(t, err)
 	require.Len(t, rootRows, 3)
 	// Token 11 was soft-deleted, so its name is intentionally left empty for the
@@ -110,7 +213,7 @@ func TestGetFlowQuotaDataUsesQuotaDataRoleSpecificDimensions(t *testing.T) {
 	require.Equal(t, 22, rootRows[1].TokenID)
 	require.Equal(t, "backup", rootRows[1].TokenName)
 
-	adminRows, err := GetFlowQuotaData(900, 2000, "alice", 0, common.RoleAdminUser)
+	adminRows, err := GetFlowQuotaData(900, 2000, "alice", "", 0, common.RoleAdminUser)
 	require.NoError(t, err)
 	require.Len(t, adminRows, 2)
 	require.Equal(t, 0, adminRows[0].TokenID)
@@ -121,7 +224,7 @@ func TestGetFlowQuotaDataUsesQuotaDataRoleSpecificDimensions(t *testing.T) {
 	require.Equal(t, "east", adminRows[0].ChannelName)
 	require.Equal(t, 150, adminRows[0].Quota)
 
-	selfRows, err := GetFlowQuotaData(900, 2000, "", 1, common.RoleCommonUser)
+	selfRows, err := GetFlowQuotaData(900, 2000, "", "", 1, common.RoleCommonUser)
 	require.NoError(t, err)
 	require.Len(t, selfRows, 1)
 	require.Empty(t, selfRows[0].Username)

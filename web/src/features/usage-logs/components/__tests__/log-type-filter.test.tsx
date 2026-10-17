@@ -23,6 +23,7 @@ import {
   createRoute,
   createRouter,
   RouterProvider,
+  useSearch,
 } from '@tanstack/react-router'
 import { getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import {
@@ -40,14 +41,24 @@ import { api } from '@/lib/api'
 import { CommonLogsFilterBar } from '../common-logs-filter-bar'
 import { UsageLogsProvider } from '../usage-logs-provider'
 
+function latestStatsParams() {
+  const calls = vi
+    .mocked(api.get)
+    .mock.calls.filter(([url]) => url.includes('/stat?'))
+  return new URL(calls.at(-1)?.[0] ?? '/', 'http://localhost').searchParams
+}
+
 function FilterFixture() {
+  const initialSearch = useSearch({
+    from: '/_authenticated/usage-logs/$section',
+  })
   const table = useReactTable({
     data: [],
     columns: [],
     getCoreRowModel: getCoreRowModel(),
   })
   return (
-    <UsageLogsProvider>
+    <UsageLogsProvider initialSearch={initialSearch}>
       <CommonLogsFilterBar table={table} />
     </UsageLogsProvider>
   )
@@ -118,13 +129,10 @@ it('marks only retired log types as deprecated while keeping historical filters 
     'Deprecated'
   )
   await userEvent.click(screen.getByRole('button', { name: 'Search' }))
-  await waitFor(() =>
-    expect(router.state.location.search).toMatchObject({ type: ['3'], page: 1 })
-  )
+  await waitFor(() => expect(latestStatsParams().get('type')).toBe('3'))
   await userEvent.click(screen.getByRole('combobox', { name: 'Type' }))
   await userEvent.click(screen.getByRole('option', { name: /^Login/ }))
   await userEvent.click(screen.getByRole('button', { name: 'Search' }))
-  await waitFor(() =>
-    expect(router.state.location.search).toMatchObject({ type: ['7'], page: 1 })
-  )
+  await waitFor(() => expect(latestStatsParams().get('type')).toBe('7'))
+  expect(router.state.location.href).toBe('/usage-logs/common')
 })

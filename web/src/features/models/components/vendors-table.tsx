@@ -37,7 +37,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useTableUrlState } from '@/hooks/use-table-url-state'
+import { useTableState } from '@/hooks/use-table-state'
 import { formatTimestampToDate } from '@/lib/format'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { createServerError } from '@/lib/server-error-message'
@@ -56,9 +56,8 @@ export function VendorsTable() {
   const navigate = useNavigate()
   const { setCurrentVendor, setOpen } = useModels()
   const [operation, setOperation] = useState<VendorOperation | null>(null)
-  const state = useTableUrlState({
-    search: route.useSearch(),
-    navigate: route.useNavigate(),
+  const state = useTableState({
+    initialSearch: route.useSearch(),
     pagination: {
       pageKey: 'vPage',
       pageSizeKey: 'vPageSize',

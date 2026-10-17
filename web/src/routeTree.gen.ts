@@ -68,6 +68,8 @@ import { Route as AuthenticatedUsageLogsAuditRouteImport } from './routes/_authe
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
 import { Route as AuthenticatedWalletIndexRouteImport } from './routes/_authenticated/wallet/index'
 import { Route as AuthenticatedWalletStoreRouteImport } from './routes/_authenticated/wallet/store'
+import { Route as AuthenticatedWorkbenchImageRouteImport } from './routes/_authenticated/workbench/image'
+import { Route as AuthenticatedWorkbenchVideoRouteImport } from './routes/_authenticated/workbench/video'
 import { Route as PricingModelIdIndexRouteImport } from './routes/pricing/$modelId/index'
 import { Route as AuthenticatedSystemSettingsAuthIndexRouteImport } from './routes/_authenticated/system-settings/auth/index'
 import { Route as AuthenticatedSystemSettingsAuthSectionRouteImport } from './routes/_authenticated/system-settings/auth/$section'
@@ -400,6 +402,18 @@ const AuthenticatedWalletStoreRoute =
     path: '/wallet/store',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedWorkbenchImageRoute =
+  AuthenticatedWorkbenchImageRouteImport.update({
+    id: '/workbench/image',
+    path: '/workbench/image',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedWorkbenchVideoRoute =
+  AuthenticatedWorkbenchVideoRouteImport.update({
+    id: '/workbench/video',
+    path: '/workbench/video',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const PricingModelIdIndexRoute = PricingModelIdIndexRouteImport.update({
   id: '/pricing/$modelId/',
   path: '/pricing/$modelId/',
@@ -544,6 +558,8 @@ export interface FileRoutesByFullPath {
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/usage-logs/audit': typeof AuthenticatedUsageLogsAuditRoute
   '/wallet/store': typeof AuthenticatedWalletStoreRoute
+  '/workbench/image': typeof AuthenticatedWorkbenchImageRoute
+  '/workbench/video': typeof AuthenticatedWorkbenchVideoRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
@@ -619,6 +635,8 @@ export interface FileRoutesByTo {
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/usage-logs/audit': typeof AuthenticatedUsageLogsAuditRoute
   '/wallet/store': typeof AuthenticatedWalletStoreRoute
+  '/workbench/image': typeof AuthenticatedWorkbenchImageRoute
+  '/workbench/video': typeof AuthenticatedWorkbenchVideoRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
@@ -698,6 +716,8 @@ export interface FileRoutesById {
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/_authenticated/usage-logs/audit': typeof AuthenticatedUsageLogsAuditRoute
   '/_authenticated/wallet/store': typeof AuthenticatedWalletStoreRoute
+  '/_authenticated/workbench/image': typeof AuthenticatedWorkbenchImageRoute
+  '/_authenticated/workbench/video': typeof AuthenticatedWorkbenchVideoRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
@@ -776,6 +796,8 @@ export interface FileRouteTypes {
     | '/usage-logs/$section'
     | '/usage-logs/audit'
     | '/wallet/store'
+    | '/workbench/image'
+    | '/workbench/video'
     | '/channels/'
     | '/dashboard/'
     | '/keys/'
@@ -851,6 +873,8 @@ export interface FileRouteTypes {
     | '/usage-logs/$section'
     | '/usage-logs/audit'
     | '/wallet/store'
+    | '/workbench/image'
+    | '/workbench/video'
     | '/channels'
     | '/dashboard'
     | '/keys'
@@ -929,6 +953,8 @@ export interface FileRouteTypes {
     | '/_authenticated/usage-logs/$section'
     | '/_authenticated/usage-logs/audit'
     | '/_authenticated/wallet/store'
+    | '/_authenticated/workbench/image'
+    | '/_authenticated/workbench/video'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
     | '/_authenticated/keys/'
@@ -1409,6 +1435,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWalletStoreRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/workbench/image': {
+      id: '/_authenticated/workbench/image'
+      path: '/workbench/image'
+      fullPath: '/workbench/image'
+      preLoaderRoute: typeof AuthenticatedWorkbenchImageRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/workbench/video': {
+      id: '/_authenticated/workbench/video'
+      path: '/workbench/video'
+      fullPath: '/workbench/video'
+      preLoaderRoute: typeof AuthenticatedWorkbenchVideoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/pricing/$modelId/': {
       id: '/pricing/$modelId/'
       path: '/pricing/$modelId'
@@ -1630,6 +1670,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
   AuthenticatedUsageLogsAuditRoute: typeof AuthenticatedUsageLogsAuditRoute
   AuthenticatedWalletStoreRoute: typeof AuthenticatedWalletStoreRoute
+  AuthenticatedWorkbenchImageRoute: typeof AuthenticatedWorkbenchImageRoute
+  AuthenticatedWorkbenchVideoRoute: typeof AuthenticatedWorkbenchVideoRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
@@ -1658,6 +1700,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,
   AuthenticatedUsageLogsAuditRoute: AuthenticatedUsageLogsAuditRoute,
   AuthenticatedWalletStoreRoute: AuthenticatedWalletStoreRoute,
+  AuthenticatedWorkbenchImageRoute: AuthenticatedWorkbenchImageRoute,
+  AuthenticatedWorkbenchVideoRoute: AuthenticatedWorkbenchVideoRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,

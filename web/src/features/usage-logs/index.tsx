@@ -186,8 +186,10 @@ function UsageLogsContent() {
 }
 
 export function UsageLogs() {
+  const initialSearch = route.useSearch()
+  const { section } = route.useParams()
   return (
-    <UsageLogsProvider>
+    <UsageLogsProvider key={section} initialSearch={initialSearch}>
       <UsageLogsContent />
     </UsageLogsProvider>
   )

@@ -21,7 +21,7 @@ import type {
   OnChangeFn,
   PaginationState,
 } from '@tanstack/react-table'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 
 type SearchRecord = Record<string, unknown>
 
@@ -31,7 +31,10 @@ const PAGE_SIZE_STORAGE_KEY = 'page-size'
 
 function getStoredPageSize(): number | undefined {
   try {
-    const n = parseInt(localStorage.getItem(PAGE_SIZE_STORAGE_KEY) ?? '', 10)
+    const n = Number.parseInt(
+      localStorage.getItem(PAGE_SIZE_STORAGE_KEY) ?? '',
+      10
+    )
     return n > 0 ? n : undefined // n > 0 also rejects NaN
   } catch {
     return undefined
@@ -46,17 +49,10 @@ function setStoredPageSize(size: number) {
   }
 }
 
-export type NavigateFn = (opts: {
-  search:
-    | true
-    | SearchRecord
-    | ((prev: SearchRecord) => Partial<SearchRecord> | SearchRecord)
-  replace?: boolean
-}) => void
-
-type UseTableUrlStateParams = {
-  search: SearchRecord
-  navigate: NavigateFn
+type UseTableStateParams = {
+  initialSearch?: SearchRecord
+  search?: SearchRecord
+  onSearchChange?: Dispatch<SetStateAction<SearchRecord>>
   pagination?: {
     pageKey?: string
     pageSizeKey?: string
@@ -87,7 +83,7 @@ type UseTableUrlStateParams = {
   >
 }
 
-type UseTableUrlStateReturn = {
+type UseTableStateReturn = {
   // Global filter
   globalFilter?: string
   onGlobalFilterChange?: OnChangeFn<string>
@@ -104,16 +100,23 @@ type UseTableUrlStateReturn = {
   ) => void
 }
 
-export function useTableUrlState(
-  params: UseTableUrlStateParams
-): UseTableUrlStateReturn {
+export function useTableState(
+  params: UseTableStateParams
+): UseTableStateReturn {
   const {
-    search,
-    navigate,
+    search: controlledSearch,
+    onSearchChange,
     pagination: paginationCfg,
     globalFilter: globalFilterCfg,
     columnFilters: columnFiltersCfg = [],
   } = params
+
+  // Incoming links seed the page once; subsequent queries stay in page state.
+  const [localSearch, setLocalSearch] = useState<SearchRecord>(
+    () => params.initialSearch ?? {}
+  )
+  const search = controlledSearch ?? localSearch
+  const setSearch = onSearchChange ?? setLocalSearch
 
   const pageKey = paginationCfg?.pageKey ?? ('page' as string)
   const pageSizeKey = paginationCfg?.pageSizeKey ?? ('pageSize' as string)
@@ -125,7 +128,7 @@ export function useTableUrlState(
   const trimGlobal = globalFilterCfg?.trim ?? true
 
   // Build initial column filters from the current search params
-  const initialColumnFilters: ColumnFiltersState = useMemo(() => {
+  const columnFilters: ColumnFiltersState = useMemo(() => {
     const collected: ColumnFiltersState = []
     for (const cfg of columnFiltersCfg) {
       const raw = (search as SearchRecord)[cfg.searchKey]
@@ -146,15 +149,6 @@ export function useTableUrlState(
     return collected
   }, [columnFiltersCfg, search])
 
-  const [columnFilters, setColumnFilters] =
-    useState<ColumnFiltersState>(initialColumnFilters)
-
-  // URL 为单一数据源：仅当 search（URL）变化时同步，避免依赖 initialColumnFilters 造成死循环（config 常为内联引用）
-  useEffect(() => {
-    setColumnFilters(initialColumnFilters)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search])
-
   const pagination: PaginationState = useMemo(() => {
     const rawPage = (search as SearchRecord)[pageKey]
     const rawPageSize = (search as SearchRecord)[pageSizeKey]
@@ -171,20 +165,16 @@ export function useTableUrlState(
     const nextPage = next.pageIndex + 1
     const nextPageSize = next.pageSize
     if (nextPageSize !== pagination.pageSize) setStoredPageSize(nextPageSize)
-    navigate({
-      search: (prev) => ({
-        ...(prev as SearchRecord),
-        [pageKey]: nextPage <= defaultPage ? undefined : nextPage,
-        [pageSizeKey]: nextPageSize,
-      }),
-    })
+    setSearch((prev) => ({
+      ...(prev as SearchRecord),
+      [pageKey]: nextPage <= defaultPage ? undefined : nextPage,
+      [pageSizeKey]: nextPageSize,
+    }))
   }
 
-  const [globalFilter, setGlobalFilter] = useState<string | undefined>(() => {
-    if (!globalFilterEnabled) return undefined
-    const raw = (search as SearchRecord)[globalFilterKey]
-    return typeof raw === 'string' ? raw : ''
-  })
+  const rawGlobalFilter = search[globalFilterKey]
+  const globalFilter =
+    typeof rawGlobalFilter === 'string' ? rawGlobalFilter : ''
 
   const onGlobalFilterChange: OnChangeFn<string> | undefined =
     globalFilterEnabled
@@ -194,21 +184,17 @@ export function useTableUrlState(
               ? updater(globalFilter ?? '')
               : updater
           const value = trimGlobal ? next.trim() : next
-          setGlobalFilter(value)
-          navigate({
-            search: (prev) => ({
-              ...(prev as SearchRecord),
-              [pageKey]: undefined,
-              [globalFilterKey]: value ? value : undefined,
-            }),
-          })
+          setSearch((prev) => ({
+            ...(prev as SearchRecord),
+            [pageKey]: undefined,
+            [globalFilterKey]: value ? value : undefined,
+          }))
         }
       : undefined
 
   const onColumnFiltersChange: OnChangeFn<ColumnFiltersState> = (updater) => {
     const next =
       typeof updater === 'function' ? updater(columnFilters) : updater
-    setColumnFilters(next)
 
     const patch: Record<string, unknown> = {}
 
@@ -222,19 +208,17 @@ export function useTableUrlState(
           value.trim() !== '' ? serialize(value) : undefined
       } else {
         const value = Array.isArray(found?.value)
-          ? (found!.value as unknown[])
+          ? (found.value as unknown[])
           : []
         patch[cfg.searchKey] = value.length > 0 ? serialize(value) : undefined
       }
     }
 
-    navigate({
-      search: (prev) => ({
-        ...(prev as SearchRecord),
-        [pageKey]: undefined,
-        ...patch,
-      }),
-    })
+    setSearch((prev) => ({
+      ...(prev as SearchRecord),
+      [pageKey]: undefined,
+      ...patch,
+    }))
   }
 
   const ensurePageInRange = (
@@ -244,13 +228,10 @@ export function useTableUrlState(
     const currentPage = (search as SearchRecord)[pageKey]
     const pageNum = typeof currentPage === 'number' ? currentPage : defaultPage
     if (pageCount > 0 && pageNum > pageCount) {
-      navigate({
-        replace: true,
-        search: (prev) => ({
-          ...(prev as SearchRecord),
-          [pageKey]: opts.resetTo === 'last' ? pageCount : undefined,
-        }),
-      })
+      setSearch((prev) => ({
+        ...(prev as SearchRecord),
+        [pageKey]: opts.resetTo === 'last' ? pageCount : undefined,
+      }))
     }
   }
 

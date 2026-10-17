@@ -26,8 +26,10 @@ import {
 } from '@tanstack/react-router'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+import { PageFooterProvider } from '@/components/layout/components/page-footer'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { api } from '@/lib/api'
 import { Route as UsersRoute } from '@/routes/_authenticated/users/index'
@@ -52,7 +54,7 @@ afterEach(() => {
   useAuthStore.getState().auth.reset()
 })
 
-async function renderUsers(initialEntry = '/users/') {
+async function renderUsers(initialEntry = '/users/', total = 1) {
   const get = vi.spyOn(api, 'get').mockImplementation(async (url) => {
     if (url === '/api/group/') {
       return { data: { success: true, data: ['default', 'premium'] } }
@@ -74,7 +76,7 @@ async function renderUsers(initialEntry = '/users/') {
               group: 'premium',
             },
           ],
-          total: 1,
+          total,
         },
       },
     }
@@ -85,13 +87,19 @@ async function renderUsers(initialEntry = '/users/') {
     getParentRoute: () => auth,
     path: 'users/',
     validateSearch: UsersRoute.options.validateSearch,
-    component: () => (
-      <TooltipProvider>
-        <UsersProvider>
-          <UsersTable />
-        </UsersProvider>
-      </TooltipProvider>
-    ),
+    component: function UsersPage() {
+      const [footer, setFooter] = useState<HTMLDivElement | null>(null)
+      return (
+        <PageFooterProvider container={footer}>
+          <TooltipProvider>
+            <UsersProvider>
+              <UsersTable />
+            </UsersProvider>
+          </TooltipProvider>
+          <div ref={setFooter} />
+        </PageFooterProvider>
+      )
+    },
   })
   const router = createRouter({
     routeTree: root.addChildren([auth.addChildren([users])]),
@@ -132,7 +140,7 @@ it('searches only the selected user group and lists all users again after the fi
   await user.click(await screen.findByRole('option', { name: /^premium/ }))
 
   await waitFor(() => expect(get).toHaveBeenLastCalledWith(premiumSearchUrl))
-  expect(router.state.location.search).toMatchObject({ group: ['premium'] })
+  expect(router.state.location.href).toBe('/users/')
   expect(getGroupFilterTrigger()).toHaveTextContent('premium')
 
   await user.click(screen.getByRole('option', { name: 'Clear filters' }))
@@ -142,7 +150,7 @@ it('searches only the selected user group and lists all users again after the fi
       params: { p: 1, page_size: 20 },
     })
   )
-  expect(router.state.location.search).not.toHaveProperty('group')
+  expect(router.state.location.href).toBe('/users/')
 })
 
 it('restores the user group filter from the page URL on load', async () => {
@@ -151,4 +159,21 @@ it('restores the user group filter from the page URL on load', async () => {
   expect(get).toHaveBeenCalledWith(premiumSearchUrl)
   expect(get).not.toHaveBeenCalledWith('/api/user/', expect.anything())
   expect(getGroupFilterTrigger()).toHaveTextContent('premium')
+})
+
+it('keeps pagination local and searches from the first page when a filter changes', async () => {
+  const user = userEvent.setup()
+  const { get, router } = await renderUsers('/users/', 50)
+  await user.click(screen.getByRole('button', { name: 'Go to next page' }))
+  await waitFor(() =>
+    expect(get).toHaveBeenLastCalledWith('/api/user/', {
+      params: { p: 2, page_size: 20 },
+    })
+  )
+  expect(router.state.location.href).toBe('/users/')
+
+  await user.click(getGroupFilterTrigger())
+  await user.click(await screen.findByRole('option', { name: /^premium/ }))
+  await waitFor(() => expect(get).toHaveBeenLastCalledWith(premiumSearchUrl))
+  expect(router.state.location.href).toBe('/users/')
 })

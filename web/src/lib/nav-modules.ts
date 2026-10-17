@@ -224,18 +224,18 @@ export async function isHeaderNavPageEnabledForGuard(
 /**
  * Whether an admin sidebar entry is enabled by `SidebarModulesAdmin`.
  *
- * Fails open: an absent, blank, or unparsable configuration keeps every module
- * visible, so a status read that has not landed yet cannot blank the sidebar.
+ * Existing modules stay visible when configuration is unavailable. Workbench
+ * tools require explicit enablement and are hidden by default.
  */
 export function isSidebarModuleEnabled(
   section: string,
-  module: string
+  module: string,
+  status = readCachedStatus()
 ): boolean {
-  const status = readCachedStatus()
-  if (!status) return true
+  if (!status) return section !== 'workbench'
 
   const raw = status.SidebarModulesAdmin
-  if (!raw || String(raw).trim() === '') return true
+  if (!raw || String(raw).trim() === '') return section !== 'workbench'
 
   try {
     const parsed = JSON.parse(String(raw)) as Record<
@@ -243,11 +243,28 @@ export function isSidebarModuleEnabled(
       Record<string, boolean>
     >
     const sectionConfig = parsed[section]
+    if (section === 'workbench') {
+      return sectionConfig?.enabled === true && sectionConfig[module] === true
+    }
     if (!sectionConfig) return true
     if (sectionConfig.enabled === false) return false
     if (sectionConfig[module] === false) return false
     return true
   } catch {
-    return true
+    return section !== 'workbench'
+  }
+}
+
+/** Wait for current visibility settings before navigating to a sidebar tool. */
+export async function isSidebarModuleEnabledForGuard(
+  queryClient: QueryClient,
+  section: string,
+  module: string
+): Promise<boolean> {
+  try {
+    const status = await queryClient.fetchQuery(statusQueryOptions)
+    return isSidebarModuleEnabled(section, module, status)
+  } catch {
+    return false
   }
 }

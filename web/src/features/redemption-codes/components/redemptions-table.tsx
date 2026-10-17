@@ -28,7 +28,7 @@ import {
   useDataTable,
 } from '@/components/data-table'
 import { useMediaQuery } from '@/hooks'
-import { useTableUrlState } from '@/hooks/use-table-url-state'
+import { useTableState } from '@/hooks/use-table-state'
 import { createServerError } from '@/lib/server-error-message'
 
 import { getRedemptions, searchRedemptions } from '../api'
@@ -67,9 +67,8 @@ export function RedemptionsTable() {
     pagination,
     onPaginationChange,
     ensurePageInRange,
-  } = useTableUrlState({
-    search: route.useSearch(),
-    navigate: route.useNavigate(),
+  } = useTableState({
+    initialSearch: route.useSearch(),
     pagination: { defaultPage: 1, defaultPageSize: isMobile ? 10 : 20 },
     globalFilter: { enabled: true, key: 'filter' },
     columnFilters: [{ columnId: 'status', searchKey: 'status', type: 'array' }],

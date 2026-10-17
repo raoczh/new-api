@@ -82,7 +82,7 @@ export function Playground() {
   return (
     <div className='relative flex size-full min-h-0 flex-col overflow-hidden'>
       <header className='bg-card/60 flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6'>
-        <h1 className='text-base font-semibold'>{t('Playground')}</h1>
+        <h1 className='text-base font-semibold'>{t('AI Chat')}</h1>
         <Badge variant='outline' className='max-w-[60%] truncate font-mono'>
           {config.model || t('Select model')}
         </Badge>

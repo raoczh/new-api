@@ -87,7 +87,7 @@ function renderExport(options: {
     getParentRoute: () => auth,
     path: '/usage-logs/$section',
     component: () => (
-      <UsageLogsProvider>
+      <UsageLogsProvider initialSearch={options.search}>
         <h1>Common Logs</h1>
         <ExportLogsDialog />
       </UsageLogsProvider>
