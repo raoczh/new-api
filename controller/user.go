@@ -1453,6 +1453,9 @@ func UpdateUserSetting(c *gin.Context) {
 		UpstreamModelUpdateNotifyEnabled: upstreamModelUpdateNotifyEnabled,
 		AcceptUnsetRatioModel:            req.AcceptUnsetModelRatioModel,
 		RecordIpLog:                      req.RecordIpLog,
+		// AI 绘图偏好不属于预警设置，整表重建时必须原样带回，否则会被清空。
+		ImageTaskEmailNotify: existingSettings.ImageTaskEmailNotify,
+		PromptPolishModel:    existingSettings.PromptPolishModel,
 	}
 
 	// 如果是webhook类型,添加webhook相关设置
@@ -1492,4 +1495,54 @@ func UpdateUserSetting(c *gin.Context) {
 	}
 
 	common.ApiSuccessT(c, "Settings updated", nil)
+}
+
+// UpdateImageStudioPreferences stores the AI 绘图 page's personal preferences.
+// It is separate from UpdateUserSetting because that endpoint rebuilds the whole
+// quota-warning configuration and would otherwise force a partial save to
+// resend unrelated fields.
+func UpdateImageStudioPreferences(c *gin.Context) {
+	var req struct {
+		ImageTaskEmailNotify *bool   `json:"image_task_email_notify"`
+		PromptPolishModel    *string `json:"prompt_polish_model"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+
+	userId := c.GetInt("id")
+	user, err := model.GetUserById(userId, true)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	settings := user.GetSetting()
+
+	if req.ImageTaskEmailNotify != nil {
+		if *req.ImageTaskEmailNotify {
+			if strings.TrimSpace(user.Email) == "" {
+				common.ApiErrorT(c, "Bind an email address before enabling completion notifications")
+				return
+			}
+			if common.SMTPServer == "" && common.SMTPAccount == "" {
+				common.ApiErrorT(c, "Email delivery is not configured on this server yet")
+				return
+			}
+		}
+		settings.ImageTaskEmailNotify = *req.ImageTaskEmailNotify
+	}
+	if req.PromptPolishModel != nil {
+		settings.PromptPolishModel = strings.TrimSpace(*req.PromptPolishModel)
+	}
+
+	if err := model.UpdateUserSetting(user.Id, settings); err != nil {
+		common.ApiErrorT(c, "Update failed")
+		return
+	}
+
+	common.ApiSuccess(c, gin.H{
+		"image_task_email_notify": settings.ImageTaskEmailNotify,
+		"prompt_polish_model":     settings.PromptPolishModel,
+	})
 }

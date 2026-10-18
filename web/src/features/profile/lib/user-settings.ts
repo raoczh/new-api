@@ -46,5 +46,7 @@ export function normalizeUserSettings(
     record_ip_log: parsed.record_ip_log || false,
     upstream_model_update_notify_enabled:
       parsed.upstream_model_update_notify_enabled || false,
+    image_task_email_notify: parsed.image_task_email_notify || false,
+    prompt_polish_model: parsed.prompt_polish_model ?? '',
   }
 }

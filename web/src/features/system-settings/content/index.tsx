@@ -43,6 +43,17 @@ const defaultContentSettings: ContentSettings = {
   MjForwardUrlEnabled: false,
   MjModeClearEnabled: false,
   MjActionCheckSuccessEnabled: false,
+  'image_studio.enabled': true,
+  'image_studio.image_concurrency': 2,
+  'image_studio.video_concurrency': 1,
+  'image_studio.retention_days': 7,
+  'image_studio.queue_max_wait_minutes': 30,
+  'image_studio.storage_dir': 'data/image-studio',
+  'image_studio.public_base_url': '',
+  'image_studio.max_images_per_request': 4,
+  'image_studio.max_reference_images': 4,
+  'image_studio.upload_max_mb': 10,
+  'image_studio.image_models': [],
 }
 
 function resolveContentSettings(

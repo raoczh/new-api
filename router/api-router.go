@@ -133,6 +133,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/waffo-pancake/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPancakePay)
 				selfRoute.POST("/aff_transfer", middleware.UserCriticalRateLimit("aff-transfer"), controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
+				selfRoute.PUT("/settings/image-studio", controller.UpdateImageStudioPreferences)
 
 				// 2FA routes
 				selfRoute.GET("/2fa/status", controller.Get2FAStatus)
@@ -172,6 +173,25 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.DELETE("/:id/2fa", controller.AdminDisable2FA)
 			}
 		}
+
+		// Interactive image workbench (AI 绘图). Submissions are queued server
+		// side; the page polls task rows for status.
+		imageStudioRoute := apiRouter.Group("/image-studio")
+		imageStudioRoute.Use(middleware.DisableCache(), middleware.UserAuth())
+		{
+			imageStudioRoute.GET("/config", controller.GetImageStudioConfig)
+			imageStudioRoute.GET("/models", controller.ListImageStudioModels)
+			imageStudioRoute.POST("/uploads", middleware.CriticalRateLimit(), controller.UploadImageStudioAsset)
+			imageStudioRoute.GET("/tasks", controller.ListImageStudioTasks)
+			imageStudioRoute.POST("/tasks", middleware.CriticalRateLimit(), controller.CreateImageStudioTask)
+			imageStudioRoute.POST("/tasks/batch", controller.BatchImageStudioTasks)
+			imageStudioRoute.GET("/tasks/:id", controller.GetImageStudioTask)
+			imageStudioRoute.DELETE("/tasks/:id", controller.DeleteImageStudioTask)
+			imageStudioRoute.POST("/tasks/:id/cancel", controller.CancelImageStudioTask)
+		}
+		// Artifacts are served without authentication: <img src> carries no
+		// Authorization header. Keys are 32 random characters and never listed.
+		apiRouter.GET("/image-studio/files/*key", controller.ServeImageStudioFile)
 
 		// Subscription billing (plans, purchase, admin management)
 		subscriptionRoute := apiRouter.Group("/subscription")

@@ -68,11 +68,16 @@ import {
   scrollSelectedOptionIntoView,
 } from './model-group-selector/layout'
 
-interface ModelOption {
+export interface ModelOption {
   label: string
   value: string
   category?: string
   description?: string
+  /**
+   * Right-aligned billing hint (ratio, per-call price). Left undefined by
+   * callers that do not show pricing, which keeps the row single-line.
+   */
+  meta?: string
 }
 
 interface GroupOption {
@@ -766,15 +771,22 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
                 }
                 value={model.value}
               >
-                <span
-                  className={cn(
-                    'min-w-0 truncate',
-                    selectedModel === model.value
-                      ? modelGroupSelectorLayoutClasses.selectedModelText
-                      : modelGroupSelectorLayoutClasses.unselectedModelText
+                <span className='flex min-w-0 flex-col'>
+                  <span
+                    className={cn(
+                      'truncate',
+                      selectedModel === model.value
+                        ? modelGroupSelectorLayoutClasses.selectedModelText
+                        : modelGroupSelectorLayoutClasses.unselectedModelText
+                    )}
+                  >
+                    {model.label}
+                  </span>
+                  {model.meta && (
+                    <span className='text-muted-foreground mt-0.5 truncate text-[10px] leading-3'>
+                      {model.meta}
+                    </span>
                   )}
-                >
-                  {model.label}
                 </span>
                 <Check
                   className={cn(

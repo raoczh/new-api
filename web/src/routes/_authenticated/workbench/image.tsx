@@ -17,11 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { Image as ImageIcon } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 
-import { EmptyState } from '@/components/empty-state'
-import { Main } from '@/components/layout'
+import { ImageStudioPage } from '@/features/image-studio'
 import { isSidebarModuleEnabledForGuard } from '@/lib/nav-modules'
 
 export const Route = createFileRoute('/_authenticated/workbench/image')({
@@ -38,17 +35,3 @@ export const Route = createFileRoute('/_authenticated/workbench/image')({
   },
   component: ImageStudioPage,
 })
-
-function ImageStudioPage() {
-  const { t } = useTranslation()
-  return (
-    <Main>
-      <EmptyState
-        icon={ImageIcon}
-        title={t('Image Studio')}
-        description={t('Image creation placeholder')}
-        bordered
-      />
-    </Main>
-  )
-}

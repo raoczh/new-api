@@ -24,6 +24,7 @@ import { ChatSettingsSection } from './chat-settings-section'
 import { DashboardSection } from './dashboard-section'
 import { DrawingSettingsSection } from './drawing-settings-section'
 import { FAQSection } from './faq-section'
+import { ImageStudioSettingsSection } from './image-studio-settings-section'
 import { UptimeKumaSection } from './uptime-kuma-section'
 
 /**
@@ -112,6 +113,27 @@ const CONTENT_SECTIONS = [
           MjForwardUrlEnabled: settings.MjForwardUrlEnabled,
           MjModeClearEnabled: settings.MjModeClearEnabled,
           MjActionCheckSuccessEnabled: settings.MjActionCheckSuccessEnabled,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'image-studio',
+    titleKey: 'AI Image Workbench',
+    build: (settings: ContentSettings) => (
+      <ImageStudioSettingsSection
+        defaultValues={{
+          Enabled: settings['image_studio.enabled'],
+          ImageConcurrency: settings['image_studio.image_concurrency'],
+          VideoConcurrency: settings['image_studio.video_concurrency'],
+          RetentionDays: settings['image_studio.retention_days'],
+          QueueMaxWaitMinutes: settings['image_studio.queue_max_wait_minutes'],
+          MaxImagesPerRequest: settings['image_studio.max_images_per_request'],
+          MaxReferenceImages: settings['image_studio.max_reference_images'],
+          UploadMaxMB: settings['image_studio.upload_max_mb'],
+          StorageDir: settings['image_studio.storage_dir'],
+          PublicBaseURL: settings['image_studio.public_base_url'],
+          ImageModels: settings['image_studio.image_models'],
         }}
       />
     ),

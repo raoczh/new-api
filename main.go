@@ -132,6 +132,11 @@ func main() {
 	// Codex credential auto-refresh check every 10 minutes, refresh when expires within 1 day
 	service.StartCodexCredentialAutoRefreshTask()
 
+	// Interactive image/video workbench queue. Submission rows live in the
+	// database, so this must start after migrations and before the router begins
+	// accepting traffic.
+	service.StartImageStudioQueue()
+
 	// Subscription quota reset task (daily/weekly/monthly/custom)
 	service.StartSubscriptionQuotaResetTask()
 

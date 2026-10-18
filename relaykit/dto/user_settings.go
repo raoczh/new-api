@@ -16,6 +16,13 @@ type UserSetting struct {
 	SidebarModules                   string  `json:"sidebar_modules,omitempty"`                      // SidebarModules 左侧边栏模块配置
 	BillingPreference                string  `json:"billing_preference,omitempty"`                   // BillingPreference 扣费策略（订阅/钱包）
 	Language                         string  `json:"language,omitempty"`                             // Language 用户语言偏好 (zh, en)
+
+	// ImageTaskEmailNotify opts the account into an email when an interactive
+	// image task finishes. Delivery requires SMTP to be configured server-side.
+	ImageTaskEmailNotify bool `json:"image_task_email_notify,omitempty"`
+	// PromptPolishModel is the model used by the "AI polish" button in the
+	// image workbench. Empty hides the button; calls are billed normally.
+	PromptPolishModel string `json:"prompt_polish_model,omitempty"`
 }
 
 var (

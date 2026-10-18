@@ -225,6 +225,17 @@ export type ContentSettings = {
   MjForwardUrlEnabled: boolean
   MjModeClearEnabled: boolean
   MjActionCheckSuccessEnabled: boolean
+  'image_studio.enabled': boolean
+  'image_studio.image_concurrency': number
+  'image_studio.video_concurrency': number
+  'image_studio.retention_days': number
+  'image_studio.queue_max_wait_minutes': number
+  'image_studio.storage_dir': string
+  'image_studio.public_base_url': string
+  'image_studio.max_images_per_request': number
+  'image_studio.max_reference_images': number
+  'image_studio.upload_max_mb': number
+  'image_studio.image_models': string[]
 }
 
 export type ModelSettings = {

@@ -337,6 +337,55 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
         </div>
       </div>
 
+      {/* Image Workbench Section */}
+      <div className='space-y-3'>
+        <div>
+          <h4 className='text-sm font-medium'>{t('AI Image')}</h4>
+          <p className='text-muted-foreground mt-1 text-xs'>
+            {t('Preferences for the drawing workbench')}
+          </p>
+        </div>
+
+        <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
+          <div className='space-y-0.5'>
+            <Label htmlFor='imageTaskEmailNotify'>
+              {t('Email me when an image is ready')}
+            </Label>
+            <p className='text-muted-foreground text-xs sm:text-sm'>
+              {t(
+                'After a drawing task finishes, send a notification to your bound account email address.'
+              )}
+            </p>
+          </div>
+          <Switch
+            id='imageTaskEmailNotify'
+            className='shrink-0'
+            checked={settings.image_task_email_notify}
+            onCheckedChange={(checked) =>
+              updateField('image_task_email_notify', checked)
+            }
+          />
+        </div>
+
+        <div className='space-y-1.5 rounded-lg border p-3 sm:p-4'>
+          <Label htmlFor='promptPolishModel'>
+            {t('Prompt polish model')}
+          </Label>
+          <Input
+            id='promptPolishModel'
+            className='h-9'
+            value={settings.prompt_polish_model}
+            onChange={(e) => updateField('prompt_polish_model', e.target.value)}
+            placeholder={t('e.g. gpt-4o-mini')}
+          />
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'Used by the “Polish” button in the image workbench. Leave empty to hide the button. Each polish is billed like a normal chat request.'
+            )}
+          </p>
+        </div>
+      </div>
+
       {/* Save Button */}
       <div className='flex justify-end'>
         <Button onClick={handleSave} disabled={loading}>

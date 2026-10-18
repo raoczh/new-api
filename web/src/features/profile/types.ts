@@ -120,6 +120,10 @@ export interface UserSettings {
   record_ip_log?: boolean
   /** Receive upstream model update notifications (admin only) */
   upstream_model_update_notify_enabled?: boolean
+  /** Email me when an interactive image task finishes */
+  image_task_email_notify?: boolean
+  /** Model used by the "Polish" button in AI 绘图 */
+  prompt_polish_model?: string
   /** Preferred interface/API response language */
   language?: string
 }
@@ -162,6 +166,10 @@ export interface UpdateUserSettingsRequest {
   accept_unset_model_ratio_model?: boolean
   record_ip_log?: boolean
   upstream_model_update_notify_enabled?: boolean
+  /** Email me when an interactive image task finishes (needs SMTP). */
+  image_task_email_notify?: boolean
+  /** Model used by the "Polish" button in AI 绘图; empty hides the button. */
+  prompt_polish_model?: string
 }
 
 /**
