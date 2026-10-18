@@ -111,6 +111,17 @@ For commercial licensing, please contact support@quantumnous.com
   html {
     @apply overflow-x-hidden font-sans;
   }
+  /* Authenticated pages own their scroll containers: pin the document to the
+     viewport so the shell's `h-svh` cannot push a second, document-level
+     scrollbar under the layout. Public/auth pages keep document scrolling. */
+  html:has(.tc-workspace-shell),
+  body:has(.tc-workspace-shell) {
+    height: 100%;
+    overflow: hidden;
+  }
+  html:has(.tc-workspace-shell) #root {
+    height: 100%;
+  }
   body {
     @apply bg-background text-foreground has-[div[data-variant='inset']]:bg-sidebar min-h-svh w-full;
     /* Font is driven by the theme's font axis via `--font-body`

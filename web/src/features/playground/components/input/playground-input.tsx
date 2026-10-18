@@ -21,12 +21,13 @@ import { useTranslation } from 'react-i18next'
 
 import {
   PromptInput,
+  PromptInputAttachment,
+  PromptInputAttachments,
   PromptInputFooter,
   PromptInputTextarea,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
 
-import { getSubmittableInputText } from '../../lib'
 import type {
   ModelOption,
   GroupOption,
@@ -38,7 +39,7 @@ import { PlaygroundInputTools } from './playground-input-tools'
 
 interface PlaygroundInputProps {
   config: PlaygroundConfig
-  onSubmit: (text: string) => void
+  onSubmit: (text: string, attachments?: string[]) => void
   onStop?: () => void
   disabled?: boolean
   isGenerating?: boolean
@@ -49,12 +50,10 @@ interface PlaygroundInputProps {
   groups: GroupOption[]
   groupValue: string
   onGroupChange: (value: string) => void
-  hasMessages?: boolean
   onConfigChange: <K extends keyof PlaygroundConfig>(
     key: K,
     value: PlaygroundConfig[K]
   ) => void
-  onClearMessages?: () => void
   onParameterEnabledChange: (
     key: keyof ParameterEnabled,
     value: boolean
@@ -75,9 +74,7 @@ export function PlaygroundInput({
   groups,
   groupValue,
   onGroupChange,
-  hasMessages = false,
   onConfigChange,
-  onClearMessages,
   onParameterEnabledChange,
   parameterEnabled,
 }: PlaygroundInputProps) {
@@ -85,20 +82,37 @@ export function PlaygroundInput({
   const [text, setText] = useState('')
 
   const handleSubmit = (message: PromptInputMessage) => {
-    const submittableText = getSubmittableInputText(message, disabled)
+    if (disabled) return
 
-    if (!submittableText) return
-    onSubmit(submittableText)
+    const submittedText = message.text ?? ''
+    const attachments = (message.files ?? [])
+      .map((file) => file.url)
+      .filter((url) => url.trim() !== '')
+
+    if (!submittedText.trim() && attachments.length === 0) return
+
+    onSubmit(submittedText, attachments)
     setText('')
   }
 
   return (
-    <div className='grid shrink-0 gap-4 px-1 md:pb-4'>
+    <div className='grid shrink-0 gap-3'>
       <PromptInput
+        accept='image/*'
         className='relative'
         groupClassName='bg-card has-disabled:bg-card has-disabled:opacity-100 border-input rounded-xl overflow-hidden shadow-sm transition-colors duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 dark:bg-card dark:has-disabled:bg-card'
+        multiple
         onSubmit={handleSubmit}
       >
+        <PromptInputAttachments>
+          {(attachment) => (
+            <PromptInputAttachment
+              className='mx-4 mt-3 w-fit max-w-[calc(100%-2rem)]'
+              data={attachment}
+            />
+          )}
+        </PromptInputAttachments>
+
         <PromptInputTextarea
           autoComplete='off'
           autoCorrect='off'
@@ -113,6 +127,7 @@ export function PlaygroundInput({
 
         <PromptInputFooter className='border-border/60 bg-muted/20 dark:bg-muted/10 border-t px-3 py-2.5 backdrop-blur'>
           <PlaygroundInputControls
+            config={config}
             disabled={disabled}
             groups={groups}
             groupValue={groupValue}
@@ -120,21 +135,14 @@ export function PlaygroundInput({
             isModelLoading={isModelLoading}
             models={models}
             modelValue={modelValue}
+            onConfigChange={onConfigChange}
             onGroupChange={onGroupChange}
             onModelChange={onModelChange}
+            onParameterEnabledChange={onParameterEnabledChange}
             onStop={onStop}
+            parameterEnabled={parameterEnabled}
             text={text}
-            tools={
-              <PlaygroundInputTools
-                config={config}
-                disabled={disabled}
-                hasMessages={hasMessages}
-                onConfigChange={onConfigChange}
-                onClearMessages={onClearMessages}
-                onParameterEnabledChange={onParameterEnabledChange}
-                parameterEnabled={parameterEnabled}
-              />
-            }
+            tools={<PlaygroundInputTools disabled={disabled} />}
           />
         </PromptInputFooter>
       </PromptInput>

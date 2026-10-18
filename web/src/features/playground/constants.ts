@@ -70,7 +70,14 @@ export const STORAGE_KEYS = {
   CONFIG: 'playground_config',
   MESSAGES: 'playground_messages',
   PARAMETER_ENABLED: 'playground_parameter_enabled',
+  CONVERSATIONS: 'playground_conversations',
 } as const
+
+/**
+ * Per-conversation messages live under `${prefix}:${conversationId}` so the
+ * user suffix added by the storage layer keeps accounts isolated.
+ */
+export const CONVERSATION_MESSAGES_PREFIX = `${STORAGE_KEYS.MESSAGES}:`
 
 // Error messages
 export const ERROR_MESSAGES = {

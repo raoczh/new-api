@@ -26,6 +26,8 @@ export type PlaygroundMessageLayoutMode = 'alternating' | 'left'
 export interface MessageVersion {
   id: string
   content: string
+  /* Data URLs attached by the user. Session-only: never persisted. */
+  attachments?: string[]
 }
 
 export interface Message {
@@ -135,6 +137,30 @@ export interface ParameterEnabled {
   frequency_penalty: boolean
   presence_penalty: boolean
   seed: boolean
+}
+
+// Conversation history
+export interface PlaygroundConversation {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface PlaygroundConversationIndex {
+  activeId: string
+  items: PlaygroundConversation[]
+}
+
+export type ConversationGroupKey =
+  | 'today'
+  | 'yesterday'
+  | 'previous7Days'
+  | 'older'
+
+export interface ConversationGroup {
+  key: ConversationGroupKey
+  items: PlaygroundConversation[]
 }
 
 // Model and group options

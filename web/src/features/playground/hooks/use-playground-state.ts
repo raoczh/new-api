@@ -20,18 +20,27 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { DEFAULT_CONFIG, DEFAULT_PARAMETER_ENABLED } from '../constants'
 import {
-  saveConfig,
-  saveParameterEnabled,
-  saveMessages,
   applyMessageStateUpdate,
+  clearLegacyMessages,
+  createConversation,
+  deleteConversationMessages,
+  deriveConversationTitle,
   getInitialParameterEnabled,
   getInitialPlaygroundConfig,
+  loadConversationIndex,
+  loadLegacyMessages,
   loadMessages,
+  saveConfig,
+  saveConversationIndex,
+  saveMessages,
+  saveParameterEnabled,
   type MessageStateUpdater,
 } from '../lib'
 import type {
   Message,
   PlaygroundConfig,
+  PlaygroundConversation,
+  PlaygroundConversationIndex,
   ParameterEnabled,
   ModelOption,
   GroupOption,
@@ -39,8 +48,24 @@ import type {
 
 const MESSAGE_SAVE_DEBOUNCE_MS = 500
 
+function upsertConversationSummary(
+  conversations: PlaygroundConversation[],
+  conversationId: string,
+  messages: Message[]
+): PlaygroundConversation[] {
+  const title = deriveConversationTitle(messages)
+  if (!title) return conversations
+
+  return conversations.map((conversation) =>
+    conversation.id === conversationId
+      ? { ...conversation, title, updatedAt: Date.now() }
+      : conversation
+  )
+}
+
 /**
- * Main state management hook for playground
+ * Main state management hook for playground.
+ * Owns the conversation index and the messages of the active conversation.
  */
 export function usePlaygroundState() {
   // Load initial state from localStorage
@@ -52,61 +77,139 @@ export function usePlaygroundState() {
     getInitialParameterEnabled
   )
 
+  const [conversations, setConversations] = useState<PlaygroundConversation[]>(
+    []
+  )
+  const [activeConversationId, setActiveConversationId] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoadingMessages, setIsLoadingMessages] = useState(true)
   const messagesSaveTimerRef = useRef<number | null>(null)
   const latestMessagesRef = useRef<Message[]>(messages)
+  const conversationsRef = useRef<PlaygroundConversation[]>([])
+  const activeConversationIdRef = useRef('')
   const hasLoadedMessagesRef = useRef(false)
 
   const [models, setModels] = useState<ModelOption[]>([])
   const [groups, setGroups] = useState<GroupOption[]>([])
 
-  const persistMessages = useCallback((messagesToSave: Message[]) => {
-    latestMessagesRef.current = messagesToSave
+  const flushPendingSave = useCallback(() => {
+    if (messagesSaveTimerRef.current !== null) {
+      window.clearTimeout(messagesSaveTimerRef.current)
+      messagesSaveTimerRef.current = null
+    }
 
-    if (!hasLoadedMessagesRef.current) {
+    if (!hasLoadedMessagesRef.current || !activeConversationIdRef.current) {
       return
     }
 
-    if (messagesSaveTimerRef.current !== null) {
-      window.clearTimeout(messagesSaveTimerRef.current)
-    }
+    saveMessages(activeConversationIdRef.current, latestMessagesRef.current)
+    saveConversationIndex({
+      activeId: activeConversationIdRef.current,
+      items: conversationsRef.current,
+    })
+  }, [])
 
-    messagesSaveTimerRef.current = window.setTimeout(() => {
-      messagesSaveTimerRef.current = null
-      saveMessages(latestMessagesRef.current)
-    }, MESSAGE_SAVE_DEBOUNCE_MS)
+  const persistMessages = useCallback(
+    (messagesToSave: Message[]) => {
+      latestMessagesRef.current = messagesToSave
+
+      if (!hasLoadedMessagesRef.current) {
+        return
+      }
+
+      if (messagesSaveTimerRef.current !== null) {
+        window.clearTimeout(messagesSaveTimerRef.current)
+      }
+
+      messagesSaveTimerRef.current = window.setTimeout(() => {
+        messagesSaveTimerRef.current = null
+        flushPendingSave()
+      }, MESSAGE_SAVE_DEBOUNCE_MS)
+
+      const conversationId = activeConversationIdRef.current
+      if (!conversationId) return
+
+      const nextConversations = upsertConversationSummary(
+        conversationsRef.current,
+        conversationId,
+        messagesToSave
+      )
+      if (nextConversations !== conversationsRef.current) {
+        conversationsRef.current = nextConversations
+        setConversations(nextConversations)
+      }
+    },
+    [flushPendingSave]
+  )
+
+  const applyIndex = useCallback((index: PlaygroundConversationIndex) => {
+    activeConversationIdRef.current = index.activeId
+    conversationsRef.current = index.items
+    setActiveConversationId(index.activeId)
+    setConversations(index.items)
+    saveConversationIndex(index)
   }, [])
 
   useEffect(() => {
     let cancelled = false
 
     window.setTimeout(() => {
-      const loadedMessages = loadMessages() ?? []
-      if (cancelled) {
+      const storedIndex = loadConversationIndex()
+
+      if (storedIndex) {
+        const hasActive = storedIndex.items.some(
+          (conversation) => conversation.id === storedIndex.activeId
+        )
+        const items =
+          hasActive || storedIndex.items.length > 0
+            ? storedIndex.items
+            : [createConversation()]
+        const index = {
+          activeId: hasActive ? storedIndex.activeId : items[0].id,
+          items,
+        }
+
+        if (cancelled) return
+        applyIndex(index)
+
+        const loadedMessages = loadMessages(index.activeId) ?? []
+        latestMessagesRef.current = loadedMessages
+        hasLoadedMessagesRef.current = true
+        setMessages(loadedMessages)
+        setIsLoadingMessages(false)
         return
       }
 
-      latestMessagesRef.current = loadedMessages
-      hasLoadedMessagesRef.current = true
-      setMessages(loadedMessages)
+      // Migrate the single-conversation layout into the first conversation.
+      const legacyMessages = loadLegacyMessages()
+      const conversation = createConversation(
+        legacyMessages ? deriveConversationTitle(legacyMessages) : ''
+      )
+
+      if (cancelled) return
+      applyIndex({ activeId: conversation.id, items: [conversation] })
+
+      if (legacyMessages && legacyMessages.length > 0) {
+        saveMessages(conversation.id, legacyMessages)
+        latestMessagesRef.current = legacyMessages
+        hasLoadedMessagesRef.current = true
+        setMessages(legacyMessages)
+        clearLegacyMessages()
+      } else {
+        latestMessagesRef.current = []
+        hasLoadedMessagesRef.current = true
+        setMessages([])
+      }
+
       setIsLoadingMessages(false)
     }, 0)
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [applyIndex])
 
-  useEffect(
-    () => () => {
-      if (messagesSaveTimerRef.current !== null) {
-        window.clearTimeout(messagesSaveTimerRef.current)
-        saveMessages(latestMessagesRef.current)
-      }
-    },
-    []
-  )
+  useEffect(() => () => flushPendingSave(), [flushPendingSave])
 
   // Update config with automatic save
   const updateConfig = useCallback(
@@ -144,8 +247,99 @@ export function usePlaygroundState() {
     [persistMessages]
   )
 
-  // Clear all messages
+  const loadConversationMessages = useCallback((conversationId: string) => {
+    const loadedMessages = loadMessages(conversationId) ?? []
+    latestMessagesRef.current = loadedMessages
+    setMessages(loadedMessages)
+  }, [])
+
+  // Switch the active conversation, flushing the current one first.
+  const selectConversation = useCallback(
+    (conversationId: string) => {
+      if (conversationId === activeConversationIdRef.current) return
+
+      flushPendingSave()
+      applyIndex({
+        activeId: conversationId,
+        items: conversationsRef.current,
+      })
+      loadConversationMessages(conversationId)
+    },
+    [applyIndex, flushPendingSave, loadConversationMessages]
+  )
+
+  // Start a new conversation. Reuses the active one when it is still empty so
+  // the history list does not collect blank entries.
+  const createNewConversation = useCallback(() => {
+    flushPendingSave()
+
+    const activeConversation = conversationsRef.current.find(
+      (conversation) => conversation.id === activeConversationIdRef.current
+    )
+
+    if (activeConversation && latestMessagesRef.current.length === 0) {
+      return activeConversation.id
+    }
+
+    const conversation = createConversation()
+    const items = [conversation, ...conversationsRef.current]
+
+    applyIndex({ activeId: conversation.id, items })
+    latestMessagesRef.current = []
+    setMessages([])
+    return conversation.id
+  }, [applyIndex, flushPendingSave])
+
+  const deleteConversation = useCallback(
+    (conversationId: string) => {
+      if (messagesSaveTimerRef.current !== null) {
+        window.clearTimeout(messagesSaveTimerRef.current)
+        messagesSaveTimerRef.current = null
+      }
+
+      deleteConversationMessages(conversationId)
+      const remaining = conversationsRef.current.filter(
+        (conversation) => conversation.id !== conversationId
+      )
+
+      if (remaining.length === 0) {
+        const conversation = createConversation()
+        applyIndex({ activeId: conversation.id, items: [conversation] })
+        latestMessagesRef.current = []
+        setMessages([])
+        return conversation.id
+      }
+
+      const wasActive = activeConversationIdRef.current === conversationId
+      const nextActiveId = wasActive
+        ? remaining[0].id
+        : activeConversationIdRef.current
+
+      applyIndex({ activeId: nextActiveId, items: remaining })
+
+      if (wasActive) {
+        loadConversationMessages(nextActiveId)
+      }
+
+      return nextActiveId
+    },
+    [applyIndex, loadConversationMessages]
+  )
+
+  // Clear all messages of the active conversation
   const clearMessages = useCallback(() => {
+    const conversationId = activeConversationIdRef.current
+    if (!conversationId) return
+
+    const items = conversationsRef.current.map((conversation) =>
+      conversation.id === conversationId
+        ? { ...conversation, title: '', updatedAt: Date.now() }
+        : conversation
+    )
+    conversationsRef.current = items
+    setConversations(items)
+    saveConversationIndex({ activeId: conversationId, items })
+
     updateMessages([])
   }, [updateMessages])
 
@@ -163,6 +357,8 @@ export function usePlaygroundState() {
     parameterEnabled,
     messages,
     isLoadingMessages,
+    conversations,
+    activeConversationId,
     models,
     groups,
 
@@ -175,6 +371,9 @@ export function usePlaygroundState() {
     updateParameterEnabled,
     updateMessages,
     clearMessages,
+    createNewConversation,
+    selectConversation,
+    deleteConversation,
     resetConfig,
   }
 }

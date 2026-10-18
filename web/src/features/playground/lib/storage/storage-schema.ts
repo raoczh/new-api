@@ -56,6 +56,7 @@ const messageStatusSchema = z.enum([
 const messageVersionSchema = z.object({
   id: z.string(),
   content: z.string(),
+  attachments: z.array(z.string()).max(8).optional(),
 })
 
 const sourceSchema = z.object({
@@ -89,3 +90,17 @@ const messageSchema = z.object({
 })
 
 export const messagesSchema = z.array(messageSchema)
+
+export const MAX_STORED_CONVERSATIONS = 50
+
+export const conversationSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+})
+
+export const conversationIndexSchema = z.object({
+  activeId: z.string(),
+  items: z.array(conversationSchema).max(MAX_STORED_CONVERSATIONS),
+})

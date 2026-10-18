@@ -83,6 +83,7 @@ export function PlaygroundMessageContent({
   const isMessageFinal =
     message.status !== MESSAGE_STATUS.LOADING &&
     message.status !== MESSAGE_STATUS.STREAMING
+  const attachments = message.versions[0]?.attachments ?? []
 
   return (
     <div
@@ -134,8 +135,24 @@ export function PlaygroundMessageContent({
         </>
       )}
 
-      {!isError && showMessageContent && (
+      {!isError && (showMessageContent || attachments.length > 0) && (
         <>
+          {attachments.length > 0 && (
+            <div className='mb-2 flex flex-wrap gap-2'>
+              {attachments.map((url, attachmentIndex) => (
+                <img
+                  alt={t('Attachment {{index}}', {
+                    index: attachmentIndex + 1,
+                  })}
+                  className='border-border bg-muted size-24 rounded-lg border object-cover'
+                  height={96}
+                  key={`${message.key}-attachment-${attachmentIndex}`}
+                  src={url}
+                  width={96}
+                />
+              ))}
+            </div>
+          )}
           {isSourceVisible ? (
             <CodeBlock
               code={versionContent}

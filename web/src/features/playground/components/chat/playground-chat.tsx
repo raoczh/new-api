@@ -52,7 +52,6 @@ interface PlaygroundChatProps {
   onRegenerateMessage?: (message: MessageType) => void
   onEditMessage?: (message: MessageType) => void
   onDeleteMessage?: (message: MessageType) => void
-  onSelectPrompt?: (prompt: string) => void
   isGenerating?: boolean
   isLoadingMessages?: boolean
   editingKey?: string | null
@@ -68,7 +67,6 @@ export function PlaygroundChat({
   onRegenerateMessage,
   onEditMessage,
   onDeleteMessage,
-  onSelectPrompt,
   isGenerating = false,
   isLoadingMessages = false,
   editingKey,
@@ -193,10 +191,8 @@ export function PlaygroundChat({
     )
   })
 
-  if (visibleMessages.length === 0 && onSelectPrompt) {
-    chatContent = [
-      <PlaygroundEmptyState key='empty' onSelectPrompt={onSelectPrompt} />,
-    ]
+  if (visibleMessages.length === 0) {
+    chatContent = [<PlaygroundEmptyState key='empty' />]
   }
 
   if (isLoadingMessages) {

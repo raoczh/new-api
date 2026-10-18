@@ -29,11 +29,15 @@ import type {
 /**
  * Create a new message version
  */
-export function createMessageVersion(content: string): MessageVersion {
-  return {
-    id: nanoid(),
-    content,
+export function createMessageVersion(
+  content: string,
+  attachments: string[] = []
+): MessageVersion {
+  if (attachments.length === 0) {
+    return { id: nanoid(), content }
   }
+
+  return { id: nanoid(), content, attachments }
 }
 
 /**
@@ -54,7 +58,11 @@ export function getMessageContent(message: Message): string {
  * Check whether a message has non-empty content in its current version.
  */
 export function hasMessageContent(message: Message): boolean {
-  return getMessageContent(message).trim() !== ''
+  const currentVersion = getCurrentVersion(message)
+  return (
+    currentVersion.content.trim() !== '' ||
+    (currentVersion.attachments?.length ?? 0) > 0
+  )
 }
 
 /**
@@ -76,12 +84,13 @@ export function updateCurrentVersionContent(
  */
 export function createUserMessage(
   content: string,
-  createdAt: number = Date.now()
+  createdAt: number = Date.now(),
+  attachments: string[] = []
 ): Message {
   return {
     key: nanoid(),
     from: MESSAGE_ROLES.USER,
-    versions: [createMessageVersion(content)],
+    versions: [createMessageVersion(content, attachments)],
     createdAt,
   }
 }
@@ -156,7 +165,10 @@ export function formatMessageForAPI(message: Message): ChatCompletionMessage {
   const currentVersion = getCurrentVersion(message)
   return {
     role: message.from,
-    content: currentVersion.content,
+    content: buildMessageContent(
+      currentVersion.content,
+      currentVersion.attachments ?? []
+    ),
   }
 }
 

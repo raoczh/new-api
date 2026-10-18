@@ -20,13 +20,23 @@ import { SendIcon, SquareIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { PromptInputButton } from '@/components/ai-elements/prompt-input'
+import {
+  PromptInputButton,
+  usePromptInputAttachments,
+} from '@/components/ai-elements/prompt-input'
 import { ModelGroupSelector } from '@/components/model-group-selector'
 
 import { getInputControlState } from '../../lib'
-import type { GroupOption, ModelOption } from '../../types'
+import type {
+  GroupOption,
+  ModelOption,
+  ParameterEnabled,
+  PlaygroundConfig,
+} from '../../types'
+import { PlaygroundParameterPanel } from './playground-parameter-panel'
 
 type PlaygroundInputControlsProps = {
+  config: PlaygroundConfig
   disabled?: boolean
   groups: GroupOption[]
   groupValue: string
@@ -34,14 +44,24 @@ type PlaygroundInputControlsProps = {
   isModelLoading?: boolean
   models: ModelOption[]
   modelValue: string
+  onConfigChange: <K extends keyof PlaygroundConfig>(
+    key: K,
+    value: PlaygroundConfig[K]
+  ) => void
   onGroupChange: (value: string) => void
   onModelChange: (value: string) => void
+  onParameterEnabledChange: (
+    key: keyof ParameterEnabled,
+    value: boolean
+  ) => void
   onStop?: () => void
+  parameterEnabled: ParameterEnabled
   text: string
   tools: ReactNode
 }
 
 export function PlaygroundInputControls({
+  config,
   disabled,
   groups,
   groupValue,
@@ -49,23 +69,38 @@ export function PlaygroundInputControls({
   isModelLoading = false,
   models,
   modelValue,
+  onConfigChange,
   onGroupChange,
   onModelChange,
+  onParameterEnabledChange,
   onStop,
+  parameterEnabled,
   text,
   tools,
 }: PlaygroundInputControlsProps) {
   const { t } = useTranslation()
+  const attachments = usePromptInputAttachments()
   const { canSubmit, isSelectorDisabled, shouldShowStop } =
     getInputControlState({
       disabled,
       groups,
+      hasAttachments: attachments.files.length > 0,
       hasStopHandler: Boolean(onStop),
       isGenerating,
       isModelLoading,
       models,
       text,
     })
+
+  const renderParameterPanel = () => (
+    <PlaygroundParameterPanel
+      config={config}
+      disabled={disabled}
+      onConfigChange={onConfigChange}
+      onParameterEnabledChange={onParameterEnabledChange}
+      parameterEnabled={parameterEnabled}
+    />
+  )
 
   const renderSelector = () => (
     <ModelGroupSelector
@@ -105,7 +140,8 @@ export function PlaygroundInputControls({
 
   return (
     <div className='flex w-full flex-col gap-2.5 md:flex-row md:items-center md:justify-between'>
-      <div className='flex min-w-0 items-center justify-end md:hidden'>
+      <div className='flex min-w-0 items-center justify-end gap-1 md:hidden'>
+        {renderParameterPanel()}
         {renderSelector()}
       </div>
 
@@ -116,7 +152,8 @@ export function PlaygroundInputControls({
         </div>
       </div>
 
-      <div className='hidden min-w-0 items-center gap-2 md:flex'>
+      <div className='hidden min-w-0 items-center gap-1.5 md:flex'>
+        {renderParameterPanel()}
         {renderSelector()}
         {renderSubmitButton()}
       </div>

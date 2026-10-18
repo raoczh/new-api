@@ -18,8 +18,17 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useAuthStore } from '@/stores/auth-store'
 
-import { MESSAGE_STATUS, STORAGE_KEYS } from '../../constants'
-import type { PlaygroundConfig, ParameterEnabled, Message } from '../../types'
+import {
+  MESSAGE_STATUS,
+  CONVERSATION_MESSAGES_PREFIX,
+  STORAGE_KEYS,
+} from '../../constants'
+import type {
+  PlaygroundConfig,
+  ParameterEnabled,
+  Message,
+  PlaygroundConversationIndex,
+} from '../../types'
 import {
   finalizeMessage,
   isAssistantMessagePending,
@@ -30,9 +39,11 @@ import { hasMessageContent } from '../message/message-utils'
 import {
   MAX_LOADED_MESSAGE_CHARS,
   MAX_LOADED_MESSAGES_CHARS,
+  MAX_STORED_CONVERSATIONS,
   MAX_STORED_MESSAGES,
   MAX_STORED_MESSAGES_BYTES,
   STORAGE_VERSION,
+  conversationIndexSchema,
   messagesSchema,
   parameterEnabledSchema,
   playgroundConfigSchema,
@@ -66,8 +77,10 @@ function readStoredValue(baseKey: string): unknown | null {
   return JSON.parse(saved) as unknown
 }
 
-function readStoredMessagesValue(): unknown | null {
-  const key = getUserStorageKey(STORAGE_KEYS.MESSAGES)
+function readStoredMessagesValue(conversationId: string): unknown | null {
+  const key = getUserStorageKey(
+    `${CONVERSATION_MESSAGES_PREFIX}${conversationId}`
+  )
   if (!key) return null
   const saved = localStorage.getItem(key)
   if (!saved) return null
@@ -353,11 +366,11 @@ export function saveParameterEnabled(
 }
 
 /**
- * Load messages from localStorage
+ * Load messages for a conversation from localStorage
  */
-export function loadMessages(): Message[] | null {
+export function loadMessages(conversationId: string): Message[] | null {
   try {
-    const saved = readStoredMessagesValue()
+    const saved = readStoredMessagesValue(conversationId)
     if (!saved) return null
 
     const parsed = messagesSchema.parse(unwrapStoredValue(saved)) as Message[]
@@ -375,7 +388,7 @@ export function loadMessages(): Message[] | null {
       sizeTrimmed !== trimmed ||
       sanitized !== sizeTrimmed
     ) {
-      saveMessages(sanitized)
+      saveMessages(conversationId, sanitized)
     }
 
     return sanitized
@@ -387,13 +400,30 @@ export function loadMessages(): Message[] | null {
 }
 
 /**
- * Save messages to localStorage
+ * Save messages for a conversation to localStorage.
+ * Attachments are data URLs that would blow past the storage budget, so only
+ * the text survives a reload.
  */
-export function saveMessages(messages: Message[]): void {
+export function saveMessages(
+  conversationId: string,
+  messages: Message[]
+): void {
   try {
     const trimmed = trimMessages(messages)
-    const parsed = messagesSchema.parse(trimmed) as Message[]
-    writeStoredValue(STORAGE_KEYS.MESSAGES, parsed)
+    const parsed = messagesSchema.parse(
+      trimmed.map((message) => ({
+        ...message,
+        versions: message.versions.map((version) => {
+          const { attachments: _attachments, ...versionWithoutAttachments } =
+            version
+          return versionWithoutAttachments
+        }),
+      }))
+    ) as Message[]
+    writeStoredValue(
+      `${CONVERSATION_MESSAGES_PREFIX}${conversationId}`,
+      parsed
+    )
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to save messages:', error)
@@ -401,13 +431,106 @@ export function saveMessages(messages: Message[]): void {
 }
 
 /**
+ * Delete the stored messages of a single conversation
+ */
+export function deleteConversationMessages(conversationId: string): void {
+  const key = getUserStorageKey(
+    `${CONVERSATION_MESSAGES_PREFIX}${conversationId}`
+  )
+  if (key) localStorage.removeItem(key)
+}
+
+/**
+ * Load the conversation index (active id + summaries)
+ */
+export function loadConversationIndex(): PlaygroundConversationIndex | null {
+  try {
+    const saved = readStoredValue(STORAGE_KEYS.CONVERSATIONS)
+    if (!saved) return null
+
+    return conversationIndexSchema.parse(
+      unwrapStoredValue(saved)
+    ) as PlaygroundConversationIndex
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to load conversation index:', error)
+  }
+  return null
+}
+
+/**
+ * Save the conversation index (active id + summaries)
+ */
+export function saveConversationIndex(
+  index: PlaygroundConversationIndex
+): void {
+  try {
+    const items = [...index.items]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_STORED_CONVERSATIONS)
+    writeStoredValue(STORAGE_KEYS.CONVERSATIONS, {
+      activeId: index.activeId,
+      items,
+    })
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to save conversation index:', error)
+  }
+}
+
+/**
+ * Load messages written by the single-conversation version of the playground.
+ * Returns null when there is nothing to migrate.
+ */
+export function loadLegacyMessages(): Message[] | null {
+  try {
+    const saved = readStoredValue(STORAGE_KEYS.MESSAGES)
+    if (!saved) return null
+
+    return messagesSchema.parse(unwrapStoredValue(saved)) as Message[]
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to load legacy messages:', error)
+  }
+  return null
+}
+
+/**
+ * Remove the pre-conversation messages key once migrated
+ */
+export function clearLegacyMessages(): void {
+  const key = getUserStorageKey(STORAGE_KEYS.MESSAGES)
+  if (key) localStorage.removeItem(key)
+}
+
+/**
  * Clear the signed-in user's playground data
  */
 export function clearPlaygroundData(): void {
   try {
+    const userId = useAuthStore.getState().auth.user?.id
+    const userSuffix = userId == null ? null : `:${userId}`
+    const keysToRemove: string[] = []
+
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index)
+      if (!key) continue
+      if (
+        key.startsWith(CONVERSATION_MESSAGES_PREFIX) &&
+        userSuffix &&
+        key.endsWith(userSuffix)
+      ) {
+        keysToRemove.push(key)
+      }
+    }
+
     for (const baseKey of Object.values(STORAGE_KEYS)) {
       const key = getUserStorageKey(baseKey)
-      if (key) localStorage.removeItem(key)
+      if (key) keysToRemove.push(key)
+    }
+
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key)
     }
   } catch (error) {
     // eslint-disable-next-line no-console
