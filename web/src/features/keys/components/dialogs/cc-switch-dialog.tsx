@@ -29,6 +29,7 @@ import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { useStatus } from '@/hooks/use-status'
 import { getUserModels } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
@@ -119,13 +120,118 @@ function getDefaultName(app: AppType): string {
   return `My ${APP_CONFIGS[app].label}`
 }
 
+// CC Switch sends the one declared request itself and runs the extractor on
+// the JSON body; the script has no network access of its own. A limited key
+// reports its own balance, while an unlimited key reports the account balance.
+// Both arrive as raw quota units, so the site's display conversion travels
+// with the script.
+const USAGE_SCRIPT = `({
+  request: {
+    url: "{{baseUrl}}/api/usage/token/",
+    method: "GET",
+    headers: { "Authorization": "Bearer {{apiKey}}" }
+  },
+  extractor: (response) => {
+    const usage = response && response.data;
+    if (!response || response.code !== true || !usage) {
+      return { isValid: false, invalidMessage: String((response && response.message) || "Failed") };
+    }
+    const account = usage.unlimited_quota ? usage.user_quota : null;
+    const source = account || usage;
+    const perUnit = {{perUnit}};
+    const rate = {{rate}};
+    const tokens = {{tokens}};
+    const toDisplay = (units) => {
+      const value = Number(units);
+      if (!Number.isFinite(value)) return null;
+      if (tokens || !(perUnit > 0)) return value;
+      return (value / perUnit) * rate;
+    };
+    const remaining = toDisplay(source.total_available);
+    const used = toDisplay(source.total_used);
+    if (remaining === null) return { isValid: false };
+    const expiresAt = Number(usage.expires_at);
+    return {
+      isValid: true,
+      remaining,
+      used: used === null ? undefined : used,
+      total: used === null ? remaining : remaining + used,
+      unit: {{unit}},
+      extra: expiresAt > 0 ? new Date(expiresAt * 1000).toISOString().slice(0, 10) : ""
+    };
+  }
+})`
+
+interface UsageDisplay {
+  unit: string
+  perUnit: number
+  rate: number
+  tokens: boolean
+}
+
+function buildUsageScript(display: UsageDisplay): string {
+  const source = USAGE_SCRIPT.replace('{{perUnit}}', String(display.perUnit))
+    .replace('{{rate}}', String(display.rate))
+    .replace('{{tokens}}', display.tokens ? 'true' : 'false')
+    .replace('{{unit}}', JSON.stringify(display.unit))
+  const bytes = new TextEncoder().encode(source)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replace(/=+$/, '')
+}
+
+function usageDisplay(status: {
+  quota_display_type?: string
+  quota_per_unit?: number
+  usd_exchange_rate?: number
+  custom_currency_symbol?: string
+  custom_currency_exchange_rate?: number
+} | null): UsageDisplay {
+  const perUnit =
+    typeof status?.quota_per_unit === 'number' && status.quota_per_unit > 0
+      ? status.quota_per_unit
+      : 500000
+  switch (status?.quota_display_type) {
+    case 'CNY':
+      return {
+        unit: 'CNY',
+        perUnit,
+        rate:
+          typeof status.usd_exchange_rate === 'number' &&
+          status.usd_exchange_rate > 0
+            ? status.usd_exchange_rate
+            : 1,
+        tokens: false,
+      }
+    case 'TOKENS':
+      return { unit: 'tokens', perUnit, rate: 1, tokens: true }
+    case 'CUSTOM':
+      return {
+        unit: status.custom_currency_symbol?.trim() || 'USD',
+        perUnit,
+        rate:
+          typeof status.custom_currency_exchange_rate === 'number' &&
+          status.custom_currency_exchange_rate > 0
+            ? status.custom_currency_exchange_rate
+            : 1,
+        tokens: false,
+      }
+    default:
+      return { unit: 'USD', perUnit, rate: 1, tokens: false }
+  }
+}
+
 function buildCCSwitchURL(
   deeplinkApp: string,
   endpoint: string,
   name: string,
   serverAddress: string,
   models: Record<string, string>,
-  apiKey: string
+  apiKey: string,
+  display: UsageDisplay | null
 ): string {
   const params = new URLSearchParams()
   params.set('resource', 'provider')
@@ -138,6 +244,15 @@ function buildCCSwitchURL(
   }
   params.set('homepage', serverAddress)
   params.set('enabled', 'true')
+  // The usage route lives at the site root, while an OpenAI-compatible
+  // endpoint keeps a /v1 suffix that the script would otherwise inherit.
+  // A key that disallows user quota queries gets no script at all.
+  if (display) {
+    params.set('usageBaseUrl', serverAddress.replace(/\/+$/, ''))
+    params.set('usageScript', buildUsageScript(display))
+    params.set('usageEnabled', 'true')
+    params.set('usageAutoInterval', '30')
+  }
   return `ccswitch://v1/import?${params.toString()}`
 }
 
@@ -145,6 +260,9 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   tokenKey: string
+  // Only a key that allows user quota queries gets a balance script. A limited
+  // key still reports its own balance through that script.
+  allowUserQuotaQuery: boolean
 }
 
 export function CCSwitchDialog(props: Props) {
@@ -155,6 +273,7 @@ export function CCSwitchDialog(props: Props) {
   // Same resolution the API address list uses, so the imported endpoint is
   // never a different address than the one shown next to the key.
   const { address: serverAddress } = usePrimaryApiAddress()
+  const { status } = useStatus()
 
   const { data: modelsData } = useQuery({
     queryKey: ['user-models-ccswitch'],
@@ -214,7 +333,8 @@ export function CCSwitchDialog(props: Props) {
       name,
       serverAddress,
       appModels,
-      key
+      key,
+      props.allowUserQuotaQuery ? usageDisplay(status) : null
     )
     window.open(url, '_blank')
     props.onOpenChange(false)

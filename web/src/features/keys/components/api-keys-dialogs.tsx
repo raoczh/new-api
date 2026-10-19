@@ -36,6 +36,7 @@ export function ApiKeysDialogs() {
         open={open === 'cc-switch'}
         onOpenChange={(isOpen) => !isOpen && setOpen(null)}
         tokenKey={resolvedKey}
+        allowUserQuotaQuery={currentRow?.allow_user_quota_query === true}
       />
     </>
   )

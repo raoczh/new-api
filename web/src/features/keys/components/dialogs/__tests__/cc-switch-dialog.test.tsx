@@ -35,16 +35,31 @@ afterEach(() => {
   queryClient.clear()
 })
 
-function renderDialog(models = ['gpt-5.4', 'claude-sonnet-4-6']) {
+function renderDialog(
+  models = ['gpt-5.4', 'claude-sonnet-4-6'],
+  allowUserQuotaQuery = true
+) {
   queryClient.setQueryData(['user-models-ccswitch'], {
     success: true,
     data: models,
   })
   render(
     <QueryClientProvider client={queryClient}>
-      <CCSwitchDialog open onOpenChange={vi.fn()} tokenKey='test-only' />
+      <CCSwitchDialog
+        open
+        onOpenChange={vi.fn()}
+        tokenKey='test-only'
+        allowUserQuotaQuery={allowUserQuotaQuery}
+      />
     </QueryClientProvider>
   )
+}
+
+function decodeUsageScript(encoded: string | null): string {
+  const padded = (encoded ?? '').replaceAll('-', '+').replaceAll('_', '/')
+  const binary = atob(padded.padEnd(Math.ceil(padded.length / 4) * 4, '='))
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  return new TextDecoder().decode(bytes)
 }
 
 describe('CC Switch model selection', () => {
@@ -143,6 +158,59 @@ describe('CC Switch app import', () => {
     expect(url.searchParams.get('name')).toBe('My OpenCode')
     expect(url.searchParams.get('endpoint')).toMatch(/\/v1$/)
     expect(url.searchParams.get('model')).toBe('gpt-5.4')
+    expect(url.searchParams.get('usageEnabled')).toBe('true')
+    expect(url.searchParams.get('usageAutoInterval')).toBe('30')
+    const script = decodeUsageScript(url.searchParams.get('usageScript'))
+    expect(script).toContain('/api/usage/token/')
+    expect(script).toContain('Bearer {{apiKey}}')
+    expect(script).toContain('usage.unlimited_quota ? usage.user_quota : null')
+    expect(script).toContain('unit: "USD"')
+    expect(script).not.toContain('{{unit}}')
+    open.mockRestore()
+  })
+
+  it('omits the balance script when the key disallows user quota queries', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    renderDialog(['gpt-5.4'], false)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('radio', { name: 'OpenCode' }))
+    await user.click(screen.getByRole('combobox', { name: 'Primary Model' }))
+    await user.click(await screen.findByRole('option', { name: 'gpt-5.4' }))
+
+    await user.click(screen.getByRole('button', { name: 'Open CC Switch' }))
+
+    const url = new URL(String(open.mock.calls[0][0]))
+    expect(url.searchParams.get('model')).toBe('gpt-5.4')
+    expect(url.searchParams.get('usageScript')).toBeNull()
+    expect(url.searchParams.get('usageEnabled')).toBeNull()
+    expect(url.searchParams.get('usageBaseUrl')).toBeNull()
+    open.mockRestore()
+  })
+
+  it('imports the quota unit configured for the site', async () => {
+    queryClient.setQueryData(['status'], {
+      quota_display_type: 'CNY',
+      quota_per_unit: 500000,
+      usd_exchange_rate: 7,
+    })
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    renderDialog()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('radio', { name: 'Claude Code' }))
+    await user.click(screen.getByRole('combobox', { name: 'Primary Model' }))
+    await user.click(await screen.findByRole('option', { name: 'gpt-5.4' }))
+
+    await user.click(screen.getByRole('button', { name: 'Open CC Switch' }))
+
+    const url = new URL(String(open.mock.calls[0][0]))
+    expect(url.searchParams.get('endpoint')).not.toMatch(/\/v1$/)
+    expect(url.searchParams.get('usageBaseUrl')).toBe(
+      url.searchParams.get('endpoint')?.replace(/\/+$/, '')
+    )
+    const script = decodeUsageScript(url.searchParams.get('usageScript'))
+    expect(script).toContain('unit: "CNY"')
+    expect(script).toContain('const perUnit = 500000;')
+    expect(script).toContain('const rate = 7;')
     open.mockRestore()
   })
 

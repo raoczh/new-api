@@ -124,6 +124,42 @@ async function renderNavigation(path = '/keys', role = 1) {
   return router
 }
 
+it('shows contact methods from system settings and confirms before signing out', async () => {
+  client.setQueryData(['status'], {
+    contact_email: 'help@example.com',
+    contact_wechat_qrcode: 'https://example.com/qr.png',
+    contact_qq_group: '123456789',
+  })
+  const user = userEvent.setup()
+  await renderNavigation()
+
+  expect(
+    screen.queryByRole('link', { name: /QuantumNous/ })
+  ).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Contact support' }))
+  expect(screen.getByRole('link', { name: 'help@example.com' })).toHaveAttribute(
+    'href',
+    'mailto:help@example.com'
+  )
+  expect(
+    screen.getByRole('img', { name: 'WeChat Group QR Code' })
+  ).toHaveAttribute('src', 'https://example.com/qr.png')
+  expect(screen.getByText('123456789')).toBeVisible()
+
+  await user.click(screen.getByRole('button', { name: 'Log out' }))
+  expect(
+    screen.getByRole('alertdialog', { name: 'Sign out' })
+  ).toBeVisible()
+})
+
+it('hides contact support when no contact method is configured', async () => {
+  await renderNavigation()
+  expect(
+    screen.queryByRole('button', { name: 'Contact support' })
+  ).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Log out' })).toBeVisible()
+})
+
 it('shows all permitted page links immediately and supports direct keyboard navigation', async () => {
   const user = userEvent.setup()
   await renderNavigation()

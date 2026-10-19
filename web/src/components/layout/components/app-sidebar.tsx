@@ -17,11 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link, useLocation } from '@tanstack/react-router'
-import { ArrowUpLeft } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { ArrowUpLeft, Headset, LogOut } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { SignOutDialog } from '@/components/sign-out-dialog'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Sheet,
   SheetContent,
@@ -31,6 +33,7 @@ import {
 } from '@/components/ui/sheet'
 import { useSidebar } from '@/components/ui/sidebar'
 import { useSidebarView } from '@/hooks/use-sidebar-view'
+import { useStatus } from '@/hooks/use-status'
 
 import { NavGroup } from './nav-group'
 
@@ -76,7 +79,7 @@ export function AppSidebar() {
           <NavGroup key={group.id || group.title} {...group} />
         ))}
       </nav>
-      <WorkspaceAttribution />
+      <SidebarAccountActions />
     </>
   )
 
@@ -116,15 +119,81 @@ function scrollToCurrentPage(navigation: HTMLElement | null) {
     ?.scrollIntoView({ block: 'nearest' })
 }
 
-function WorkspaceAttribution() {
+/** Bottom of the sidebar: contact methods from system settings, and sign-out. */
+function SidebarAccountActions() {
+  const { t } = useTranslation()
+  const { status } = useStatus()
+  const [signingOut, setSigningOut] = useState(false)
+  const email = status?.contact_email?.trim()
+  const wechatQR = status?.contact_wechat_qrcode?.trim()
+  const qqGroup = status?.contact_qq_group?.trim()
+  const hasContact = Boolean(email || wechatQR || qqGroup)
+
   return (
-    <a
-      href='https://github.com/QuantumNous/new-api'
-      target='_blank'
-      rel='noopener noreferrer'
-      className='tc-workspace-attribution'
-    >
-      <span>New API</span> <span>QuantumNous</span>
-    </a>
+    <div className='tc-workspace-attribution'>
+      {hasContact && (
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button
+                variant='ghost'
+                className='tc-sidebar-action'
+                aria-label={t('Contact support')}
+              />
+            }
+          >
+            <Headset aria-hidden='true' />
+            <span>{t('Contact support')}</span>
+          </PopoverTrigger>
+          <PopoverContent
+            side='top'
+            align='start'
+            className='w-64 space-y-3'
+            aria-label={t('Contact support')}
+          >
+            {email && (
+              <div className='min-w-0 space-y-1'>
+                <p className='text-muted-foreground text-xs'>
+                  {t('Contact Email')}
+                </p>
+                <a
+                  className='text-sm font-medium break-all hover:underline'
+                  href={`mailto:${email}`}
+                >
+                  {email}
+                </a>
+              </div>
+            )}
+            {wechatQR && (
+              <div className='space-y-1'>
+                <p className='text-muted-foreground text-xs'>
+                  {t('WeChat Group QR Code')}
+                </p>
+                <img
+                  src={wechatQR}
+                  alt={t('WeChat Group QR Code')}
+                  className='size-32 rounded-sm border bg-white object-contain p-1'
+                />
+              </div>
+            )}
+            {qqGroup && (
+              <div className='min-w-0 space-y-1'>
+                <p className='text-muted-foreground text-xs'>{t('QQ Group')}</p>
+                <p className='text-sm font-medium break-all'>{qqGroup}</p>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+      )}
+      <Button
+        variant='ghost'
+        className='tc-sidebar-action'
+        onClick={() => setSigningOut(true)}
+      >
+        <LogOut aria-hidden='true' />
+        <span>{t('Log out')}</span>
+      </Button>
+      <SignOutDialog open={signingOut} onOpenChange={setSigningOut} />
+    </div>
   )
 }
