@@ -23,7 +23,11 @@ import { useTranslation } from 'react-i18next'
 
 import { SignOutDialog } from '@/components/sign-out-dialog'
 import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import {
   Sheet,
   SheetContent,
@@ -56,13 +60,8 @@ export function AppSidebar() {
 
   const navigation = (
     <>
-      <nav
-        key={key}
-        ref={navigationRef}
-        className='tc-navigation-panel tc-sidebar-menu'
-        aria-label={t('Navigation')}
-      >
-        {view && (
+      {view && (
+        <div className='tc-sidebar-view-header'>
           <Button
             role='link'
             variant='ghost'
@@ -74,7 +73,14 @@ export function AppSidebar() {
             <ArrowUpLeft aria-hidden='true' />
             {t(view.parent.label)}
           </Button>
-        )}
+        </div>
+      )}
+      <nav
+        key={key}
+        ref={navigationRef}
+        className='tc-navigation-panel tc-sidebar-menu'
+        aria-label={t('Navigation')}
+      >
         {groups.map((group) => (
           <NavGroup key={group.id || group.title} {...group} />
         ))}

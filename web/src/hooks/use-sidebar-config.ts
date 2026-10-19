@@ -60,11 +60,8 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
   admin: {
     enabled: true,
     channel: true,
-    models: true,
-    redemption: true,
     user: true,
     setting: true,
-    subscription: true,
   },
 }
 
@@ -115,12 +112,15 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/profile': { section: 'personal', module: 'personal' },
   '/security': { section: 'personal', module: 'personal' },
   '/channels': { section: 'admin', module: 'channel' },
-  '/models': { section: 'admin', module: 'models' },
-  '/models/metadata': { section: 'admin', module: 'models' },
-  '/models/deployments': { section: 'admin', module: 'models' },
   '/users': { section: 'admin', module: 'user' },
-  '/redemption-codes': { section: 'admin', module: 'redemption' },
-  '/subscriptions': { section: 'admin', module: 'subscription' },
+  '/ticket-management': { section: 'admin', module: 'setting' },
+  '/models': { section: 'admin', module: 'setting' },
+  '/models/metadata': { section: 'admin', module: 'setting' },
+  '/models/deployments': { section: 'admin', module: 'setting' },
+  '/redemption-codes': { section: 'admin', module: 'setting' },
+  '/subscriptions': { section: 'admin', module: 'setting' },
+  '/system-info': { section: 'admin', module: 'setting' },
+  '/task-plugins': { section: 'admin', module: 'setting' },
   '/system-settings': { section: 'admin', module: 'setting' },
   '/system-settings/site': { section: 'admin', module: 'setting' },
 }

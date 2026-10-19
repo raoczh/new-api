@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type TFunction } from 'i18next'
+import type { TFunction } from 'i18next'
 
 import { SYSTEM_SETTINGS_VIEW } from '../config/system-settings.config'
 import type { NavGroup, SidebarView } from '../types'
@@ -43,6 +43,27 @@ export function resolveSidebarView(pathname: string): SidebarView | null {
 }
 
 /**
+ * Hide navigation items whose `requiredRole` exceeds the given role.
+ *
+ * Nested views are not passed through `useSidebarConfig`, but they can still
+ * contain role-gated entries (e.g. super-admin-only pages), so the same
+ * role check used for the root navigation must be applied here.
+ */
+export function filterNavGroupsByRole(
+  navGroups: NavGroup[],
+  role: number
+): NavGroup[] {
+  return navGroups
+    .map((group) => {
+      const items = group.items.filter(
+        (item) => item.requiredRole === undefined || role >= item.requiredRole
+      )
+      return items.length === group.items.length ? group : { ...group, items }
+    })
+    .filter((group) => group.items.length > 0)
+}
+
+/**
  * Backwards-compatible helper for consumers (e.g. command palette) that
  * just need the navigation groups for the current path, without caring
  * about the view metadata.
@@ -52,8 +73,11 @@ export function resolveSidebarView(pathname: string): SidebarView | null {
  */
 export function getNavGroupsForPath(
   pathname: string,
-  t: TFunction
+  t: TFunction,
+  role?: number
 ): NavGroup[] | null {
   const view = resolveSidebarView(pathname)
-  return view ? view.getNavGroups(t) : null
+  if (!view) return null
+  const navGroups = view.getNavGroups(t)
+  return role === undefined ? navGroups : filterNavGroupsByRole(navGroups, role)
 }

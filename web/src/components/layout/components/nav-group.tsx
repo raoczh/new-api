@@ -127,15 +127,17 @@ function SidebarMenuLink({
   onNavigate?: () => void
 }) {
   const { isMobile, setOpenMobile } = useSidebar()
+  const isActive = checkIsActive(href, item)
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
-        isActive={checkIsActive(href, item)}
+        isActive={isActive}
         tooltip={item.title}
         render={
           <Link
             to={item.url}
             preload={isMobile ? false : undefined}
+            aria-current={isActive ? 'page' : undefined}
             onClick={() => {
               setOpenMobile(false)
               onNavigate?.()

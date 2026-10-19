@@ -103,6 +103,11 @@ For commercial licensing, please contact support@quantumnous.com
   scroll-padding-block: 1rem;
   padding: 1rem 0.875rem 1.5rem;
 }
+.tc-sidebar-view-header {
+  flex: none;
+  padding: 0.75rem 0.875rem 0;
+  background: var(--card);
+}
 .tc-sidebar-back {
   flex: none;
   justify-content: flex-start;

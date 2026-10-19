@@ -26,6 +26,9 @@ import {
   Shield,
   ShieldAlert,
   Wrench,
+  Ticket,
+  ServerCog,
+  PlugZap,
 } from 'lucide-react'
 
 import { getAuthSectionNavItems } from '@/features/system-settings/auth/section-registry.tsx'
@@ -36,6 +39,7 @@ import { getOperationsSectionNavItems } from '@/features/system-settings/operati
 import { getPolicySectionNavItems } from '@/features/system-settings/request-policies/section-registry'
 import { getSecuritySectionNavItems } from '@/features/system-settings/security/section-registry.tsx'
 import { getSiteSectionNavItems } from '@/features/system-settings/site/section-registry.tsx'
+import { ROLE } from '@/lib/roles'
 
 import type { NavGroup, SidebarView } from '../types'
 
@@ -92,21 +96,56 @@ function getSystemSettingsNavGroups(t: TFunction): NavGroup[] {
           icon: Wrench,
           items: getOperationsSectionNavItems(t),
         },
+        {
+          title: t('Model management'),
+          icon: Box,
+          url: '/models/metadata',
+          activeUrls: [
+            '/models/metadata',
+            '/models/vendors',
+            '/models/deployments',
+          ],
+        },
+        {
+          title: t('Redemption Codes'),
+          icon: Ticket,
+          url: '/redemption-codes',
+        },
+        {
+          title: t('Subscriptions'),
+          icon: CreditCard,
+          url: '/subscriptions',
+        },
+        {
+          title: t('System Info'),
+          icon: ServerCog,
+          url: '/system-info',
+          requiredRole: ROLE.SUPER_ADMIN,
+        },
+        {
+          title: t('Task Plugins'),
+          icon: PlugZap,
+          url: '/task-plugins',
+          requiredRole: ROLE.SUPER_ADMIN,
+        },
       ],
     },
   ]
 }
 
 /**
- * Nested sidebar view for `/system-settings/*`.
+ * Nested sidebar view for the administration workspace.
  *
- * Activates the Vercel / Cloudflare-style drill-in sidebar:
- * the root navigation is replaced by the system administration
+ * Besides `/system-settings/*`, the administrator pages that were folded into
+ * System Settings keep using this contextual sidebar instead of falling back
+ * to the root navigation. Activates the Vercel / Cloudflare-style drill-in
+ * sidebar: the root navigation is replaced by the system administration
  * groups, with a "Back to Dashboard" affordance in the header.
  */
 export const SYSTEM_SETTINGS_VIEW: SidebarView = {
   id: 'system-settings',
-  pathPattern: /^\/system-settings(\/|$)/,
+  pathPattern:
+    /^\/(?:system-settings|models|redemption-codes|subscriptions|system-info|task-plugins)(?:\/|$)/,
   parent: {
     to: '/dashboard/overview',
     label: 'Back to Dashboard',

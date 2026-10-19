@@ -251,7 +251,7 @@ function ChineseContent({
       </p>
 
       <h2>18. 联系</h2>
-      <p>服务由 Token Come（渡康）提供。问题请通过站内客服提交。</p>
+      <p>服务由 Token Come（杜康）提供。问题请通过站内客服提交。</p>
       {(contactEmail || contactWeChatQR || contactQQ) && (
         <div className='border-border mt-6 rounded-lg border p-4'>
           <h3 className='mb-3 text-base font-semibold'>联系方式</h3>

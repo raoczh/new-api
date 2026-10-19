@@ -317,6 +317,7 @@ export function ChannelsTable() {
   const columns = useChannelsColumns({
     enableSelection: batchMode,
     groupRatios: groupsData?.group_ratio,
+    groupOptions,
   })
 
   // React Table instance
@@ -436,6 +437,7 @@ export function ChannelsTable() {
           row={row}
           isSelected={isSelected}
           groupRatios={groupsData?.group_ratio}
+          groupOptions={groupOptions}
         />
       )}
       cardGridClassName='grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3'

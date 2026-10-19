@@ -20,7 +20,10 @@ import { useLocation } from '@tanstack/react-router'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { resolveSidebarView } from '@/components/layout/lib/sidebar-view-registry'
+import {
+  filterNavGroupsByRole,
+  resolveSidebarView,
+} from '@/components/layout/lib/sidebar-view-registry'
 import type { NavGroup, ResolvedSidebarView } from '@/components/layout/types'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
@@ -70,7 +73,10 @@ export function useSidebarView(): ResolvedSidebarView {
     return {
       key: view.id,
       view,
-      navGroups: view.getNavGroups(t),
+      navGroups: filterNavGroupsByRole(
+        view.getNavGroups(t),
+        userRole ?? ROLE.GUEST
+      ),
     }
   }
 

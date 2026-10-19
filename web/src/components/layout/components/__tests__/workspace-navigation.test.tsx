@@ -106,6 +106,11 @@ async function renderNavigation(path = '/keys', role = 1) {
     '/channels',
     '/system-settings/site',
     '/system-settings/site/system-info',
+    '/models/$section',
+    '/redemption-codes',
+    '/subscriptions',
+    '/system-info',
+    '/task-plugins',
     '/dashboard/overview',
     '/chat/$chatId',
   ].map((path) => createRoute({ getParentRoute: () => root, path }))
@@ -137,19 +142,16 @@ it('shows contact methods from system settings and confirms before signing out',
     screen.queryByRole('link', { name: /QuantumNous/ })
   ).not.toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Contact support' }))
-  expect(screen.getByRole('link', { name: 'help@example.com' })).toHaveAttribute(
-    'href',
-    'mailto:help@example.com'
-  )
+  expect(
+    screen.getByRole('link', { name: 'help@example.com' })
+  ).toHaveAttribute('href', 'mailto:help@example.com')
   expect(
     screen.getByRole('img', { name: 'WeChat Group QR Code' })
   ).toHaveAttribute('src', 'https://example.com/qr.png')
   expect(screen.getByText('123456789')).toBeVisible()
 
   await user.click(screen.getByRole('button', { name: 'Log out' }))
-  expect(
-    screen.getByRole('alertdialog', { name: 'Sign out' })
-  ).toBeVisible()
+  expect(screen.getByRole('alertdialog', { name: 'Sign out' })).toBeVisible()
 })
 
 it('hides contact support when no contact method is configured', async () => {
@@ -258,6 +260,67 @@ it('expands settings categories so their pages can be opened directly', async ()
   await waitFor(() =>
     expect(screen.getByRole('link', { name: 'API Keys' })).toBeVisible()
   )
+})
+
+it('keeps the settings sidebar active on pages migrated into system settings', async () => {
+  await renderNavigation('/models/vendors', 100)
+  const navigation = within(
+    screen.getByRole('navigation', { name: 'Navigation' })
+  )
+  expect(
+    navigation.getByRole('link', { name: 'Model management' })
+  ).toHaveAttribute('aria-current', 'page')
+  expect(
+    navigation.queryByRole('link', { name: 'Channels' })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.getByRole('link', { name: /Back to Dashboard/ })
+  ).toHaveAttribute('href', '/dashboard/overview')
+})
+
+it.each([
+  ['/redemption-codes', 'Redemption Codes'],
+  ['/subscriptions', 'Subscriptions'],
+  ['/system-info', 'System Info'],
+  ['/task-plugins', 'Task Plugins'],
+])(
+  'highlights the migrated entry for %s inside the settings sidebar',
+  async (path, label) => {
+    await renderNavigation(path, 100)
+    const navigation = within(
+      screen.getByRole('navigation', { name: 'Navigation' })
+    )
+    expect(navigation.getByRole('link', { name: label })).toHaveAttribute(
+      'aria-current',
+      'page'
+    )
+    expect(
+      navigation.queryByRole('link', { name: 'Channels' })
+    ).not.toBeInTheDocument()
+  }
+)
+
+it('hides super-admin-only settings entries from regular admins', async () => {
+  await renderNavigation('/models/metadata', 10)
+  const navigation = within(
+    screen.getByRole('navigation', { name: 'Navigation' })
+  )
+  expect(
+    navigation.getByRole('link', { name: 'Model management' })
+  ).toBeVisible()
+  expect(
+    navigation.queryByRole('link', { name: 'System Info' })
+  ).not.toBeInTheDocument()
+  expect(
+    navigation.queryByRole('link', { name: 'Task Plugins' })
+  ).not.toBeInTheDocument()
+})
+
+it('keeps the back control outside the scrolling menu', async () => {
+  await renderNavigation('/models/metadata', 100)
+  const back = screen.getByRole('link', { name: /Back to Dashboard/ })
+  const navigation = screen.getByRole('navigation', { name: 'Navigation' })
+  expect(navigation.contains(back)).toBe(false)
 })
 
 it('opens mobile navigation as a drawer and closes it after selecting a page', async () => {

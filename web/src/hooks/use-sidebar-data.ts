@@ -18,9 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   Activity,
-  Box,
   ClipboardList,
-  CreditCard,
   FileText,
   Image,
   Key,
@@ -29,12 +27,9 @@ import {
   LifeBuoy,
   MessageCircle,
   MessagesSquare,
-  PlugZap,
   Radio,
-  ServerCog,
   Settings,
   ShoppingBag,
-  Ticket,
   User,
   Users,
   Video,
@@ -152,41 +147,14 @@ export function useSidebarData(): SidebarData {
             icon: Radio,
           },
           {
-            title: t('Models'),
-            url: '/models/metadata',
-            icon: Box,
-          },
-          {
             title: t('Users'),
             url: '/users',
             icon: Users,
           },
           {
-            title: t('Redemption Codes'),
-            url: '/redemption-codes',
-            icon: Ticket,
-          },
-          {
-            title: t('Subscriptions'),
-            url: '/subscriptions',
-            icon: CreditCard,
-          },
-          {
             title: t('Ticket Management'),
             url: '/ticket-management',
             icon: MessagesSquare,
-          },
-          {
-            title: t('System Info'),
-            url: '/system-info',
-            icon: ServerCog,
-            requiredRole: ROLE.SUPER_ADMIN,
-          },
-          {
-            title: t('Task Plugins'),
-            url: '/task-plugins',
-            icon: PlugZap,
-            requiredRole: ROLE.SUPER_ADMIN,
           },
           {
             title: t('System Settings'),

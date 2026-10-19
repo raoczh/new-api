@@ -88,6 +88,10 @@ import {
 } from '../lib'
 import { parseUpstreamUpdateMeta } from '../lib/upstream-update-utils'
 import type { Channel } from '../types'
+import {
+  ChannelGroupEditableCell,
+  type ChannelGroupOption,
+} from './channel-group-editable-cell'
 import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
 import { TaskPluginChannelBadge } from './channel-type-badge'
 import { useChannels } from './channels-provider'
@@ -622,12 +626,14 @@ export function useChannelsColumns(
   options: {
     enableSelection?: boolean
     groupRatios?: Record<string, number>
+    groupOptions?: ChannelGroupOption[]
   } = {}
 ): ColumnDef<Channel>[] {
   const { t, i18n } = useTranslation()
   const { sensitiveVisible } = useChannels()
   const enableSelection = options.enableSelection ?? true
   const groupRatios = options.groupRatios
+  const groupOptions = options.groupOptions
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   // The column definitions only depend on the translation function, the active
   // locale, and sensitive-data visibility. Memoizing keeps the array (and every
@@ -1104,8 +1110,26 @@ export function useChannelsColumns(
         header: t('Groups'),
         meta: { mobileHidden: true },
         cell: ({ row }) => {
+          const channel = row.original
           const group = row.getValue('group') as string
           const groupArray = parseGroupsList(group)
+
+          // Tag aggregate rows do not map to a single channel, so they keep
+          // the read-only badge list.
+          if (
+            !isTagAggregateRow(channel) &&
+            groupOptions &&
+            groupOptions.length > 0
+          ) {
+            return (
+              <ChannelGroupEditableCell
+                channel={channel}
+                groupOptions={groupOptions}
+                groupRatios={groupRatios}
+              />
+            )
+          }
+
           return (
             <BadgeListCell
               items={groupArray.map((g) => (
@@ -1271,6 +1295,6 @@ export function useChannelsColumns(
         meta: { pinned: 'right' as const },
       },
     ],
-    [enableSelection, t, locale, sensitiveVisible, groupRatios]
+    [enableSelection, t, locale, sensitiveVisible, groupRatios, groupOptions]
   )
 }

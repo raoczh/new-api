@@ -26,6 +26,10 @@ import { StatusBadgeTypeContext } from '@/components/status-badge'
 import { CHANNEL_STATUS } from '../constants'
 import { isTagAggregateRow, parseGroupsList } from '../lib'
 import type { Channel } from '../types'
+import {
+  ChannelGroupEditableCell,
+  type ChannelGroupOption,
+} from './channel-group-editable-cell'
 import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
 import { useChannels } from './channels-provider'
 
@@ -43,10 +47,12 @@ function ChannelCardComponent({
   row,
   isSelected,
   groupRatios,
+  groupOptions,
 }: {
   row: Row<Channel>
   isSelected: boolean
   groupRatios?: Record<string, number>
+  groupOptions?: ChannelGroupOption[]
 }) {
   const { t } = useTranslation()
   const { sensitiveVisible } = useChannels()
@@ -83,6 +89,35 @@ function ChannelCardComponent({
     isTagRow ||
     (row.original.status !== CHANNEL_STATUS.ENABLED &&
       row.original.status !== CHANNEL_STATUS.MANUAL_DISABLED)
+
+  const renderGroupFooter = () => {
+    if (!isTagRow && groupOptions && groupOptions.length > 0) {
+      return (
+        <ChannelGroupEditableCell
+          channel={row.original}
+          groupOptions={groupOptions}
+          groupRatios={groupRatios}
+          layout='card'
+        />
+      )
+    }
+    if (groups.length === 0) {
+      return <span className='text-muted-foreground text-sm'>-</span>
+    }
+    return (
+      <div className='-ml-1.5 flex min-w-0 flex-wrap gap-1'>
+        {groups.map((g) => (
+          <GroupBadge
+            key={g}
+            group={g}
+            label={sensitiveVisible ? undefined : SENSITIVE_MASK}
+            ratio={sensitiveVisible ? groupRatios?.[g] : undefined}
+            size='sm'
+          />
+        ))}
+      </div>
+    )
+  }
 
   return (
     <ChannelRowActionsLayoutContext.Provider value='card'>
@@ -152,23 +187,7 @@ function ChannelCardComponent({
         </StatusBadgeTypeContext.Provider>
 
         {/* Groups retain their compact, full-width footer. */}
-        <div className='min-w-0'>
-          {groups.length > 0 ? (
-            <div className='-ml-1.5 flex min-w-0 flex-wrap gap-1'>
-              {groups.map((g) => (
-                <GroupBadge
-                  key={g}
-                  group={g}
-                  label={sensitiveVisible ? undefined : SENSITIVE_MASK}
-                  ratio={sensitiveVisible ? groupRatios?.[g] : undefined}
-                  size='sm'
-                />
-              ))}
-            </div>
-          ) : (
-            <span className='text-muted-foreground text-sm'>-</span>
-          )}
-        </div>
+        <div className='min-w-0'>{renderGroupFooter()}</div>
       </div>
     </ChannelRowActionsLayoutContext.Provider>
   )
