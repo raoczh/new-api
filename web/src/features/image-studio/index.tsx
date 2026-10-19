@@ -24,6 +24,7 @@ import { toast } from 'sonner'
 import { EmptyState } from '@/components/empty-state'
 import { Main } from '@/components/layout'
 import { Skeleton } from '@/components/ui/skeleton'
+import { toIntlLocale } from '@/i18n/languages'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { ImageStudioComposer } from './components/studio-composer'
@@ -178,7 +179,7 @@ export function ImageStudioPage() {
         />
 
         <ImageStudioHistory
-          locale={i18n.language}
+          locale={toIntlLocale(i18n.resolvedLanguage || i18n.language)}
           retentionDays={config.retention_days}
           onReuse={handleReuse}
         />

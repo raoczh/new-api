@@ -48,10 +48,15 @@ function unwrap<T>(response: ServerEnvelope<T>, fallback: string): T {
 
 export async function getImageStudioConfig(): Promise<ImageStudioConfig> {
   const res = await api.get(IMAGE_STUDIO_ENDPOINTS.CONFIG)
-  return unwrap<ImageStudioConfig>(res.data, 'Unable to load the drawing settings')
+  return unwrap<ImageStudioConfig>(
+    res.data,
+    'Unable to load the drawing settings'
+  )
 }
 
-export async function getImageStudioModels(): Promise<ImageStudioGroupOption[]> {
+export async function getImageStudioModels(): Promise<
+  ImageStudioGroupOption[]
+> {
   const res = await api.get(IMAGE_STUDIO_ENDPOINTS.MODELS)
   const data = unwrap<{ groups: ImageStudioGroupOption[] }>(
     res.data,
@@ -115,9 +120,13 @@ export async function getImageStudioTask(
   id: string,
   signal?: AbortSignal
 ): Promise<ImageStudioTask> {
-  const res = await api.get(taskEndpoint(id), { signal, disableDuplicate: true })
-  const data = unwrap<{ task: ImageStudioTask }>(res.data, 'Unable to load this record')
-  return data.task
+  const res = await api.get(taskEndpoint(id), {
+    signal,
+    disableDuplicate: true,
+  })
+  // The single-task endpoint returns the task view itself in `data`; only the
+  // submit endpoint wraps it in `{ task }`.
+  return unwrap<ImageStudioTask>(res.data, 'Unable to load this record')
 }
 
 export async function deleteImageStudioTask(id: string): Promise<void> {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -22,10 +23,12 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 
 	"github.com/gin-gonic/gin"
@@ -502,8 +505,13 @@ func GetImageStudioConfig(c *gin.Context) {
 //
 // Ratio and Price are resolved for the calling account so the selector can show
 // the same numbers the billing path will use: Ratio is the group multiplier,
-// Price is the per-call charge already multiplied by it (only meaningful when
-// QuotaType is 1, i.e. per-call billing).
+// Price is the fixed charge already multiplied by it.
+//
+// PriceUnit says how to label Price: "image" for a per-image charge and
+// "request" for a per-request one. It is empty for token-priced models, which
+// have no fixed amount to show. Tiered expressions are the source of truth
+// whenever BillingMode is tiered_expr; their legacy QuotaType/ModelPrice values
+// may still be configured but are no longer used for billing.
 type imageStudioModelOption struct {
 	Model       string  `json:"model"`
 	Description string  `json:"description,omitempty"`
@@ -511,12 +519,13 @@ type imageStudioModelOption struct {
 	GroupRatio  float64 `json:"group_ratio"`
 	ModelRatio  float64 `json:"model_ratio"`
 	Price       float64 `json:"price"`
+	PriceUnit   string  `json:"price_unit,omitempty"`
 }
 
 type imageStudioGroupOption struct {
-	Group  string                  `json:"group"`
-	Desc   string                  `json:"desc"`
-	Ratio  float64                 `json:"ratio"`
+	Group  string                   `json:"group"`
+	Desc   string                   `json:"desc"`
+	Ratio  float64                  `json:"ratio"`
 	Models []imageStudioModelOption `json:"models"`
 }
 
@@ -559,8 +568,14 @@ func ListImageStudioModels(c *gin.Context) {
 				GroupRatio:  groupRatio,
 				ModelRatio:  item.ModelRatio,
 			}
-			if item.QuotaType == 1 {
+			if item.BillingMode == billing_setting.BillingModeTieredExpr && strings.TrimSpace(item.BillingExpr) != "" {
+				// A tiered model may still carry a legacy per-call price; the
+				// expression decides what is actually charged, so only a fixed
+				// leaf can produce a number the selector may display.
+				option.Price, option.PriceUnit = imageStudioFixedPrice(item.BillingExpr, groupRatio)
+			} else if item.QuotaType == 1 {
 				option.Price = item.ModelPrice * groupRatio
+				option.PriceUnit = "image"
 			}
 			models = append(models, option)
 		}
@@ -589,6 +604,46 @@ func ListImageStudioModels(c *gin.Context) {
 	})
 
 	common.ApiSuccess(c, gin.H{"groups": groups})
+}
+
+// imageStudioFixedPrice evaluates a tiered expression far enough to recover the
+// fixed USD price the selector should show, already multiplied by the group
+// ratio. The second return value is "image" when the executed leaf bills per
+// image and "request" when it bills per request; both are empty for token-priced
+// expressions or when the expression cannot be evaluated.
+//
+// No request body or headers are supplied, so conditional prices resolve to
+// their default branch. That matches the pre-consume estimate for a request
+// that carries no extra parameters.
+func imageStudioFixedPrice(expression string, groupRatio float64) (float64, string) {
+	if !billingexpr.UsesFixedPricing(expression) {
+		return 0, ""
+	}
+	one := 1
+	oneCost, trace, err := billingexpr.RunExprWithRequest(
+		expression,
+		billingexpr.TokenParams{},
+		billingexpr.RequestInput{ImageCount: &one},
+	)
+	if err != nil || trace.FixedPrice == nil {
+		return 0, ""
+	}
+	unit := "request"
+	if trace.ImageCount != nil {
+		// image_count is referenced somewhere in the expression, but the leaf
+		// that ran may not be the one multiplied by it. Doubling the quantity
+		// doubles the charge only when the executed leaf bills per image.
+		two := 2
+		twoCost, _, err := billingexpr.RunExprWithRequest(
+			expression,
+			billingexpr.TokenParams{},
+			billingexpr.RequestInput{ImageCount: &two},
+		)
+		if err == nil && oneCost > 0 && math.Abs(twoCost-2*oneCost) <= 1e-9*oneCost {
+			unit = "image"
+		}
+	}
+	return *trace.FixedPrice * groupRatio, unit
 }
 
 // imageStudioIsImageModel decides whether a priced model belongs on this page.

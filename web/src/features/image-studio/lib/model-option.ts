@@ -19,10 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import type { ModelOption } from '@/components/model-group-selector'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 
-import type {
-  ImageStudioModelOption,
-  ImageStudioOptionGroup,
-} from '../hooks/use-image-studio-options'
+import type { ImageStudioOptionGroup } from '../hooks/use-image-studio-options'
+import type { ImageStudioModelOption } from '../types'
 
 /** `value` embeds the group because one model can exist in several groups. */
 function optionValue(group: string, model: string): string {
@@ -38,8 +36,13 @@ export function parseModelOptionValue(
 }
 
 /**
- * The ratio line under a model name: group multiplier plus, for per-call
- * models, the exact amount one image will cost in the current group.
+ * The ratio line under a model name: group multiplier plus, for fixed-price
+ * models, the exact amount one image or one request will cost in the current
+ * group.
+ *
+ * `price_unit` comes from the billing expression and is authoritative. Older
+ * servers only send `quota_type`, so a per-call model without a unit keeps the
+ * historical per-image label.
  *
  * Token-billed models intentionally show no amount: the charge depends on the
  * number of output tokens, and inventing a fixed estimate would be misleading.
@@ -51,12 +54,17 @@ export function summarizeModelMeta(
   const ratioText = t('Ratio: {{value}}', {
     value: formatRatio(model.group_ratio),
   })
-  if (model.quota_type === 1 && model.price > 0) {
+  if (model.price > 0) {
     const price = formatBillingCurrencyFromUSD(model.price, {
       digitsLarge: 4,
       digitsSmall: 6,
     })
-    return `${ratioText} · ${t('{{price}} / image', { price })}`
+    if (model.price_unit === 'request') {
+      return `${ratioText} · ${price} / ${t('request')}`
+    }
+    if (model.price_unit === 'image' || model.quota_type === 1) {
+      return `${ratioText} · ${t('{{price}} / image', { price })}`
+    }
   }
   return ratioText
 }

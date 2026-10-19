@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { toIntlLocale } from '@/i18n/languages'
 import { formatTimestampRelative } from '@/lib/format'
 
 import { IMAGE_STUDIO_STATUS } from '../constants'
@@ -56,7 +57,9 @@ export function hasVisibleImages(task: ImageStudioTask): boolean {
 }
 
 export function describeTaskTime(timestamp: number, locale?: string): string {
-  return formatTimestampRelative(timestamp, 'seconds', locale)
+  // Callers may pass the interface language code (`zhCN`), which is not a
+  // valid BCP-47 tag and makes Intl.RelativeTimeFormat throw.
+  return formatTimestampRelative(timestamp, 'seconds', toIntlLocale(locale))
 }
 
 export function describeElapsed(milliseconds: number): string {
