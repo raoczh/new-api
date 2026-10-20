@@ -200,6 +200,23 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 			require.NoError(t, db.Migrator().DropTable(&model.StatusProbe{}))
 			require.NoError(t, db.AutoMigrate(&model.PerfMetric{}, &model.StatusProbe{}, &model.Ability{}, &model.Channel{}, &model.Model{}, &model.Vendor{}))
 			require.NoError(t, db.AutoMigrate(&model.StatusProbe{}))
+			// Group status only counts models a group currently serves, so the
+			// fixtures mirror the abilities the site would have configured.
+			require.NoError(t, db.Where("channel_id = ?", 1).Delete(&model.Ability{}).Error)
+			for _, ability := range []model.Ability{
+				{Model: "test-model", Group: "a", ChannelId: 1, Enabled: true},
+				{Model: "test-model", Group: "b", ChannelId: 1, Enabled: true},
+				{Model: "test-model", Group: "idle", ChannelId: 1, Enabled: true},
+				{Model: "second-model", Group: "a", ChannelId: 1, Enabled: true},
+				{Model: "probe-only-model", Group: "a", ChannelId: 1, Enabled: true},
+				{Model: "history-model", Group: "a", ChannelId: 1, Enabled: true},
+				{Model: "history-model", Group: "b", ChannelId: 1, Enabled: true},
+				{Model: "history-idle", Group: "a", ChannelId: 1, Enabled: true},
+				{Model: "history-hot", Group: "a", ChannelId: 1, Enabled: true},
+			} {
+				require.NoError(t, db.Create(&ability).Error)
+			}
+			model.InvalidatePricingCache()
 			versionQuery := "SELECT version()"
 			if dialect.name == "sqlite" {
 				versionQuery = "SELECT sqlite_version()"
@@ -459,6 +476,32 @@ func TestPerformanceAggregationAndFlush(t *testing.T) {
 				assert.Equal(t, []SuccessRatePoint{{Ts: historyStart, SuccessRate: 100}}, history.RecentSuccessSeries["history-hot-boundary"])
 				assert.Empty(t, history.RecentSuccessSeries["history-expired"])
 				assert.Empty(t, history.RecentSuccessSeries["history-hot-expired"])
+			})
+
+			t.Run("removed models are dropped from the breakdown and the success rate", func(t *testing.T) {
+				require.NoError(t, db.Create(&model.PerfMetric{
+					ModelName: "removed-model", Group: "b", BucketTs: hour,
+					RequestCount: 100, SuccessCount: 100,
+				}).Error)
+				require.NoError(t, model.RecordStatusProbe(&model.StatusProbe{
+					GroupName: "b", ModelName: "removed-model", Source: "manual_test", ObservedAt: hour + 3, Success: true,
+				}))
+				require.NoError(t, db.Where(&model.Ability{Model: "test-model", Group: "b"}).Delete(&model.Ability{}).Error)
+				model.InvalidatePricingCache()
+
+				status, err := QueryGroupStatus(24, map[string]string{"a": "Group A", "b": "Group B"})
+				require.NoError(t, err)
+				require.Len(t, status.Groups, 2)
+				groupB := status.Groups[0]
+				assert.Equal(t, "b", groupB.Group)
+				require.Len(t, groupB.Models, 1)
+				assert.Equal(t, "history-model", groupB.Models[0].ModelName)
+				// The removed model's successes must not raise group b's rate.
+				require.NotNil(t, groupB.Summary)
+				assert.Equal(t, 0.0, groupB.Summary.SuccessRate)
+				for _, point := range groupB.Hourly {
+					assert.NotEqual(t, "removed-model", point.TopModel)
+				}
 			})
 		})
 	}

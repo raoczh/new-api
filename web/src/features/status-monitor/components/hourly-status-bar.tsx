@@ -47,12 +47,6 @@ export function HourlyStatusBar(props: HourlyStatusBarProps) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const sources: Record<string, string> = {
-    request: t('Request observation'),
-    auto_probe: t('Automatic probe'),
-    manual_test: t('Manual test'),
-    mixed_tests: t('Automatic and manual tests'),
-  }
   const slots = useMemo(
     () => buildHourlySlots(props.hourlyStart, props.group.hourly),
     [props.group.hourly, props.hourlyStart]
@@ -79,7 +73,6 @@ export function HourlyStatusBar(props: HourlyStatusBarProps) {
                 <span
                   data-slot='hour-cell'
                   data-health={health}
-                  data-source={slot.point?.source ?? 'pending'}
                   tabIndex={0}
                   aria-label={`${formatHourRange(slot.ts, locale)}: ${t(config.labelKey)}`}
                   className={cn(
@@ -108,9 +101,6 @@ export function HourlyStatusBar(props: HourlyStatusBarProps) {
               </span>
               {slot.point && (
                 <>
-                  <span>
-                    {t('Source')}: {sources[slot.point.source ?? 'request']}
-                  </span>
                   <span>
                     {t('Samples')}: {slot.point.sample_count ?? '—'}
                   </span>

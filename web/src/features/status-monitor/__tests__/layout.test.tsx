@@ -111,7 +111,9 @@ describe('group monitor cards', () => {
         onOpenDetails={vi.fn()}
       />
     )
-    const card = screen.getByRole('article')
+    const card = screen.getByRole('button', {
+      name: 'Show model breakdown for Public group',
+    })
     expect(card).toHaveClass('min-w-0', 'p-5')
     expect(card).not.toHaveClass('min-h-72')
     expect(card.parentElement).toHaveClass(
@@ -126,7 +128,7 @@ describe('group monitor cards', () => {
     expect(screen.getByText('Last 60 hours')).toBeVisible()
   })
 
-  it('opens model details by keyboard and keeps long group names contained', async () => {
+  it('opens model details by clicking or keyboard on the whole card and keeps long group names contained', async () => {
     const user = userEvent.setup()
     const onOpenDetails = vi.fn()
     const longGroup = {
@@ -147,8 +149,17 @@ describe('group monitor cards', () => {
       />
     )
     expect(screen.getByRole('heading', { level: 3 })).toHaveClass('truncate')
-    screen.getByRole('button', { name: 'Show model breakdown' }).focus()
+    const card = screen.getByRole('button', {
+      name: 'Show model breakdown for A public group with a long descriptive title that must stay inside its card',
+    })
+    await user.click(screen.getByRole('heading', { level: 3 }))
+    expect(onOpenDetails).toHaveBeenCalledWith(longGroup)
+    onOpenDetails.mockClear()
+    card.focus()
     await user.keyboard('{Enter}')
+    expect(onOpenDetails).toHaveBeenCalledWith(longGroup)
+    onOpenDetails.mockClear()
+    await user.keyboard(' ')
     expect(onOpenDetails).toHaveBeenCalledWith(longGroup)
   })
 
@@ -195,14 +206,9 @@ describe('group monitor cards', () => {
     expect(screen.getByText('0.30s')).toBeVisible()
   })
 
-  it.each([
-    ['auto_probe', 'Automatic probe'],
-    ['manual_test', 'Manual test'],
-    ['request', 'Request observation'],
-    ['mixed_tests', 'Automatic and manual tests'],
-  ] as const)(
-    'shows %s as the source when focusing its hourly sample',
-    async (source, label) => {
+  it.each(['auto_probe', 'manual_test', 'request', 'mixed_tests'] as const)(
+    'does not label %s samples with a source in the hourly tooltip',
+    async (source) => {
       const user = userEvent.setup()
       render(
         <HourlyStatusBar
@@ -224,23 +230,33 @@ describe('group monitor cards', () => {
       )
       const timeline = screen.getByRole('group')
       expect(timeline.children).toHaveLength(60)
-      expect(timeline.children[0]).toHaveAttribute('data-source', source)
+      expect(timeline.children[0]).not.toHaveAttribute('data-source')
       expect(timeline.children[1]).toHaveAttribute('data-health', 'pending')
       await user.tab()
-      expect(await screen.findByRole('tooltip')).toHaveTextContent(label)
-      expect(screen.getByRole('tooltip')).toHaveTextContent('gpt-test')
+      const tooltip = await screen.findByRole('tooltip')
+      expect(tooltip).toHaveTextContent('gpt-test')
+      expect(tooltip).not.toHaveTextContent('Automatic probe')
+      expect(tooltip).not.toHaveTextContent('Manual test')
+      expect(tooltip).not.toHaveTextContent('Request observation')
+      expect(tooltip).not.toHaveTextContent('Automatic and manual tests')
     }
   )
 
   it.each([
-    [100, 'bg-emerald-600'],
-    [99.5, 'bg-emerald-500'],
-    [96, 'bg-lime-500'],
-    [87, 'bg-yellow-400'],
-    [72, 'bg-orange-500'],
-    [20, 'bg-red-700'],
+    [100, 'bg-green-500'],
+    [95, 'bg-green-500'],
+    [90, 'bg-lime-400'],
+    [85, 'bg-lime-400'],
+    [75, 'bg-yellow-400'],
+    [70, 'bg-yellow-400'],
+    [60, 'bg-amber-500'],
+    [50, 'bg-amber-500'],
+    [40, 'bg-orange-500'],
+    [30, 'bg-orange-500'],
+    [20, 'bg-red-500'],
+    [0, 'bg-red-500'],
   ])(
-    'colors an hourly cell at %s%% with the matching finer grade',
+    'colors an hourly cell at %s%% with the matching grade',
     (rate, className) => {
       render(
         <HourlyStatusBar

@@ -16,19 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  SORT_OPTIONS,
-  FILTER_ALL,
-  QUOTA_TYPES,
-  QUOTA_TYPE_VALUES,
-  ENDPOINT_TYPES,
-  type SortOption,
-} from '../constants'
+import { SORT_OPTIONS, FILTER_ALL, type SortOption } from '../constants'
 import type { PricingModel } from '../types'
 import {
   getCardExamplePrice,
   getDynamicPricingSummary,
-  hasTaskUsageSchema,
   isUnconfiguredTaskUsageModel,
 } from './dynamic-price'
 import { isTokenBasedModel } from './model-helpers'
@@ -77,40 +69,6 @@ export function filterByGroup(
 ): PricingModel[] {
   if (group === FILTER_ALL) return models
   return models.filter((m) => m.enable_groups?.includes(group))
-}
-
-/**
- * Filter models by quota type
- */
-export function filterByQuotaType(
-  models: PricingModel[],
-  quotaType: string
-): PricingModel[] {
-  if (quotaType === QUOTA_TYPES.ALL) return models
-  // Task-usage models form their own bucket, disjoint from token/request.
-  if (quotaType === QUOTA_TYPES.TASK) {
-    return models.filter((m) => hasTaskUsageSchema(m))
-  }
-  const targetType =
-    quotaType === QUOTA_TYPES.TOKEN
-      ? QUOTA_TYPE_VALUES.TOKEN
-      : QUOTA_TYPE_VALUES.REQUEST
-  return models.filter(
-    (m) => m.quota_type === targetType && !hasTaskUsageSchema(m)
-  )
-}
-
-/**
- * Filter models by endpoint type
- */
-export function filterByEndpointType(
-  models: PricingModel[],
-  endpointType: string
-): PricingModel[] {
-  if (endpointType === ENDPOINT_TYPES.ALL) return models
-  return models.filter((m) =>
-    m.supported_endpoint_types?.includes(endpointType)
-  )
 }
 
 type SortPriceKind = 'input' | 'output' | 'request'
@@ -215,9 +173,6 @@ export function filterAndSortModels(
     search: string
     vendor: string
     group: string
-    quotaType: string
-    endpointType: string
-    tag: string
     sortBy: string
     groupOrder?: string[]
   }
@@ -225,9 +180,6 @@ export function filterAndSortModels(
   let result = filterBySearch(models, filters.search)
   result = filterByVendor(result, filters.vendor)
   result = filterByGroup(result, filters.group)
-  result = filterByQuotaType(result, filters.quotaType)
-  result = filterByEndpointType(result, filters.endpointType)
-  result = filterByTag(result, filters.tag)
   result = sortModels(result, filters.sortBy, filters.groupOrder)
 
   return result
@@ -242,39 +194,4 @@ export function parseTags(tagsString?: string): string[] {
     .split(/[,;|\s]+/)
     .map((t) => t.trim())
     .filter(Boolean)
-}
-
-/**
- * Extract all unique tags from models
- */
-export function extractAllTags(models: PricingModel[]): string[] {
-  const tagSet = new Set<string>()
-
-  models.forEach((model) => {
-    if (model.tags) {
-      const tags = parseTags(model.tags)
-      tags.forEach((tag) => {
-        tagSet.add(tag.toLowerCase())
-      })
-    }
-  })
-
-  return [...tagSet].sort((a, b) => a.localeCompare(b))
-}
-
-/**
- * Filter models by tag
- */
-export function filterByTag(
-  models: PricingModel[],
-  tag: string
-): PricingModel[] {
-  if (tag === FILTER_ALL) return models
-
-  const tagLower = tag.toLowerCase()
-  return models.filter((m) => {
-    if (!m.tags) return false
-    const modelTags = parseTags(m.tags).map((t) => t.toLowerCase())
-    return modelTags.includes(tagLower)
-  })
 }

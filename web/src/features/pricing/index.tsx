@@ -60,24 +60,17 @@ export function Pricing() {
     sortBy,
     vendorFilter,
     groupFilter,
-    quotaTypeFilter,
-    endpointTypeFilter,
-    tagFilter,
     tokenUnit,
     viewMode,
     setSearchInput,
     setSortBy,
     setVendorFilter,
     setGroupFilter,
-    setQuotaTypeFilter,
-    setEndpointTypeFilter,
-    setTagFilter,
     setTokenUnit,
     setViewMode,
     filteredModels,
     hasActiveFilters,
     activeFilterCount,
-    availableTags,
     clearFilters,
     clearSearch,
   } = useFilters(models || [], groupOrder)
@@ -183,20 +176,13 @@ export function Pricing() {
 
           <div className='grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]'>
             <PricingSidebar
-              quotaTypeFilter={quotaTypeFilter}
-              endpointTypeFilter={endpointTypeFilter}
               vendorFilter={vendorFilter}
               groupFilter={groupFilter}
-              tagFilter={tagFilter}
-              onQuotaTypeChange={setQuotaTypeFilter}
-              onEndpointTypeChange={setEndpointTypeFilter}
               onVendorChange={setVendorFilter}
               onGroupChange={setGroupFilter}
-              onTagChange={setTagFilter}
               vendors={vendors || []}
               groups={availableGroups}
               groupRatios={groupRatio}
-              tags={availableTags}
               models={models || []}
               hasActiveFilters={hasActiveFilters}
               onClearFilters={clearFilters}
@@ -213,20 +199,13 @@ export function Pricing() {
                 onTokenUnitChange={setTokenUnit}
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
-                quotaTypeFilter={quotaTypeFilter}
-                endpointTypeFilter={endpointTypeFilter}
                 vendorFilter={vendorFilter}
                 groupFilter={groupFilter}
-                tagFilter={tagFilter}
-                onQuotaTypeChange={setQuotaTypeFilter}
-                onEndpointTypeChange={setEndpointTypeFilter}
                 onVendorChange={setVendorFilter}
                 onGroupChange={setGroupFilter}
-                onTagChange={setTagFilter}
                 vendors={vendors || []}
                 groups={availableGroups}
                 groupRatios={groupRatio}
-                tags={availableTags}
                 models={models || []}
                 hasActiveFilters={hasActiveFilters}
                 activeFilterCount={activeFilterCount}

@@ -20,7 +20,6 @@ import { ChevronRight, Gauge, Layers } from 'lucide-react'
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
 import {
   formatUptimePct,
   getSuccessRateTextClass,
@@ -53,16 +52,6 @@ export const GroupStatusCard = memo(function GroupStatusCard(
   const latest = props.group.hourly.at(-1)
   const icon = props.vendor?.icon ? getLobeIcon(props.vendor.icon, 22) : null
   const rate = props.group.summary?.success_rate ?? Number.NaN
-  let summarySource = t('Request observation')
-  if (props.group.summary_source === 'auto_probe') {
-    summarySource = t('Automatic probe')
-  }
-  if (props.group.summary_source === 'manual_test') {
-    summarySource = t('Manual test')
-  }
-  if (props.group.summary_source === 'mixed_tests') {
-    summarySource = t('Automatic and manual tests')
-  }
   let lastObserved = t('No records')
   if (props.group.last_seen_ts > 0) {
     lastObserved =
@@ -72,7 +61,20 @@ export const GroupStatusCard = memo(function GroupStatusCard(
   }
 
   return (
-    <article className='bg-card hover:border-primary/40 flex min-w-0 flex-col gap-4 rounded-xl border p-5 transition-colors'>
+    <article
+      role='button'
+      tabIndex={0}
+      aria-label={t('Show model breakdown for {{group}}', {
+        group: props.group.description || props.group.group,
+      })}
+      onClick={() => props.onOpenDetails(props.group)}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        props.onOpenDetails(props.group)
+      }}
+      className='bg-card hover:border-primary/40 focus-visible:ring-ring flex min-w-0 cursor-pointer flex-col gap-4 rounded-xl border p-5 transition-colors focus-visible:ring-2 focus-visible:outline-none'
+    >
       <div className='flex items-start justify-between gap-3'>
         <div className='flex min-w-0 items-center gap-3'>
           <span
@@ -134,11 +136,6 @@ export const GroupStatusCard = memo(function GroupStatusCard(
           <p>
             {t('Availability')} · {props.windowLabel}
           </p>
-          {props.group.summary && (
-            <p className='text-[11px]'>
-              {t('Source')}: {summarySource}
-            </p>
-          )}
         </div>
         <span
           className={cn(
@@ -162,15 +159,10 @@ export const GroupStatusCard = memo(function GroupStatusCard(
           <span>{t('Now')}</span>
         </div>
       </div>
-      <Button
-        variant='ghost'
-        size='sm'
-        className='text-muted-foreground -mx-2 -mb-1 justify-between'
-        onClick={() => props.onOpenDetails(props.group)}
-      >
+      <span className='text-muted-foreground -mx-2 -mb-1 flex items-center justify-between gap-2 px-2 py-1 text-xs font-medium'>
         {t('Show model breakdown')}
-        <ChevronRight aria-hidden='true' />
-      </Button>
+        <ChevronRight className='size-4' aria-hidden='true' />
+      </span>
     </article>
   )
 })

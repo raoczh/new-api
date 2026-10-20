@@ -124,21 +124,17 @@ export function matchesGroupSearch(group: GroupStatus, query: string): boolean {
 }
 
 /**
- * Finer color grades for hourly cells, worst first. Steps at or above 90%
- * stay green, 70%-90% go yellow to orange, and below 70% are red, so the
- * scale refines GROUP_HEALTH_CONFIG without crossing its boundaries.
+ * Six widely spaced color grades for hourly cells, worst first: below 30% is
+ * red, then orange, amber, yellow and lime, and 95% or above is green. The
+ * scale deliberately avoids the darkest red and green shades.
  */
 export const HOUR_CELL_SCALE = [
-  { min: 0, label: '<50%', className: 'bg-red-700' },
-  { min: 50, label: '≥50%', className: 'bg-red-500' },
-  { min: 70, label: '≥70%', className: 'bg-orange-500' },
-  { min: 80, label: '≥80%', className: 'bg-amber-500' },
-  { min: 85, label: '≥85%', className: 'bg-yellow-400' },
-  { min: 90, label: '≥90%', className: 'bg-lime-400' },
-  { min: 95, label: '≥95%', className: 'bg-lime-500' },
-  { min: 97, label: '≥97%', className: 'bg-emerald-400' },
-  { min: 99, label: '≥99%', className: 'bg-emerald-500' },
-  { min: 100, label: '100%', className: 'bg-emerald-600' },
+  { min: 0, label: '<30%', className: 'bg-red-500' },
+  { min: 30, label: '≥30%', className: 'bg-orange-500' },
+  { min: 50, label: '≥50%', className: 'bg-amber-500' },
+  { min: 70, label: '≥70%', className: 'bg-yellow-400' },
+  { min: 85, label: '≥85%', className: 'bg-lime-400' },
+  { min: 95, label: '≥95%', className: 'bg-green-500' },
 ] as const
 
 export function getHourCellClass(rate: number): string {

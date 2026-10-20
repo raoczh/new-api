@@ -101,13 +101,31 @@ func QueryGroupStatus(hours int, groupDescs map[string]string) (GroupStatusResul
 	if err != nil {
 		return GroupStatusResult{}, err
 	}
+	// A group is only credited with models it currently serves. Historical
+	// samples and manual probes for models that have since left the group must
+	// neither appear in the breakdown nor affect its success rate.
+	enabledModels := map[string]map[string]struct{}{}
+	for _, pricing := range model.GetPricing() {
+		for _, group := range pricing.EnableGroup {
+			if enabledModels[group] == nil {
+				enabledModels[group] = map[string]struct{}{}
+			}
+			enabledModels[group][pricing.ModelName] = struct{}{}
+		}
+	}
 	probesByGroup := map[string][]model.StatusProbe{}
 	for _, probe := range probes {
+		if _, ok := enabledModels[probe.GroupName][probe.ModelName]; !ok {
+			continue
+		}
 		probesByGroup[probe.GroupName] = append(probesByGroup[probe.GroupName], probe)
 	}
 
 	merged := map[bucketKey]counters{}
 	for _, row := range rows {
+		if _, ok := enabledModels[row.GroupName][row.ModelName]; !ok {
+			continue
+		}
 		mergeCounters(merged, bucketKey{model: row.ModelName, group: row.GroupName, bucketTs: row.BucketTs}, counters{
 			requestCount:   row.RequestCount,
 			successCount:   row.SuccessCount,
@@ -124,6 +142,9 @@ func QueryGroupStatus(hours int, groupDescs map[string]string) (GroupStatusResul
 			return true
 		}
 		if _, ok := groupDescs[k.group]; !ok {
+			return true
+		}
+		if _, ok := enabledModels[k.group][k.model]; !ok {
 			return true
 		}
 		mergeCounters(merged, k, value.(*atomicBucket).snapshot())

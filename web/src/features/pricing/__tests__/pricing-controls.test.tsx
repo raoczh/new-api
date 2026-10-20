@@ -34,23 +34,16 @@ function toolbarProps(): PricingToolbarProps {
     sortBy: 'name',
     tokenUnit: 'M',
     viewMode: 'card',
-    quotaTypeFilter: 'all',
-    endpointTypeFilter: 'all',
     vendorFilter: 'all',
     groupFilter: 'all',
-    tagFilter: 'all',
     onSortChange: vi.fn(),
     onTokenUnitChange: vi.fn(),
     onViewModeChange: vi.fn(),
-    onQuotaTypeChange: vi.fn(),
-    onEndpointTypeChange: vi.fn(),
     onVendorChange: vi.fn(),
     onGroupChange: vi.fn(),
-    onTagChange: vi.fn(),
     vendors: [],
     groups: ['default', 'premium'],
     groupRatios: { default: 1, premium: 3 },
-    tags: [],
     models: [],
     hasActiveFilters: false,
     activeFilterCount: 0,
@@ -59,7 +52,7 @@ function toolbarProps(): PricingToolbarProps {
 }
 
 describe('pricing controls', () => {
-  it('counts each model once per filter and updates counts when the catalog changes', () => {
+  it('only offers vendors and groups, with vendors first', () => {
     const props = toolbarProps()
     const base: PricingModel = {
       id: 1,
@@ -98,7 +91,6 @@ describe('pricing controls', () => {
         { id: 1, name: 'Vendor A' },
         { id: 2, name: 'Vendor B' },
       ],
-      tags: ['Chat', 'Image', 'Video'],
     }
     const { rerender } = render(
       <PricingSidebar {...sidebarProps} models={models} />
@@ -109,17 +101,18 @@ describe('pricing controls', () => {
     ).toBeVisible()
     expect(screen.getByRole('button', { name: /^Vendor A\s*2$/ })).toBeVisible()
     expect(screen.getByRole('button', { name: /^Vendor B\s*1$/ })).toBeVisible()
-    expect(screen.getByRole('button', { name: /^Chat\s*2$/ })).toBeVisible()
-    expect(screen.getByRole('button', { name: /^Chat\s*1$/ })).toBeVisible()
-    expect(
-      screen.getByRole('button', { name: /^Token-based\s*1$/ })
-    ).toBeVisible()
-    expect(
-      screen.getByRole('button', { name: /^Per Request\s*1$/ })
-    ).toBeVisible()
-    expect(
-      screen.getByRole('button', { name: /^Task billing\s*1$/ })
-    ).toBeVisible()
+    expect(screen.getByRole('button', { name: /^premium/ })).toBeVisible()
+
+    // Pricing type, endpoint type and tags no longer appear in the sidebar.
+    expect(screen.queryByRole('button', { name: /^Chat\s*2$/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Token-based/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Per Request/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Task billing/ })).toBeNull()
+
+    const headings = screen
+      .getAllByRole('button', { expanded: true })
+      .map((button) => button.textContent)
+    expect(headings).toEqual(['All Vendors', 'Groups'])
 
     rerender(<PricingSidebar {...sidebarProps} models={[models[1]]} />)
     expect(
@@ -127,14 +120,6 @@ describe('pricing controls', () => {
     ).toBeVisible()
     expect(screen.getByRole('button', { name: /^Vendor A\s*1$/ })).toBeVisible()
     expect(screen.queryByRole('button', { name: /^Vendor B\s*1$/ })).toBeNull()
-    expect(screen.getByRole('button', { name: /^Chat\s*1$/ })).toBeVisible()
-    expect(screen.getByRole('button', { name: /^Chat\s*0$/ })).toBeVisible()
-    expect(
-      screen.getByRole('button', { name: /^Token-based\s*0$/ })
-    ).toBeVisible()
-    expect(
-      screen.getByRole('button', { name: /^Task billing\s*0$/ })
-    ).toBeVisible()
   })
 
   it('changes the token unit and keeps the selected unit pressed when clicked again', async () => {
