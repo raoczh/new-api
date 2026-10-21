@@ -27,6 +27,7 @@ import {
   PromptInputTextarea,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 import type {
   ModelOption,
@@ -47,6 +48,7 @@ interface PlaygroundInputProps {
   modelValue: string
   onModelChange: (value: string) => void
   isModelLoading?: boolean
+  hasNoChatModels?: boolean
   groups: GroupOption[]
   groupValue: string
   onGroupChange: (value: string) => void
@@ -71,6 +73,7 @@ export function PlaygroundInput({
   modelValue,
   onModelChange,
   isModelLoading = false,
+  hasNoChatModels = false,
   groups,
   groupValue,
   onGroupChange,
@@ -97,6 +100,15 @@ export function PlaygroundInput({
 
   return (
     <div className='grid shrink-0 gap-3'>
+      {hasNoChatModels && (
+        <Alert>
+          <AlertDescription>
+            {t(
+              'This group has no chat-capable models. Choose another group to start chatting.'
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
       <PromptInput
         accept='image/*'
         className='relative'

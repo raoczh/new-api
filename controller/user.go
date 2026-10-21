@@ -642,10 +642,19 @@ func GetUserModels(c *gin.Context) {
 			groupsToQuery = []string{group}
 		}
 	}
+	// chat_only 仅保留可用于对话的模型，供智能对话选择模型时使用；
+	// 不传该参数时保持原有行为。
+	chatOnly, _ := strconv.ParseBool(c.Query("chat_only"))
+	var enabledModels []string
+	if chatOnly {
+		enabledModels = service.GetGroupsEnabledChatModels(groupsToQuery)
+	} else {
+		enabledModels = service.GetGroupsEnabledModels(groupsToQuery)
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    service.GetGroupsEnabledModels(groupsToQuery),
+		"data":    enabledModels,
 	})
 }
 

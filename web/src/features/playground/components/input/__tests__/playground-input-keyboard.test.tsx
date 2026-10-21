@@ -57,7 +57,7 @@ function renderInput(onSubmit: (text: string, attachments?: string[]) => void) {
 describe('PlaygroundInput keyboard', () => {
   beforeAll(() => {
     i18next.addResourceBundle('en', 'translation', {
-      Ask anything: 'Ask anything',
+      'Ask anything': 'Ask anything',
       Attach: 'Attach',
       Parameters: 'Parameters',
       Send: 'Send',

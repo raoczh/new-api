@@ -2,12 +2,16 @@ package model
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/pkg/jsplugin"
+	kitdto "github.com/QuantumNous/new-api/relaykit/dto"
 
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -29,6 +33,55 @@ type AbilityWithChannel struct {
 	ChannelType int `json:"channel_type"`
 }
 
+// AbilityWithChannelSettings extends Ability with the channel fields that
+// decide whether the ability can serve chat completions.
+type AbilityWithChannelSettings struct {
+	Ability
+	ChannelType int    `json:"channel_type"`
+	Settings    string `json:"settings"`
+}
+
+// nonChatChannelTypes lists channel types that only serve media or embedding
+// tasks. They must be excluded explicitly: GetEndpointTypesByChannelType still
+// falls back to the generic OpenAI endpoint for most of them.
+var nonChatChannelTypes = []int{
+	constant.ChannelTypeMidjourney,
+	constant.ChannelTypeMidjourneyPlus,
+	constant.ChannelTypeSunoAPI,
+	constant.ChannelTypeKling,
+	constant.ChannelTypeJimeng,
+	constant.ChannelTypeVidu,
+	constant.ChannelTypeDoubaoVideo,
+	constant.ChannelTypeSora,
+	constant.ChannelTypeReplicate,
+	constant.ChannelTypeTaskPlugin,
+	// MokaAI only implements embeddings.
+	constant.ChannelTypeMokaAI,
+}
+
+// nonChatModelKeywords lists name fragments of image, video and music models.
+// Task plugin declarations cover the built-in models; these keywords also catch
+// custom names and the aliases channels map onto them.
+var nonChatModelKeywords = []string{
+	"cogview", "embedding", "flux", "grok-imagine", "hailuo", "i2i", "i2v",
+	"ideogram", "image-edit", "imageedit", "jimeng", "kf2v", "kling",
+	"kolors", "midjourney", "nano-banana", "recraft", "rerank", "s2v",
+	"sdxl", "seedance", "seedream", "sora", "stable-diffusion", "suno_",
+	"t2i", "t2v", "tts", "veo-", "video", "vidu", "wan2", "wanx", "whisper",
+}
+
+// chatEndpointTypes are the endpoints a playground chat request can be served
+// through. Image, video, rerank and embedding endpoints are intentionally
+// absent.
+var chatEndpointTypes = []constant.EndpointType{
+	constant.EndpointTypeOpenAI,
+	constant.EndpointTypeOpenAIResponse,
+	constant.EndpointTypeOpenAIResponseCompact,
+	constant.EndpointTypeOpenAIAlphaSearch,
+	constant.EndpointTypeAnthropic,
+	constant.EndpointTypeGemini,
+}
+
 func GetAllEnableAbilityWithChannels() ([]AbilityWithChannel, error) {
 	var abilities []AbilityWithChannel
 	err := DB.Table("abilities").
@@ -44,6 +97,96 @@ func GetGroupEnabledModels(group string) []string {
 	// Find distinct models
 	DB.Table("abilities").Where(commonGroupCol+" = ? and enabled = ?", group, true).Distinct("model").Pluck("model", &models)
 	return models
+}
+
+// GetGroupEnabledChatModels returns the enabled models in group that a chat
+// completion request can actually reach. Unlike GetGroupEnabledModels it also
+// looks at the serving channel, so media-only channels and models are dropped.
+func GetGroupEnabledChatModels(group string) ([]string, error) {
+	var abilities []AbilityWithChannelSettings
+	err := DB.Table("abilities").
+		Select("abilities.*, channels.type as channel_type, channels.settings as settings").
+		Joins("left join channels on abilities.channel_id = channels.id").
+		Where("abilities."+commonGroupCol+" = ? and abilities.enabled = ?", group, true).
+		Scan(&abilities).Error
+	if err != nil {
+		return nil, err
+	}
+
+	models := make([]string, 0, len(abilities))
+	seen := make(map[string]struct{}, len(abilities))
+	for _, ability := range abilities {
+		if _, ok := seen[ability.Model]; ok {
+			continue
+		}
+		if !abilityServesChat(ability) {
+			continue
+		}
+		seen[ability.Model] = struct{}{}
+		models = append(models, ability.Model)
+	}
+	return models, nil
+}
+
+// abilityServesChat reports whether the ability can serve a chat completion.
+// Unknown channels (for example an ability whose channel was deleted) fail
+// closed because they cannot route anything.
+func abilityServesChat(ability AbilityWithChannelSettings) bool {
+	if ability.ChannelType == constant.ChannelTypeUnknown {
+		return false
+	}
+	if slices.Contains(nonChatChannelTypes, ability.ChannelType) {
+		return false
+	}
+	if isNonChatModelName(ability.Model) {
+		return false
+	}
+	return slices.ContainsFunc(abilityChatEndpointTypes(ability), func(endpoint constant.EndpointType) bool {
+		return slices.Contains(chatEndpointTypes, endpoint)
+	})
+}
+
+// abilityChatEndpointTypes mirrors GetEndpointTypesByChannelType for advanced
+// custom channels, whose routes live in the channel settings. It reads the raw
+// settings column on purpose: Channel.GetOtherSettings writes back to the
+// database when the settings are malformed, which a list query must not do.
+func abilityChatEndpointTypes(ability AbilityWithChannelSettings) []constant.EndpointType {
+	if !constant.IsAdvancedCustomChannel(ability.ChannelType) {
+		return common.GetEndpointTypesByChannelType(ability.ChannelType, ability.Model)
+	}
+
+	settings := kitdto.ChannelOtherSettings{}
+	if ability.Settings != "" {
+		if err := common.UnmarshalJsonStr(ability.Settings, &settings); err != nil {
+			common.SysLog(common.LogText("failed to parse settings for channel %d: %s", ability.ChannelId, err.Error()))
+			settings = kitdto.ChannelOtherSettings{}
+		}
+	}
+	if preset := common.GetAdvancedCustomPreset(ability.ChannelType); preset != nil {
+		settings.AdvancedCustom = preset
+	}
+	if settings.AdvancedCustom == nil {
+		// No routes means no known way in; do not fall back to the generic
+		// OpenAI endpoint, which would mark every model as chat-capable.
+		return nil
+	}
+	return settings.AdvancedCustom.SupportedEndpointTypesForModel(ability.Model)
+}
+
+// isNonChatModelName reports whether the model name belongs to image, video,
+// audio or embedding families, or is declared by a task plugin.
+func isNonChatModelName(modelName string) bool {
+	if common.IsImageGenerationModel(modelName) {
+		return true
+	}
+	lower := strings.ToLower(modelName)
+	if slices.ContainsFunc(nonChatModelKeywords, func(keyword string) bool {
+		return strings.Contains(lower, keyword)
+	}) {
+		return true
+	}
+	_, taskModel := jsplugin.DefaultRegistry.Generation().GetByModel(modelName)
+	return taskModel
 }
 
 func GetEnabledModels() []string {

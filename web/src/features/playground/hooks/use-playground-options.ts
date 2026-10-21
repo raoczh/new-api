@@ -144,5 +144,11 @@ export function usePlaygroundOptions({
 
   return {
     isLoadingModels,
+    hasNoChatModels:
+      currentGroup !== '' &&
+      !isLoadingModels &&
+      !isModelsError &&
+      modelsData !== undefined &&
+      modelsData.length === 0,
   }
 }

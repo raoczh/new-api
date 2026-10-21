@@ -122,6 +122,27 @@ func GetGroupsEnabledModels(groups []string) []string {
 	return models
 }
 
+// GetGroupsEnabledChatModels 按 groups 顺序获取各分组可用于对话的模型并去重。
+// 单个分组查询失败时回退到未过滤的模型列表，避免因一次查询失败而隐藏模型。
+func GetGroupsEnabledChatModels(groups []string) []string {
+	seen := make(map[string]struct{})
+	models := make([]string, 0)
+	for _, group := range groups {
+		groupModels, err := model.GetGroupEnabledChatModels(group)
+		if err != nil {
+			common.SysLog(common.LogText("failed to list chat models for group %s: %s", group, err.Error()))
+			groupModels = model.GetGroupEnabledModels(group)
+		}
+		for _, modelName := range groupModels {
+			if _, ok := seen[modelName]; !ok {
+				seen[modelName] = struct{}{}
+				models = append(models, modelName)
+			}
+		}
+	}
+	return models
+}
+
 // GetUserGroupRatio 获取用户使用某个分组的倍率
 // userGroup 用户分组
 // group 需要获取倍率的分组

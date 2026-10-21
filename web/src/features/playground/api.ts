@@ -43,10 +43,14 @@ export async function sendChatCompletion(
 
 /**
  * Get user available models
+ *
+ * `chat_only` drops models that can only serve image, video or task
+ * endpoints, so the playground never offers a model a chat request cannot
+ * reach.
  */
 export async function getUserModels(group: string): Promise<ModelOption[]> {
   const res = await api.get(API_ENDPOINTS.USER_MODELS, {
-    params: { group },
+    params: { group, chat_only: true },
   })
   const { data } = res
   requireServerSuccess(data)

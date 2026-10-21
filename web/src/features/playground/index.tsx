@@ -76,7 +76,7 @@ export function Playground() {
     sendChat,
   })
 
-  const { isLoadingModels } = usePlaygroundOptions({
+  const { isLoadingModels, hasNoChatModels } = usePlaygroundOptions({
     currentGroup: config.group,
     currentModel: config.model,
     setGroups,
@@ -169,6 +169,7 @@ export function Playground() {
               disabled={isGenerating}
               groups={groups}
               groupValue={config.group}
+              hasNoChatModels={hasNoChatModels}
               isGenerating={isGenerating}
               isModelLoading={isLoadingModels}
               modelValue={config.model}

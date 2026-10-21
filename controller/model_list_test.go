@@ -265,6 +265,61 @@ func TestGetUserModelsExpandsAutoGroupsInConfiguredOrder(t *testing.T) {
 	assert.Equal(t, "zz-default-model", models[2])
 }
 
+func TestGetUserModelsChatOnlyFiltersMediaModels(t *testing.T) {
+	db := setupModelListControllerTestDB(t)
+	require.NoError(t, db.Create(&model.User{
+		Id:       1004,
+		Username: "playground-chat-model-user",
+		Password: "password",
+		Group:    "default",
+		Status:   common.UserStatusEnabled,
+	}).Error)
+
+	advancedSettings := `{"advanced_custom":{"advanced_routes":[{"incoming_path":"/v1/images/generations","upstream_path":"/v1/images/generations"}]}}`
+	require.NoError(t, db.Create(&[]model.Channel{
+		{Id: 801, Type: constant.ChannelTypeOpenAI, Name: "chat-and-image", Group: "default", Models: "zz-chat-model,gpt-image-2"},
+		{Id: 802, Type: constant.ChannelTypeSora, Name: "video", Group: "default", Models: "zz-video-model"},
+		{Id: 803, Type: constant.ChannelTypeTaskPlugin, Name: "task", Group: "default", Models: "zz-task-model"},
+		{Id: 804, Type: constant.ChannelTypeAdvancedCustom, Name: "image-only", Group: "default", Models: "zz-custom-image", OtherSettings: advancedSettings},
+		{Id: 805, Type: constant.ChannelTypeCodex, Name: "responses-only", Group: "default", Models: "zz-responses-model"},
+	}).Error)
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: "default", Model: "zz-chat-model", ChannelId: 801, Enabled: true},
+		{Group: "default", Model: "gpt-image-2", ChannelId: 801, Enabled: true},
+		{Group: "default", Model: "zz-video-model", ChannelId: 802, Enabled: true},
+		{Group: "default", Model: "zz-task-model", ChannelId: 803, Enabled: true},
+		{Group: "default", Model: "zz-custom-image", ChannelId: 804, Enabled: true},
+		{Group: "default", Model: "zz-responses-model", ChannelId: 805, Enabled: true},
+	}).Error)
+
+	chatOnlyRecorder := httptest.NewRecorder()
+	chatOnlyContext, _ := gin.CreateTestContext(chatOnlyRecorder)
+	chatOnlyContext.Request = httptest.NewRequest(http.MethodGet, "/api/user/models?group=default&chat_only=true", nil)
+	chatOnlyContext.Set("id", 1004)
+
+	GetUserModels(chatOnlyContext)
+
+	chatModels := decodeUserModelsResponse(t, chatOnlyRecorder)
+	assert.ElementsMatch(t, []string{"zz-chat-model", "zz-responses-model"}, chatModels)
+
+	// 不传 chat_only 时必须保持原有行为，避免影响其他调用方。
+	defaultRecorder := httptest.NewRecorder()
+	defaultContext, _ := gin.CreateTestContext(defaultRecorder)
+	defaultContext.Request = httptest.NewRequest(http.MethodGet, "/api/user/models?group=default", nil)
+	defaultContext.Set("id", 1004)
+
+	GetUserModels(defaultContext)
+
+	assert.ElementsMatch(t, []string{
+		"zz-chat-model",
+		"gpt-image-2",
+		"zz-video-model",
+		"zz-task-model",
+		"zz-custom-image",
+		"zz-responses-model",
+	}, decodeUserModelsResponse(t, defaultRecorder))
+}
+
 func TestListModelsIncludesTieredBillingModel(t *testing.T) {
 	withSelfUseModeDisabled(t)
 	withTieredBillingConfig(t, map[string]string{
