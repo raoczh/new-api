@@ -273,9 +273,7 @@ it('updates count unit labels across cards, table cells and breakdowns with loca
   )
   for (const [language, unit] of [
     ['en', 'image'],
-    ['zhTW', '張'],
     ['zhCN', '张'],
-    ['fr', 'image'],
   ]) {
     await act(() => i18next.changeLanguage(language))
     for (const surface of ['card', 'cell', 'breakdown']) {
@@ -366,7 +364,7 @@ it('shows one standard task price and a localized group price without duplicate 
   expect(screen.getByText('$0.44')).toBeVisible()
   await act(() => i18next.changeLanguage('zhCN'))
   expect(screen.getAllByText('生成歌曲单价', { exact: false })).toHaveLength(2)
-  await act(() => i18next.changeLanguage('fr'))
+  await act(() => i18next.changeLanguage('en'))
   expect(
     screen.getAllByText('Song generation unit price', { exact: false })
   ).toHaveLength(2)

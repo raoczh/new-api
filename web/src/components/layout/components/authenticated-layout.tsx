@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarProvider } from '@/components/ui/sidebar'
-import { LayoutProvider } from '@/context/layout-provider'
 import { SearchProvider } from '@/context/search-provider'
 
 import { AppHeader } from './app-header'
@@ -31,22 +30,20 @@ type AuthenticatedLayoutProps = {
 
 export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   return (
-    <LayoutProvider>
-      <SearchProvider>
-        <SidebarProvider
-          defaultOpen
-          className='tc-workspace-shell h-svh min-h-0 flex-col overflow-hidden'
-        >
-          <SkipToMain />
-          <AppHeader />
-          <div className='tc-workspace-body flex min-h-0 flex-1'>
-            <AppSidebar />
-            <div className='tc-workspace-content @container/content flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
-              {props.children ?? <AnimatedOutlet />}
-            </div>
+    <SearchProvider>
+      <SidebarProvider
+        defaultOpen
+        className='tc-workspace-shell h-svh min-h-0 flex-col overflow-hidden'
+      >
+        <SkipToMain />
+        <AppHeader />
+        <div className='tc-workspace-body flex min-h-0 flex-1'>
+          <AppSidebar />
+          <div className='tc-workspace-content @container/content flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
+            {props.children ?? <AnimatedOutlet />}
           </div>
-        </SidebarProvider>
-      </SearchProvider>
-    </LayoutProvider>
+        </div>
+      </SidebarProvider>
+    </SearchProvider>
   )
 }

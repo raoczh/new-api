@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useState } from 'react'
 
+import { useTheme } from '@/context/theme-provider'
+
 export function resolveThemeRadiusPx(
   cssVariable = '--radius-md'
 ): number | undefined {
@@ -38,14 +40,14 @@ export function resolveThemeRadiusPx(
 }
 
 export function useThemeRadiusPx(
-  cssVariable = '--radius-md',
-  refreshKey?: string
+  cssVariable = '--radius-md'
 ): number | undefined {
+  const { resolvedTheme } = useTheme()
   const [radius, setRadius] = useState<number | undefined>()
 
   useEffect(() => {
     setRadius(resolveThemeRadiusPx(cssVariable))
-  }, [cssVariable, refreshKey])
+  }, [cssVariable, resolvedTheme])
 
   return radius
 }

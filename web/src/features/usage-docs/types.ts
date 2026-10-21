@@ -78,8 +78,8 @@ export function both(text: string): Copy {
 /**
  * Map an interface language to the language the documentation is written in.
  *
- * `zh` and `zh-TW` both read Simplified content; the remaining interface
- * languages fall back to English rather than rendering a blank page.
+ * Chinese interface languages read Simplified content; every other interface
+ * language falls back to English rather than rendering a blank page.
  */
 export function resolveDocLanguage(language: string | undefined): DocLanguage {
   return language?.toLowerCase().startsWith('zh') ? 'zh' : 'en'

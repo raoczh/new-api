@@ -61,8 +61,7 @@ const metadataSchema = z
 /** Translate the app's language aliases to canonical release-note language tags. */
 export function changelogLocale(language: string): string {
   const normalized = language.trim().replaceAll('_', '-').toLowerCase()
-  if (['zh', 'zhcn', 'zh-cn', 'zh-hans'].includes(normalized)) return 'zh-CN'
-  if (['zhtw', 'zh-tw', 'zh-hant'].includes(normalized)) return 'zh-TW'
+  if (normalized.startsWith('zh')) return 'zh-CN'
   try {
     return Intl.getCanonicalLocales(normalized)[0] ?? 'en'
   } catch {

@@ -780,7 +780,7 @@ test('plugin descriptions follow the current language with an English fallback a
   await act(() => language.changeLanguage('zhCN'))
   expect(within(option).getByText('通过厂商接口生成视频')).toBeVisible()
   expect(option).toHaveAccessibleDescription('通过厂商接口生成视频')
-  await act(() => language.changeLanguage('fr'))
+  await act(() => language.changeLanguage('en'))
   await user.click(
     within(option).getByText('Video generation via the vendor API')
   )

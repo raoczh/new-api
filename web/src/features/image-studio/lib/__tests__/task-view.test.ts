@@ -23,7 +23,7 @@ import { describeTaskTime } from '../task-view'
 test('describeTaskTime accepts the interface language codes', () => {
   const timestamp = Math.floor(Date.now() / 1000) - 5
   expect(() => describeTaskTime(timestamp, 'zhCN')).not.toThrow()
-  expect(() => describeTaskTime(timestamp, 'zhTW')).not.toThrow()
+  expect(() => describeTaskTime(timestamp, 'en')).not.toThrow()
 })
 
 test('describeTaskTime formats with a BCP-47 locale', () => {

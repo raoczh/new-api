@@ -21,10 +21,15 @@ For commercial licensing, please contact support@quantumnous.com
   --tc-landing-max: 1240px;
   --tc-landing-glow: color-mix(
     in oklch,
-    var(--tc-brand-accent) 22%,
+    var(--tc-gradient-from) 24%,
     transparent
   );
-  --tc-landing-line: color-mix(in srgb, var(--foreground) 9%, transparent);
+  --tc-landing-glow-alt: color-mix(
+    in oklch,
+    var(--tc-gradient-to) 20%,
+    transparent
+  );
+  --tc-landing-line: color-mix(in oklch, var(--foreground) 6%, transparent);
 }
 .tc-landing-container {
   position: relative;
@@ -50,14 +55,14 @@ For commercial licensing, please contact support@quantumnous.com
   height: 46rem;
   background:
     radial-gradient(
-      40% 50% at 70% 30%,
+      38% 48% at 72% 26%,
       var(--tc-landing-glow),
       transparent 70%
     ),
     radial-gradient(
-      35% 40% at 15% 10%,
-      color-mix(in oklch, var(--tc-brand-accent) 10%, transparent),
-      transparent 70%
+      34% 40% at 12% 12%,
+      var(--tc-landing-glow-alt),
+      transparent 72%
     );
   pointer-events: none;
 }
@@ -77,14 +82,14 @@ For commercial licensing, please contact support@quantumnous.com
 }
 .tc-landing-display {
   font-size: clamp(2.6rem, 6.4vw, 4.9rem);
-  font-weight: 650;
-  line-height: 1.04;
+  font-weight: 700;
+  line-height: 1.05;
   letter-spacing: -0.045em;
   text-wrap: balance;
 }
 .tc-landing-title {
   font-size: clamp(1.9rem, 3.8vw, 3rem);
-  font-weight: 640;
+  font-weight: 680;
   line-height: 1.12;
   letter-spacing: -0.035em;
   text-wrap: balance;
@@ -92,9 +97,9 @@ For commercial licensing, please contact support@quantumnous.com
 .tc-landing-gradient-text {
   background: linear-gradient(
     100deg,
-    var(--foreground) 10%,
-    var(--tc-brand-accent) 60%,
-    color-mix(in oklch, var(--tc-brand-accent) 55%, var(--foreground))
+    var(--tc-gradient-from) 5%,
+    var(--tc-gradient-to) 70%,
+    color-mix(in oklch, var(--tc-gradient-to) 60%, var(--tc-gradient-from))
   );
   -webkit-background-clip: text;
   background-clip: text;
@@ -117,7 +122,7 @@ For commercial licensing, please contact support@quantumnous.com
   gap: 0.6rem;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--card) 80%, transparent);
+  background: color-mix(in srgb, var(--card) 78%, transparent);
   padding: 0.3rem 0.85rem 0.3rem 0.35rem;
   font-size: 0.8rem;
   color: var(--muted-foreground);
@@ -127,24 +132,22 @@ For commercial licensing, please contact support@quantumnous.com
     color 0.2s;
 }
 .tc-landing-pill:hover {
-  border-color: color-mix(in oklch, var(--tc-brand-accent) 45%, var(--border));
+  border-color: color-mix(in oklch, var(--tc-gradient-from) 40%, var(--border));
   color: var(--foreground);
 }
 .tc-landing-pill-tag {
   border-radius: 999px;
-  background: color-mix(in oklch, var(--tc-brand-accent) 14%, transparent);
-  padding: 0.12rem 0.55rem;
-  color: var(--tc-brand-accent);
+  background: var(--tc-gradient);
+  padding: 0.14rem 0.6rem;
+  color: #fff;
   font-weight: 650;
 }
 .tc-landing-card {
   position: relative;
-  border: 1px solid var(--border);
-  border-radius: 1.25rem;
+  border: 1px solid var(--tc-rule, var(--border));
+  border-radius: var(--radius-xl);
   background: var(--card);
-  box-shadow:
-    0 1px 0 color-mix(in srgb, var(--foreground) 3%, transparent),
-    0 20px 40px -28px color-mix(in srgb, var(--foreground) 22%, transparent);
+  box-shadow: var(--tc-shadow-md);
 }
 .tc-landing-card-hover {
   transition:
@@ -153,12 +156,9 @@ For commercial licensing, please contact support@quantumnous.com
     box-shadow 0.25s;
 }
 .tc-landing-card-hover:hover {
-  border-color: color-mix(in oklch, var(--tc-brand-accent) 35%, var(--border));
-  transform: translateY(-2px);
-  box-shadow:
-    0 1px 0 color-mix(in srgb, var(--foreground) 3%, transparent),
-    0 28px 50px -30px
-      color-mix(in oklch, var(--tc-brand-accent) 45%, transparent);
+  border-color: color-mix(in oklch, var(--tc-gradient-from) 32%, var(--border));
+  transform: translateY(-3px);
+  box-shadow: var(--tc-shadow-lg);
 }
 .tc-landing-icon {
   display: inline-flex;
@@ -167,11 +167,11 @@ For commercial licensing, please contact support@quantumnous.com
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border: 1px solid
-    color-mix(in oklch, var(--tc-brand-accent) 22%, var(--border));
-  border-radius: 0.75rem;
-  background: color-mix(in oklch, var(--tc-brand-accent) 9%, var(--card));
-  color: var(--tc-brand-accent);
+  border: 0;
+  border-radius: 0.8rem;
+  background: var(--tc-gradient);
+  box-shadow: 0 8px 18px -10px var(--tc-gradient-from);
+  color: #fff;
 }
 .tc-landing-icon svg {
   width: 1.15rem;
@@ -218,6 +218,7 @@ For commercial licensing, please contact support@quantumnous.com
   border-radius: 0.9rem;
   backdrop-filter: blur(14px);
   background: color-mix(in srgb, var(--card) 88%, transparent);
+  box-shadow: var(--tc-shadow-lg);
   animation: tc-float 7s ease-in-out infinite;
 }
 .tc-hero-float-delayed {
@@ -247,7 +248,7 @@ For commercial licensing, please contact support@quantumnous.com
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 999px;
-  background: var(--tc-brand-accent);
+  background: var(--tc-gradient-to);
 }
 .tc-pulse-dot::after {
   content: '';
@@ -367,11 +368,11 @@ For commercial licensing, please contact support@quantumnous.com
   gap: 1rem;
 }
 .tc-compare-highlight {
-  border-color: color-mix(in oklch, var(--tc-brand-accent) 40%, var(--border));
+  border-color: color-mix(in oklch, var(--tc-gradient-from) 34%, var(--border));
   background:
     radial-gradient(
       120% 80% at 100% 0%,
-      color-mix(in oklch, var(--tc-brand-accent) 10%, transparent),
+      color-mix(in oklch, var(--tc-gradient-to) 12%, transparent),
       transparent 60%
     ),
     var(--card);
@@ -432,10 +433,11 @@ For commercial licensing, please contact support@quantumnous.com
 .tc-closing {
   position: relative;
   overflow: hidden;
-  border-radius: 1.75rem;
-  background: var(--foreground);
-  color: var(--background);
+  border-radius: calc(var(--radius) * 1.8);
+  background: var(--tc-gradient);
+  color: #fff;
   padding: clamp(2.5rem, 6vw, 4.5rem);
+  box-shadow: var(--tc-shadow-lg);
 }
 .tc-closing::before {
   content: '';
@@ -444,11 +446,15 @@ For commercial licensing, please contact support@quantumnous.com
   height: 120%;
   background: radial-gradient(
     closest-side,
-    color-mix(in oklch, var(--tc-brand-accent) 55%, transparent),
+    rgb(255 255 255 / 32%),
     transparent
   );
-  opacity: 0.55;
+  opacity: 0.8;
   pointer-events: none;
+}
+.tc-closing .text-muted-foreground {
+  color: inherit;
+  opacity: 0.82;
 }
 
 @media (max-width: 1023px) {
@@ -588,12 +594,18 @@ For commercial licensing, please contact support@quantumnous.com
   width: 0.9rem;
   height: 2px;
   border-radius: 999px;
-  background: var(--tc-brand-accent);
+  background: var(--tc-gradient);
   transform: translateX(-50%);
 }
 .tc-nav-cta {
-  box-shadow: 0 8px 20px -10px
-    color-mix(in oklch, var(--tc-brand-accent) 80%, transparent);
+  background: var(--tc-gradient);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 10px 24px -12px var(--tc-gradient-from);
+}
+.tc-nav-cta:hover {
+  background: var(--tc-gradient);
+  filter: brightness(1.06);
 }
 .tc-nav-sheet-link {
   display: flex;
@@ -613,9 +625,9 @@ For commercial licensing, please contact support@quantumnous.com
   color: var(--foreground);
 }
 .tc-nav-sheet-link[aria-current='page'] {
-  background: color-mix(in oklch, var(--tc-brand-accent) 10%, var(--card));
-  color: var(--foreground);
-  box-shadow: inset 2px 0 var(--tc-brand-accent);
+  background: var(--accent);
+  color: var(--accent-foreground);
+  box-shadow: inset 2px 0 var(--tc-gradient-from);
 }
 @media (prefers-reduced-motion: reduce) {
   .tc-public-header,

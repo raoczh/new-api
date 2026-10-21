@@ -138,9 +138,8 @@ describe('changelog path and language resolution', () => {
 
   test.each([
     ['zhCN', 'zh-CN'],
-    ['zhTW', 'zh-TW'],
     ['zh', 'zh-CN'],
-    ['zh_TW', 'zh-TW'],
+    ['zh_TW', 'zh-CN'],
     ['ja', 'ja'],
     ['en-US', 'en-US'],
     ['invalid_locale!', 'en'],
@@ -260,7 +259,7 @@ describe('changelog downloads', () => {
     )
   })
 
-  test.each(['fr', 'ru', 'vi', 'zhTW', 'en-US'])(
+  test.each(['fr', 'ru', 'vi', 'en-US'])(
     'falls back to English for %s rather than another available translation',
     async (language) => {
       const fetchMock = vi.fn(async () => new Response(english))

@@ -270,6 +270,7 @@ export function Hero(props: HeroProps) {
           >
             <Button
               size='lg'
+              variant='gradient'
               className='h-12 rounded-full px-6'
               render={<Link to={cta.to} />}
             >

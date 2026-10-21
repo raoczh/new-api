@@ -121,7 +121,7 @@ test('renders inline formatting and resolves release links against the source in
   expect(source).toHaveAttribute('rel', 'noopener noreferrer')
 })
 
-test('changing language chooses Chinese when declared and otherwise displays English with a fallback notice', async () => {
+test('changing language to Chinese selects the declared translation', async () => {
   vi.stubGlobal(
     'fetch',
     vi.fn(
@@ -133,7 +133,19 @@ test('changing language chooses Chinese when declared and otherwise displays Eng
   expect(await screen.findByText('Configure resolution prices.')).toBeVisible()
   await act(() => i18next.changeLanguage('zhCN'))
   expect(await screen.findByText('配置分辨率价格。')).toBeVisible()
-  await act(() => i18next.changeLanguage('fr'))
+})
+
+test('shows a fallback notice when the Chinese translation is unavailable', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url.endsWith('CHANGELOG.zh-CN.md')
+        ? new Response(null, { status: 404 })
+        : new Response(english)
+    )
+  )
+  await act(() => i18next.changeLanguage('zhCN'))
+  renderPanel()
   expect(
     await screen.findByText(
       'This changelog is not available in your language. Showing English.'

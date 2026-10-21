@@ -91,11 +91,7 @@ async function renderNavigation(path = '/keys', role = 1) {
   const root = createRootRoute({
     component: () => (
       <>
-        <AppHeader
-          showSearch={false}
-          showConfigDrawer={false}
-          showProfileDropdown={false}
-        />
+        <AppHeader showSearch={false} showProfileDropdown={false} />
         <AppSidebar />
       </>
     ),
@@ -103,6 +99,7 @@ async function renderNavigation(path = '/keys', role = 1) {
   const routes = [
     '/keys',
     '/wallet',
+    '/playground',
     '/channels',
     '/system-settings/site',
     '/system-settings/site/system-info',
@@ -163,12 +160,17 @@ it('hides contact support when no contact method is configured', async () => {
 })
 
 it('shows all permitted page links immediately and supports direct keyboard navigation', async () => {
+  client.setQueryData(['status'], {
+    SidebarModulesAdmin: JSON.stringify({
+      workbench: { enabled: true, chat: true },
+    }),
+  })
   const user = userEvent.setup()
   await renderNavigation()
   const navigation = within(
     screen.getByRole('navigation', { name: 'Navigation' })
   )
-  expect(navigation.getByRole('link', { name: 'Playground' })).toBeVisible()
+  expect(navigation.getByRole('link', { name: 'AI Chat' })).toBeVisible()
   expect(navigation.getByRole('link', { name: 'Overview' })).toBeVisible()
   expect(navigation.getByRole('link', { name: 'Wallet' })).toBeVisible()
   expect(
@@ -200,20 +202,6 @@ it('keeps the full menu visible when choosing the current page', async () => {
   )
   expect(screen.getByRole('link', { name: 'API Keys' })).toBeVisible()
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-})
-
-it('lists configured chat pages without opening another menu', async () => {
-  client.setQueryData(['status'], {
-    chats: [{ 'Team chat': 'https://chat.example.invalid' }],
-  })
-  const user = userEvent.setup()
-  const router = await renderNavigation()
-  const chat = screen.getByRole('link', { name: 'Team chat' })
-  expect(chat).toBeVisible()
-  await user.click(chat)
-  await waitFor(() => expect(router.state.location.pathname).toBe('/chat/0'))
-  expect(chat).toHaveAttribute('aria-current', 'page')
-  expect(screen.getByRole('link', { name: 'API Keys' })).toBeVisible()
 })
 
 it('preserves administrator and user menu visibility settings', async () => {

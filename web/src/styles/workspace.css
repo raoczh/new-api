@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 /* The workspace uses a full sidebar and an open document canvas. */
 :root {
-  --tc-rule: color-mix(in srgb, var(--foreground) 22%, var(--background));
+  --tc-rule: color-mix(in srgb, var(--border) 82%, transparent);
   --tc-gutter: clamp(1rem, 3.2vw, 3.5rem);
 }
 .tc-site-logo {
@@ -35,15 +35,15 @@ For commercial licensing, please contact support@quantumnous.com
 }
 .tc-brand .tc-brand-name {
   font-size: 1.1rem;
-  font-weight: 720;
-  letter-spacing: 0;
+  font-weight: 700;
+  letter-spacing: -0.015em;
   line-height: 1.05;
 }
 .tc-brand .tc-brand-chinese {
-  color: var(--tc-brand-accent);
-  font-size: 1rem;
-  font-weight: 680;
-  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   line-height: 1;
 }
 .tc-brand-compact .tc-site-logo {
@@ -54,15 +54,16 @@ For commercial licensing, please contact support@quantumnous.com
   font-size: 0.98rem;
 }
 .tc-brand-compact .tc-brand-chinese {
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }
 .tc-workspace-shell {
-  background: var(--card);
+  background: var(--background);
 }
 .tc-masthead {
-  background: var(--card);
-  box-shadow: none;
+  background: color-mix(in srgb, var(--background) 86%, var(--card));
   border-bottom: 1px solid var(--tc-rule);
+  box-shadow: none;
+  backdrop-filter: saturate(1.4) blur(16px);
 }
 .tc-masthead-inner {
   display: flex;
@@ -89,8 +90,8 @@ For commercial licensing, please contact support@quantumnous.com
   flex-direction: column;
   width: clamp(14rem, 18vw, 16rem);
   min-height: 0;
-  background: var(--card);
-  border-inline-end: 1px solid var(--border);
+  background: var(--sidebar);
+  border-inline-end: 1px solid var(--tc-rule);
 }
 .tc-sidebar-menu {
   display: flex;
@@ -106,7 +107,7 @@ For commercial licensing, please contact support@quantumnous.com
 .tc-sidebar-view-header {
   flex: none;
   padding: 0.75rem 0.875rem 0;
-  background: var(--card);
+  background: transparent;
 }
 .tc-sidebar-back {
   flex: none;
@@ -117,37 +118,53 @@ For commercial licensing, please contact support@quantumnous.com
   padding: 0.7rem 0.85rem;
   white-space: normal;
   text-align: start;
+  border-radius: 0.7rem;
   color: var(--muted-foreground);
 }
 .tc-navigation-panel [data-slot='sidebar-group-label'] {
   padding-inline: 0.85rem;
   margin-bottom: 0.3rem;
+  color: var(--muted-foreground);
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 .tc-navigation-panel [data-slot='sidebar-group'] {
   flex: none;
   padding: 0;
 }
 .tc-navigation-panel [data-slot='sidebar-menu'] {
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 .tc-navigation-panel [data-sidebar='menu-button'] {
   height: auto;
-  min-height: 2.75rem;
-  gap: 0.8rem;
-  padding: 0.7rem 0.85rem;
-  border-radius: 0.65rem;
+  min-height: 2.65rem;
+  gap: 0.75rem;
+  padding: 0.62rem 0.85rem;
+  border-radius: 0.7rem;
+  color: var(--sidebar-foreground);
   font-size: 0.875rem;
+  font-weight: 500;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+.tc-navigation-panel [data-sidebar='menu-button']:hover {
+  background: color-mix(in srgb, var(--sidebar-accent) 70%, transparent);
 }
 .tc-navigation-panel [data-sidebar='menu-sub-button'] {
   height: auto;
-  min-height: 2.5rem;
-  padding-block: 0.6rem;
-  border-radius: 0.5rem;
+  min-height: 2.35rem;
+  padding-block: 0.5rem;
+  border-radius: 0.6rem;
   font-size: 0.8125rem;
 }
 .tc-navigation-panel [data-slot='sidebar-menu-sub'] {
-  gap: 0.25rem;
-  margin-block: 0.4rem 0.75rem;
+  gap: 0.2rem;
+  margin-block: 0.35rem 0.7rem;
+  border-inline-start-color: var(--tc-rule);
 }
 .tc-navigation-panel [data-sidebar='menu-button'] > span,
 .tc-navigation-panel [data-sidebar='menu-sub-button'] > span {
@@ -155,15 +172,24 @@ For commercial licensing, please contact support@quantumnous.com
   overflow-wrap: anywhere;
 }
 .tc-navigation-panel [data-active] {
-  background: color-mix(in srgb, var(--tc-brand-accent) 10%, var(--card));
-  color: var(--tc-brand-accent);
+  background: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
+  font-weight: 600;
 }
 .tc-navigation-panel [data-sidebar='menu-button'][data-active] {
-  box-shadow: inset 2px 0 var(--tc-brand-accent);
+  background: var(--tc-gradient);
+  color: #fff;
+  box-shadow: var(--tc-shadow-lg);
+}
+.tc-navigation-panel
+  [data-sidebar='menu-button'][data-active]
+  .text-muted-foreground {
+  color: inherit;
+  opacity: 0.85;
 }
 .tc-navigation-panel [data-sidebar='menu-button'] > svg:first-child {
   color: var(--muted-foreground);
-  stroke-width: 1.6;
+  stroke-width: 1.7;
 }
 .tc-navigation-panel [data-active] > svg:first-child {
   color: currentColor;
@@ -175,7 +201,7 @@ For commercial licensing, please contact support@quantumnous.com
   align-items: stretch;
   gap: 0.125rem;
   padding: 0.75rem 0.875rem max(0.75rem, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--tc-rule);
 }
 .tc-sidebar-action {
   justify-content: flex-start;
@@ -184,12 +210,12 @@ For commercial licensing, please contact support@quantumnous.com
   min-height: 2.5rem;
   gap: 0.75rem;
   padding: 0.55rem 0.85rem;
-  border-radius: 0.65rem;
+  border-radius: 0.7rem;
   color: var(--muted-foreground);
   font-weight: 500;
 }
 .tc-sidebar-action > svg {
-  stroke-width: 1.6;
+  stroke-width: 1.7;
 }
 .tc-workspace-content {
   background: var(--background);
@@ -203,18 +229,18 @@ For commercial licensing, please contact support@quantumnous.com
   background: none;
 }
 .tc-page-title {
-  font-size: clamp(1.55rem, 2.2vw, 2.2rem);
-  line-height: 1.1;
-  letter-spacing: 0;
-  font-weight: 650;
+  font-size: clamp(1.5rem, 2.1vw, 2.05rem);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  font-weight: 680;
   overflow-wrap: anywhere;
 }
 .tc-page-title::before {
   display: inline-block;
   content: '';
-  width: 0.22rem;
+  width: 0.3rem;
   height: 1em;
-  background: var(--tc-brand-accent);
+  background: var(--tc-gradient);
   margin-inline-end: 0.7rem;
   border-radius: 999px;
   vertical-align: -0.08em;
@@ -235,12 +261,12 @@ For commercial licensing, please contact support@quantumnous.com
   position: relative;
   overflow: hidden;
 }
-.tc-channel-drawer-header::before {
+.tc-channel-drawer-header::after {
   position: absolute;
-  inset-inline-start: 0;
-  inset-block: 0;
-  width: 0.2rem;
-  background: var(--tc-brand-accent);
+  inset-inline: 0;
+  inset-block-start: 0;
+  height: 3px;
+  background: var(--tc-gradient);
   content: '';
 }
 .tc-channel-drawer-header-content {
@@ -275,7 +301,7 @@ For commercial licensing, please contact support@quantumnous.com
   min-height: 2.35rem;
   max-width: min(100%, 32rem);
   border-color: var(--border);
-  background: color-mix(in srgb, var(--tc-brand-accent) 5%, var(--background));
+  background: color-mix(in oklch, var(--accent) 55%, var(--background));
 }
 .tc-channel-drawer-meta-row {
   display: flex;
@@ -292,36 +318,36 @@ For commercial licensing, please contact support@quantumnous.com
 }
 .tc-page-footer {
   padding-inline: var(--tc-gutter);
-  background: var(--card);
+  background: color-mix(in srgb, var(--background) 92%, var(--card));
   box-shadow: none;
 }
 /* List pages stack a filter panel above the results at every width, so the
    table always gets the full content width. */
 .tc-data-workspace {
-  --tc-data-radius: 0.75rem;
-  --tc-data-shadow: 0 1px 2px
-    color-mix(in srgb, var(--foreground) 5%, transparent);
+  --tc-data-radius: var(--radius-xl);
+  --tc-data-shadow: var(--tc-shadow-md);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.875rem;
   min-width: 0;
 }
 .tc-data-tools {
   position: relative;
-  padding: 0.875rem 1rem;
-  border: 1px solid var(--border);
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--tc-rule);
   border-radius: var(--tc-data-radius);
   background: var(--card);
   box-shadow: var(--tc-data-shadow);
 }
 .tc-data-tools::before {
   position: absolute;
-  inset-block: 0.875rem;
-  inset-inline-start: 0;
-  width: 0.2rem;
-  border-radius: 0 999px 999px 0;
-  background: var(--tc-brand-accent);
+  inset-inline: 1rem;
+  inset-block-start: 0;
+  height: 2px;
+  border-radius: 0 0 999px 999px;
+  background: var(--tc-gradient);
   content: '';
+  opacity: 0.75;
 }
 /* Feature filter bars bring their own frame; the shared panel replaces it. */
 .tc-data-tools > .tc-log-filters,
@@ -344,43 +370,37 @@ For commercial licensing, please contact support@quantumnous.com
 }
 .tc-data-results > div:has([data-slot='table']) {
   background: var(--card);
+  border: 1px solid var(--tc-rule);
   box-shadow: var(--tc-data-shadow);
 }
 .tc-data-results [data-slot='table-head'] {
   height: 2.75rem;
+  background: color-mix(in oklch, var(--muted) 40%, var(--card));
   color: var(--muted-foreground);
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.01em;
 }
 .tc-data-results [data-slot='table-row'] {
-  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  border-color: color-mix(in srgb, var(--border) 65%, transparent);
 }
 .tc-data-results [data-slot='table-body'] [data-slot='table-row']:last-child {
   border-bottom: 0;
+}
+.tc-data-results [data-slot='table-body'] [data-slot='table-row']:hover {
+  background: color-mix(in oklch, var(--accent) 45%, transparent);
 }
 .tc-data-results [data-slot='table-cell'] {
   padding-block: 0.7rem;
 }
 .tc-data-results [data-slot='card'] {
-  border-radius: 0.6rem;
+  border-radius: var(--radius-lg);
   box-shadow: none;
-}
-.tc-overview-ledger {
-  border-block: 2px solid var(--foreground);
-  background: var(--card);
-}
-.tc-overview-ledger-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.4fr);
-}
-.tc-overview-metrics {
-  padding: 1.75rem;
 }
 .tc-overview-metric-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.25rem 0;
+  gap: 1rem;
 }
 @media (min-width: 768px) {
   .tc-overview-metric-list {
@@ -393,90 +413,21 @@ For commercial licensing, please contact support@quantumnous.com
   }
 }
 .tc-overview-metric {
-  padding-inline: 1.2rem;
-  border-inline-start: 1px solid var(--border);
-}
-.tc-overview-metric:nth-child(odd) {
-  padding-inline-start: 0;
-  border-inline-start: 0;
-}
-@media (min-width: 768px) {
-  .tc-overview-metric:nth-child(odd) {
-    padding-inline-start: 1.2rem;
-    border-inline-start: 1px solid var(--border);
-  }
-  .tc-overview-metric:nth-child(3n + 1) {
-    padding-inline-start: 0;
-    border-inline-start: 0;
-  }
-}
-@media (min-width: 1280px) {
-  .tc-overview-metric:nth-child(3n + 1) {
-    padding-inline-start: 1.2rem;
-    border-inline-start: 1px solid var(--border);
-  }
-  .tc-overview-metric:nth-child(6n + 1) {
-    padding-inline-start: 0;
-    border-inline-start: 0;
-  }
-}
-.tc-overview-credit {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 1.25rem;
-  padding: 1.75rem;
-  border-inline-start: 1px solid var(--border);
-  background: var(--muted);
-}
-.tc-overview-credit > div > .font-mono {
-  font-size: 2.5rem;
-  line-height: 1.2;
+  min-width: 0;
 }
 .tc-overview-panels {
   display: grid;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 .tc-overview-panel {
-  border-top: 1px solid var(--foreground);
+  border: 1px solid var(--tc-rule);
+  border-radius: var(--radius-xl);
   background: var(--card);
+  box-shadow: var(--tc-shadow-md);
 }
 .tc-panel-heading {
-  padding: 1.25rem;
-  border-bottom: 1px solid var(--border);
-}
-.tc-health-panel {
-  display: grid;
-  grid-template-columns: 15rem minmax(0, 1fr);
-  border-top: 1px solid var(--foreground);
-  border-bottom: 1px solid var(--border);
-  background: var(--card);
-}
-.tc-health-heading {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.8rem;
-  padding: 1.5rem;
-  border-inline-end: 1px solid var(--border);
-}
-.tc-health-content {
-  min-width: 0;
-  padding: 1.5rem;
-}
-.tc-health-metric {
-  min-width: 0;
-  padding: 0.25rem 1rem;
-  border-inline-start: 1px solid var(--border);
-}
-.tc-health-metric:first-child {
-  border-inline-start: 0;
-  padding-inline-start: 0;
-}
-.tc-health-value {
-  margin-top: 1rem;
-  font-size: 1.65rem;
-  line-height: 1.2;
+  padding: 1.125rem 1.25rem;
+  border-bottom: 1px solid var(--tc-rule);
 }
 .tc-wallet-workspace {
   display: grid;
@@ -497,22 +448,42 @@ For commercial licensing, please contact support@quantumnous.com
 .tc-wallet-stats {
   display: flex;
   flex-direction: column;
-  border-top: 2px solid var(--foreground);
+  overflow: hidden;
+  border: 1px solid var(--tc-rule);
+  border-radius: var(--radius-xl);
   background: var(--card);
+  box-shadow: var(--tc-shadow-md);
 }
 .tc-wallet-stat {
   min-width: 0;
   padding: 1.5rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--tc-rule);
+}
+.tc-wallet-stat:last-child {
+  border-bottom: 0;
 }
 .tc-wallet-stat:first-child {
-  background: var(--foreground);
-  color: var(--background);
+  position: relative;
+  overflow: hidden;
+  background: var(--tc-gradient);
+  color: #fff;
   padding-block: 2rem;
+}
+.tc-wallet-stat:first-child::after {
+  position: absolute;
+  inset: auto -20% -70% 40%;
+  height: 160%;
+  background: radial-gradient(
+    closest-side,
+    rgb(255 255 255 / 35%),
+    transparent
+  );
+  content: '';
+  pointer-events: none;
 }
 .tc-wallet-stat:first-child .text-muted-foreground {
   color: inherit;
-  opacity: 0.75;
+  opacity: 0.82;
 }
 .tc-wallet-stat:first-child .text-foreground {
   color: inherit;
@@ -523,8 +494,8 @@ For commercial licensing, please contact support@quantumnous.com
   margin-block: 1rem 0.5rem;
 }
 .tc-wallet-details [data-slot='card'] {
+  border-radius: var(--radius-xl);
   box-shadow: none;
-  border-radius: 0.3rem;
 }
 .tc-store-workspace {
   display: flex;
@@ -536,7 +507,9 @@ For commercial licensing, please contact support@quantumnous.com
 .tc-store-steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-top: 2px solid var(--foreground);
+  overflow: hidden;
+  border: 1px solid var(--tc-rule);
+  border-radius: var(--radius-lg);
   background: var(--card);
 }
 .tc-store-step {
@@ -544,9 +517,9 @@ For commercial licensing, please contact support@quantumnous.com
   align-items: center;
   gap: 0.6rem;
   min-width: 0;
-  padding: 0.75rem 1rem;
+  padding: 0.7rem 1rem;
+  border-inline-start: 1px solid var(--tc-rule);
   font-size: 0.85rem;
-  border-inline-start: 1px solid var(--border);
 }
 .tc-store-step:first-child {
   border-inline-start: 0;
@@ -556,11 +529,11 @@ For commercial licensing, please contact support@quantumnous.com
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 1.4rem;
-  height: 1.4rem;
+  width: 1.45rem;
+  height: 1.45rem;
   border-radius: 999px;
-  background: var(--foreground);
-  color: var(--background);
+  background: var(--tc-gradient);
+  color: #fff;
   font-size: 0.75rem;
   font-weight: 650;
 }
@@ -569,9 +542,10 @@ For commercial licensing, please contact support@quantumnous.com
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 0.3rem;
+  border: 1px solid var(--tc-rule);
+  border-radius: var(--radius-xl);
   background: var(--background);
+  box-shadow: var(--tc-shadow-md);
 }
 .tc-store-frame-overlay {
   position: absolute;
@@ -589,19 +563,6 @@ For commercial licensing, please contact support@quantumnous.com
   border: 0;
   background: var(--background);
 }
-.tc-home-hero {
-  padding: 8rem var(--tc-gutter) 0;
-  overflow: hidden;
-}
-.tc-hero-stage {
-  position: relative;
-  max-width: 1440px;
-  margin-inline: auto;
-}
-.tc-hero-heading {
-  position: relative;
-  padding-bottom: 3rem;
-}
 .tc-home-brand {
   position: relative;
   z-index: 1;
@@ -615,185 +576,51 @@ For commercial licensing, please contact support@quantumnous.com
   font-size: 1.35rem;
 }
 .tc-home-brand .tc-brand-chinese {
-  font-size: 1.15rem;
-}
-.tc-hero-kicker {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  font-size: 0.7rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--muted-foreground);
-}
-.tc-hero-title {
-  position: relative;
-  z-index: 1;
-  font-size: clamp(3.8rem, 8.8vw, 8.5rem);
-  line-height: 1.04;
-  font-weight: 650;
-  letter-spacing: -0.075em;
-  margin-block: 2rem;
-}
-.tc-hero-title span {
-  color: var(--tc-brand-accent);
-}
-.tc-hero-description {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 2rem;
-}
-.tc-hero-description > p {
-  max-width: 31rem;
-  font-size: 1rem;
-  line-height: 1.9;
-}
-.tc-hero-diagram {
-  position: absolute;
-  width: 45%;
-  inset-inline-end: -2rem;
-  top: 1rem;
-  opacity: 0.4;
-  transform: rotate(-12deg);
-  pointer-events: none;
-}
-.tc-protocol-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2rem;
-  padding: 1.5rem 0;
-  border-block: 1px solid var(--tc-rule);
-}
-.tc-protocol-strip > span {
-  font-size: 0.65rem;
-  color: var(--muted-foreground);
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.tc-protocol-names {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2rem;
-  font-size: 1.2rem;
-  font-weight: 550;
-  letter-spacing: -0.04em;
-}
-.tc-editorial-section {
-  padding: 5rem var(--tc-gutter);
-}
-.tc-features-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 0.4fr) minmax(0, 1fr);
-  gap: 3rem;
-  max-width: 1440px;
-  margin-inline: auto;
-}
-.tc-section-intro {
-  padding-top: 1.5rem;
-}
-.tc-feature-register {
-  border-top: 2px solid var(--foreground);
-}
-.tc-feature-row {
-  display: grid;
-  grid-template-columns: 2.25rem minmax(0, 1fr) minmax(10rem, 0.7fr);
-  gap: 1.5rem;
-  align-items: center;
-  padding: 2rem 0;
-  border-bottom: 1px solid var(--tc-rule);
-}
-.tc-feature-number {
-  align-self: start;
-  font: 0.75rem var(--font-mono);
-  color: var(--tc-brand-accent);
-}
-.tc-feature-visual {
-  min-width: 0;
-}
-.tc-feature-visual > div {
-  margin-top: 0;
-}
-.tc-feature-notes {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 2rem;
-  padding-top: 2rem;
-  border-top: 1px solid var(--border);
-}
-.tc-journey {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-top: 2px solid var(--foreground);
-}
-.tc-journey-step {
-  padding: 2rem;
-  border-inline-start: 1px solid var(--border);
-}
-.tc-journey-step:first-child {
-  padding-inline-start: 0;
-  border-inline-start: 0;
-}
-.tc-journey-number {
-  font: 500 clamp(3.5rem, 6vw, 5rem)/1 var(--font-mono);
-  letter-spacing: -0.09em;
-  color: var(--tc-brand-accent);
-}
-.tc-home-cta {
-  background: var(--foreground);
-  color: var(--background);
-}
-.tc-home-cta-inner {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
-  gap: 1.5rem 4rem;
-  max-width: 1440px;
-  margin-inline: auto;
-  align-items: start;
-}
-.tc-home-cta-inner > h2 {
-  grid-row: span 2;
-}
-.tc-public-shell,
-.tc-auth-shell {
-  background-image: none;
-}
-.tc-public-shell::before,
-.tc-auth-shell::before {
-  background: none;
+  font-size: 1.1rem;
 }
 .tc-public-header {
   border-bottom-color: var(--tc-rule);
 }
 .tc-auth-aside {
   position: relative;
-  background: var(--foreground);
-  color: var(--background);
   overflow: hidden;
+  background: var(--tc-gradient);
+  color: #fff;
+}
+.tc-auth-aside::after {
+  position: absolute;
+  inset: -30% -40% auto auto;
+  width: 32rem;
+  height: 32rem;
+  border-radius: 999px;
+  background: radial-gradient(
+    closest-side,
+    rgb(255 255 255 / 28%),
+    transparent
+  );
+  content: '';
+  pointer-events: none;
 }
 .tc-auth-brand {
   margin-bottom: 2.5rem;
 }
 .tc-auth-aside .tc-brand {
-  color: var(--background);
+  color: #fff;
 }
 .tc-auth-aside .tc-brand-chinese {
-  color: var(--tc-brand-accent);
+  color: #fff;
+  opacity: 0.85;
 }
 .tc-auth-aside .text-muted-foreground {
   color: inherit;
-  opacity: 0.7;
+  opacity: 0.82;
 }
 .tc-auth-aside .text-brand {
-  color: var(--background);
-  opacity: 0.7;
+  color: #fff;
+  opacity: 0.82;
 }
 .tc-auth-aside svg {
-  opacity: 0.5;
+  opacity: 0.7;
 }
 /* Short mobile screens can scroll the workspace instead of squeezing the result
    list between navigation, filters, and pagination. */
@@ -811,13 +638,6 @@ For commercial licensing, please contact support@quantumnous.com
   }
 }
 @media (max-width: 1023px) {
-  .tc-overview-ledger-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .tc-overview-credit {
-    border-inline-start: 0;
-    border-top: 1px solid var(--border);
-  }
   .tc-wallet-workspace {
     grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
@@ -835,24 +655,6 @@ For commercial licensing, please contact support@quantumnous.com
   }
   .tc-wallet-stat-value {
     font-size: 1.3rem;
-  }
-  .tc-features-layout {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 2rem;
-  }
-  .tc-health-panel {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .tc-health-heading {
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-    padding: 1rem;
-    border-inline-end: 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .tc-health-heading > span {
-    margin-inline-start: auto;
   }
 }
 @media (max-width: 639px) {
@@ -876,7 +678,7 @@ For commercial licensing, please contact support@quantumnous.com
     font-size: 0.94rem;
   }
   .tc-brand-compact .tc-brand-chinese {
-    font-size: 0.84rem;
+    font-size: 0.82rem;
   }
   .tc-page-heading {
     padding-block: 1.1rem;
@@ -888,13 +690,20 @@ For commercial licensing, please contact support@quantumnous.com
     padding: 0.625rem 0.75rem;
   }
   .tc-data-tools::before {
-    inset-block: 0.625rem;
+    inset-inline: 0.75rem;
   }
   .tc-page-title {
-    font-size: 1.7rem;
+    font-size: 1.6rem;
+  }
+  .tc-page-title::before {
+    width: 0.25rem;
+    margin-inline-end: 0.5rem;
   }
   .tc-page-heading > div {
     gap: 0.8rem;
+  }
+  .tc-overview-metric-list {
+    gap: 0.75rem;
   }
   .tc-channel-drawer-title-row {
     align-items: stretch;
@@ -912,16 +721,6 @@ For commercial licensing, please contact support@quantumnous.com
   .tc-channel-drawer-meta-row {
     align-items: flex-start;
     flex-direction: column;
-  }
-  .tc-overview-metrics,
-  .tc-overview-credit {
-    padding: 1rem;
-  }
-  .tc-overview-metric {
-    padding-inline: 0.6rem;
-  }
-  .tc-overview-metric-list {
-    margin-top: 1.25rem;
   }
   .tc-wallet-stats {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -941,90 +740,9 @@ For commercial licensing, please contact support@quantumnous.com
   .tc-store-step {
     padding: 0.55rem 0.75rem;
     border-inline-start: 0;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--tc-rule);
   }
   .tc-store-step:first-child {
     border-top: 0;
-  }
-  .tc-home-hero {
-    padding-top: 7rem;
-  }
-  .tc-home-brand {
-    margin-bottom: 1.5rem;
-  }
-  .tc-home-brand .tc-site-logo {
-    width: 3rem;
-    height: 3rem;
-  }
-  .tc-home-brand .tc-brand-name {
-    font-size: 1.15rem;
-  }
-  .tc-home-brand .tc-brand-chinese {
-    font-size: 1rem;
-  }
-  .tc-hero-title {
-    font-size: clamp(3rem, 13vw, 5rem);
-  }
-  .tc-hero-description {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-  .tc-hero-diagram {
-    width: 90%;
-    top: 1rem;
-    opacity: 0.18;
-  }
-  .tc-protocol-strip {
-    gap: 0.8rem;
-  }
-  .tc-protocol-names {
-    gap: 1rem;
-    font-size: 1rem;
-  }
-  .tc-editorial-section {
-    padding-block: 3rem;
-  }
-  .tc-feature-row {
-    grid-template-columns: 1.5rem minmax(0, 1fr);
-    gap: 0.8rem;
-    padding-block: 1.5rem;
-  }
-  .tc-feature-visual {
-    grid-column: 2;
-  }
-  .tc-feature-notes {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 2rem 1rem;
-  }
-  .tc-journey {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .tc-journey-step,
-  .tc-journey-step:first-child {
-    padding: 1.5rem 0;
-    border-inline-start: 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .tc-journey-step:last-child {
-    border-bottom: 0;
-  }
-  .tc-home-cta-inner {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .tc-home-cta-inner > h2 {
-    grid-row: auto;
-  }
-  .tc-health-content {
-    padding: 1rem;
-  }
-  .tc-health-metric {
-    padding-inline: 0.5rem;
-  }
-  .tc-health-metric > div:first-child {
-    flex-wrap: wrap;
-  }
-  .tc-health-value {
-    font-size: 1.1rem;
   }
 }
