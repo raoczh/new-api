@@ -788,7 +788,7 @@ func imageStudioQueueDepth(kind string) int64 {
 // logging, channel selection and retries behave exactly like a first-class
 // image request.
 func runImageStudioRelay(ctx context.Context, input service.ImageStudioRunInput) (*service.ImageStudioRunOutput, error) {
-	body, contentType, requestPath, err := buildImageStudioBody(input)
+	body, contentType, requestPath, err := buildImageStudioBody(input, dto.ChannelSettings{})
 	if err != nil {
 		return nil, err
 	}
@@ -817,6 +817,26 @@ func runImageStudioRelay(ctx context.Context, input service.ImageStudioRunInput)
 
 	if selectErr := imageStudioSelectChannel(c, input.Model, input.Group); selectErr != nil {
 		return nil, errors.New(selectErr.Error())
+	}
+	channelSetting, _ := common.GetContextKeyType[dto.ChannelSettings](c, constant.ContextKeyChannelSetting)
+
+	// A channel that only accepts reference URLs needs a different payload
+	// shape, so the body is rebuilt once the channel is known. The default
+	// body above stays in place for every other channel and keeps body-based
+	// affinity rules working during selection. A retry that switches channels
+	// keeps the first channel's shape, because the queue snapshot has already
+	// fixed the body.
+	if channelSetting.ImageReferenceAsURL && len(input.ReferenceKeys) > 0 {
+		body, contentType, requestPath, err = buildImageStudioBody(input, channelSetting)
+		if err != nil {
+			return nil, err
+		}
+		// Selection may have read the default body (for example a body-based
+		// affinity rule); drop that snapshot so Relay reads the rebuilt one.
+		common.CleanupBodyStorage(c)
+		c.Request = httptest.NewRequestWithContext(ctx, http.MethodPost, requestPath, bytes.NewReader(body))
+		c.Request.Header.Set("Content-Type", contentType)
+		c.Request.ContentLength = int64(len(body))
 	}
 
 	// The synthetic token mirrors the playground: it carries the chosen group
@@ -891,9 +911,11 @@ func imageStudioSelectChannel(c *gin.Context, modelName string, group string) *t
 }
 
 // buildImageStudioBody renders the stored snapshot into an upstream request.
-// Reference images switch the request to the multipart edit endpoint, which is
-// what every image-editing adapter understands.
-func buildImageStudioBody(input service.ImageStudioRunInput) (body []byte, contentType string, requestPath string, err error) {
+// Reference images normally switch the request to the multipart edit endpoint,
+// which is what every image-editing adapter understands. A channel that only
+// accepts reference URLs gets a JSON generation body whose image entries are
+// absolute URLs instead.
+func buildImageStudioBody(input service.ImageStudioRunInput, setting dto.ChannelSettings) (body []byte, contentType string, requestPath string, err error) {
 	params := map[string]any{}
 	if input.Params != "" {
 		if unmarshalErr := common.Unmarshal([]byte(input.Params), &params); unmarshalErr != nil {
@@ -908,6 +930,34 @@ func buildImageStudioBody(input service.ImageStudioRunInput) (body []byte, conte
 		if marshalErr != nil {
 			return nil, "", "", marshalErr
 		}
+		return payload, "application/json", imageStudioGenerationPath, nil
+	}
+
+	if setting.ImageReferenceAsURL {
+		imageURLs := make([]string, 0, len(input.ReferenceKeys))
+		for _, key := range input.ReferenceKeys {
+			absoluteURL, urlErr := service.ImageStudioFileAbsoluteURL(key)
+			if urlErr != nil {
+				return nil, "", "", errors.New("参考图外链生成失败，请检查绘图设置中的公网地址")
+			}
+			imageURLs = append(imageURLs, absoluteURL)
+		}
+		params["image"] = imageURLs
+		if input.MaskKey != "" {
+			maskURL, urlErr := service.ImageStudioFileAbsoluteURL(input.MaskKey)
+			if urlErr != nil {
+				return nil, "", "", errors.New("蒙版外链生成失败，请检查绘图设置中的公网地址")
+			}
+			params["mask"] = maskURL
+		}
+		payload, marshalErr := common.Marshal(params)
+		if marshalErr != nil {
+			return nil, "", "", marshalErr
+		}
+		// URL references are a JSON payload for the generation endpoint: that is
+		// where providers expose an image URL array. The OpenAI adaptor forwards
+		// generations bodies unchanged, and adaptors that rewrite edit traffic
+		// (for example volcengine) map both paths to the same upstream route.
 		return payload, "application/json", imageStudioGenerationPath, nil
 	}
 

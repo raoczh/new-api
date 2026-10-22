@@ -35,6 +35,10 @@ type ChannelSettings struct {
 	// TLSInsecureSkipVerify accepts upstream certificates that fail
 	// verification, such as self-signed ones, for this channel only.
 	TLSInsecureSkipVerify bool `json:"tls_insecure_skip_verify,omitempty"`
+	// ImageReferenceAsURL sends Image Studio reference images as absolute
+	// URLs instead of multipart file parts. It applies only to the drawing
+	// page; direct /v1/images/edits traffic is unchanged.
+	ImageReferenceAsURL bool `json:"image_reference_as_url,omitempty"`
 }
 
 // BindsTaskPlugin reports whether the channel is bound to the task plugin,

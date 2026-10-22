@@ -3,11 +3,15 @@ package controller
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -99,6 +103,137 @@ func findImageStudioModelOption(t *testing.T, groups []imageStudioGroupOption, g
 	}
 	require.FailNow(t, "image studio model option not found", "group=%s model=%s", group, name)
 	return imageStudioModelOption{}
+}
+
+func TestBuildImageStudioBodySendsReferenceFilesByDefault(t *testing.T) {
+	withImageStudioStorage(t)
+	referenceKey := saveImageStudioTestImage(t)
+
+	body, contentType, requestPath, err := buildImageStudioBody(service.ImageStudioRunInput{
+		Model:         "gpt-image-1",
+		Prompt:        "a cat",
+		ReferenceKeys: []string{referenceKey},
+	}, dto.ChannelSettings{})
+	require.NoError(t, err)
+
+	assert.Equal(t, imageStudioEditPath, requestPath)
+	assert.True(t, strings.HasPrefix(contentType, "multipart/form-data"))
+	assert.Contains(t, string(body), `name="image[]"`)
+	assert.NotContains(t, string(body), "http://")
+}
+
+func TestBuildImageStudioBodySendsReferenceURLsWhenChannelRequiresThem(t *testing.T) {
+	withImageStudioStorage(t)
+	referenceKey := saveImageStudioTestImage(t)
+
+	body, contentType, requestPath, err := buildImageStudioBody(service.ImageStudioRunInput{
+		Model:         "gpt-image-1",
+		Prompt:        "a cat",
+		ReferenceKeys: []string{referenceKey},
+	}, dto.ChannelSettings{ImageReferenceAsURL: true})
+	require.NoError(t, err)
+
+	assert.Equal(t, imageStudioGenerationPath, requestPath)
+	assert.Equal(t, "application/json", contentType)
+	var payload struct {
+		Model string   `json:"model"`
+		Image []string `json:"image"`
+	}
+	require.NoError(t, common.Unmarshal(body, &payload))
+	require.Len(t, payload.Image, 1)
+	assert.Equal(t, "https://img.example.com/"+referenceKey, payload.Image[0])
+}
+
+func TestBuildImageStudioBodySendsMaskAsURLWhenChannelRequiresThem(t *testing.T) {
+	withImageStudioStorage(t)
+	referenceKey := saveImageStudioTestImage(t)
+	maskKey := saveImageStudioTestImage(t)
+
+	body, _, _, err := buildImageStudioBody(service.ImageStudioRunInput{
+		Model:         "gpt-image-1",
+		Prompt:        "a cat",
+		ReferenceKeys: []string{referenceKey},
+		MaskKey:       maskKey,
+	}, dto.ChannelSettings{ImageReferenceAsURL: true})
+	require.NoError(t, err)
+
+	var payload struct {
+		Mask string `json:"mask"`
+	}
+	require.NoError(t, common.Unmarshal(body, &payload))
+	assert.Equal(t, "https://img.example.com/"+maskKey, payload.Mask)
+}
+
+func TestBuildImageStudioBodyFallsBackToServerAddressForReferenceURLs(t *testing.T) {
+	withImageStudioStorage(t)
+	referenceKey := saveImageStudioTestImage(t)
+	settings := system_setting.GetImageStudioSettings()
+	settings.PublicBaseURL = ""
+	originalServerAddress := system_setting.ServerAddress
+	system_setting.ServerAddress = "https://gateway.example.com"
+	t.Cleanup(func() { system_setting.ServerAddress = originalServerAddress })
+
+	body, _, _, err := buildImageStudioBody(service.ImageStudioRunInput{
+		Model:         "gpt-image-1",
+		Prompt:        "a cat",
+		ReferenceKeys: []string{referenceKey},
+	}, dto.ChannelSettings{ImageReferenceAsURL: true})
+	require.NoError(t, err)
+
+	var payload struct {
+		Image []string `json:"image"`
+	}
+	require.NoError(t, common.Unmarshal(body, &payload))
+	require.Len(t, payload.Image, 1)
+	assert.Equal(
+		t,
+		"https://gateway.example.com/api/image-studio/files/"+referenceKey,
+		payload.Image[0],
+	)
+}
+
+func TestBuildImageStudioBodyRejectsURLModeWithoutAbsoluteAddress(t *testing.T) {
+	withImageStudioStorage(t)
+	referenceKey := saveImageStudioTestImage(t)
+	settings := system_setting.GetImageStudioSettings()
+	settings.PublicBaseURL = ""
+	originalServerAddress := system_setting.ServerAddress
+	system_setting.ServerAddress = ""
+	t.Cleanup(func() { system_setting.ServerAddress = originalServerAddress })
+
+	_, _, _, err := buildImageStudioBody(service.ImageStudioRunInput{
+		Model:         "gpt-image-1",
+		Prompt:        "a cat",
+		ReferenceKeys: []string{referenceKey},
+	}, dto.ChannelSettings{ImageReferenceAsURL: true})
+
+	require.Error(t, err)
+}
+
+// withImageStudioStorage points artifact storage at a temporary directory and
+// configures PublicBaseURL, restoring both afterwards.
+func withImageStudioStorage(t *testing.T) {
+	t.Helper()
+
+	settings := system_setting.GetImageStudioSettings()
+	originalStorageDir := settings.StorageDir
+	originalPublicBaseURL := settings.PublicBaseURL
+	t.Cleanup(func() {
+		settings.StorageDir = originalStorageDir
+		settings.PublicBaseURL = originalPublicBaseURL
+	})
+	settings.StorageDir = t.TempDir()
+	settings.PublicBaseURL = "https://img.example.com"
+}
+
+func saveImageStudioTestImage(t *testing.T) string {
+	t.Helper()
+
+	// Minimal PNG signature plus IHDR chunk is enough for content sniffing.
+	png := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R', 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0}
+	key, err := service.SaveImageStudioBytes(png)
+	require.NoError(t, err)
+	return key
 }
 
 func TestListImageStudioModelsResolvesTieredFixedPrices(t *testing.T) {

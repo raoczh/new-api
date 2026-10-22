@@ -38,6 +38,7 @@ import {
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ImagePreviewDialog } from '@/components/image-preview-dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { formatTimestampToDate } from '@/lib/format'
 
@@ -48,7 +49,6 @@ import {
   mjSubmitResultMapper,
 } from '../../lib/mappers'
 import type { MidjourneyLog } from '../../types'
-import { ImageDialog } from '../dialogs/image-dialog'
 import { PromptDialog } from '../dialogs/prompt-dialog'
 import {
   createDurationColumn,
@@ -215,11 +215,16 @@ export function useDrawingLogsColumns(
                   {t('View')}
                 </span>
               </button>
-              <ImageDialog
-                imageUrl={imageUrl}
-                taskId={log.mj_id}
+              <ImagePreviewDialog
                 open={dialogOpen}
                 onOpenChange={setDialogOpen}
+                src={imageUrl}
+                title={t('Image Preview')}
+                description={
+                  log.mj_id ? `${t('Task ID:')} ${log.mj_id}` : undefined
+                }
+                alt={t('Generated image')}
+                showSource
               />
             </>
           )

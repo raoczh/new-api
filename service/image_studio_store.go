@@ -21,7 +21,7 @@ import (
 // enumerate another user's images.
 
 const (
-	imageStudioKeyPrefix  = "img/"
+	imageStudioKeyPrefix   = "img/"
 	imageStudioKeyShardLen = 3
 	imageStudioMaxExtLen   = 5
 )
@@ -214,6 +214,31 @@ func ImageStudioFileURL(key string) string {
 		return settings.PublicBaseURL + "/" + strings.TrimPrefix(key, "/")
 	}
 	return "/api/image-studio/files/" + strings.TrimPrefix(key, "/")
+}
+
+// ImageStudioFileAbsoluteURL returns an absolute URL for a key, for upstream
+// providers that only accept reference image URLs.
+//
+// PublicBaseURL wins when configured; otherwise the gateway's own
+// ServerAddress is used. The result must be reachable by the upstream
+// provider, so a relative browser path is never returned.
+func ImageStudioFileAbsoluteURL(key string) (string, error) {
+	if err := ValidateImageStudioKey(key); err != nil {
+		return "", err
+	}
+	settings := system_setting.GetImageStudioSettings()
+	// PublicBaseURL maps the storage root directly; the gateway address needs
+	// the API file route in front of the key.
+	baseAddress := strings.TrimSpace(settings.PublicBaseURL)
+	suffix := ""
+	if baseAddress == "" {
+		baseAddress = strings.TrimSpace(system_setting.ServerAddress)
+		suffix = "/api/image-studio/files"
+	}
+	if err := ValidateTaskArtifactBaseURL(baseAddress); err != nil {
+		return "", fmt.Errorf("image studio public base URL is not usable: %w", err)
+	}
+	return strings.TrimRight(baseAddress, "/") + suffix + "/" + strings.TrimPrefix(key, "/"), nil
 }
 
 // CleanupImageStudioStorage removes artifact files whose modification time is
