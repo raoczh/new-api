@@ -133,6 +133,11 @@ var TelegramBotName = ""
 var QuotaForNewUser = 0
 var QuotaForInviter = 0
 var QuotaForInvitee = 0
+
+// DefaultMaxConcurrentRequests and DefaultRequestsPerMinute seed the per-user
+// relay limits of newly created accounts. Zero means unlimited.
+var DefaultMaxConcurrentRequests = 0
+var DefaultRequestsPerMinute = 0
 var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false
 var AutomaticEnableChannelEnabled = false

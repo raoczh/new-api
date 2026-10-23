@@ -112,6 +112,11 @@ type User struct {
 	LastLoginAt          int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
 	AuthVersion          int64                      `json:"-" gorm:"type:bigint;not null;default:1;column:auth_version"`
 	AdminPermissions     map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
+
+	// Per-user relay limits live in Setting. The API exposes them as top-level
+	// fields so the admin form can edit them; nil means "not provided" on update.
+	MaxConcurrentRequests *int `json:"max_concurrent_requests,omitempty" gorm:"-:all"`
+	RequestsPerMinute     *int `json:"requests_per_minute,omitempty" gorm:"-:all"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -195,6 +200,29 @@ func UpdateUserSetting(userId int, setting dto.UserSetting) error {
 		return err
 	}
 	return updateUserSettingCache(userId, settingValue)
+}
+
+// maxUserRelayLimit bounds the per-user concurrency/RPM settings so a typo
+// cannot make every request wait on an absurd counter.
+const maxUserRelayLimit = 1_000_000
+
+// ValidateUserRelayLimits rejects negative or out-of-range per-user relay limits.
+func ValidateUserRelayLimits(maxConcurrentRequests, requestsPerMinute int) error {
+	if maxConcurrentRequests < 0 || maxConcurrentRequests > maxUserRelayLimit {
+		return fmt.Errorf("max concurrent requests must be between 0 and %d", maxUserRelayLimit)
+	}
+	if requestsPerMinute < 0 || requestsPerMinute > maxUserRelayLimit {
+		return fmt.Errorf("requests per minute must be between 0 and %d", maxUserRelayLimit)
+	}
+	return nil
+}
+
+func (user *User) ApplyUserRelayLimitsToResponse() {
+	setting := user.GetSetting()
+	maxConcurrent := setting.MaxConcurrentRequests
+	requestsPerMinute := setting.RequestsPerMinute
+	user.MaxConcurrentRequests = &maxConcurrent
+	user.RequestsPerMinute = &requestsPerMinute
 }
 
 // userBindColumns 允许通过 UpdateUserBindColumn 更新的第三方账号绑定列白名单。
@@ -683,7 +711,10 @@ func (user *User) Insert(inviterId int) error {
 
 			// 初始化用户设置，包括默认的边栏配置
 			if user.Setting == "" {
-				defaultSetting := dto.UserSetting{}
+				defaultSetting := dto.UserSetting{
+					MaxConcurrentRequests: common.DefaultMaxConcurrentRequests,
+					RequestsPerMinute:     common.DefaultRequestsPerMinute,
+				}
 				// 这里暂时不设置SidebarModules，因为需要在用户创建后根据角色设置
 				user.SetSetting(defaultSetting)
 			}
@@ -747,7 +778,10 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 
 		// 初始化用户设置
 		if user.Setting == "" {
-			defaultSetting := dto.UserSetting{}
+			defaultSetting := dto.UserSetting{
+				MaxConcurrentRequests: common.DefaultMaxConcurrentRequests,
+				RequestsPerMinute:     common.DefaultRequestsPerMinute,
+			}
 			user.SetSetting(defaultSetting)
 		}
 
@@ -890,6 +924,22 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	current := User{}
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
+	}
+	// The admin form submits only the two limit fields; merge them into the
+	// stored Setting so unrelated preferences survive the update.
+	if user.MaxConcurrentRequests != nil || user.RequestsPerMinute != nil {
+		setting := current.GetSetting()
+		if user.MaxConcurrentRequests != nil {
+			setting.MaxConcurrentRequests = *user.MaxConcurrentRequests
+		}
+		if user.RequestsPerMinute != nil {
+			setting.RequestsPerMinute = *user.RequestsPerMinute
+		}
+		settingBytes, err := common.Marshal(setting)
+		if err != nil {
+			return err
+		}
+		updates["setting"] = string(settingBytes)
 	}
 	authChanged := (updatePassword && current.Password != newUser.Password) || current.Group != newUser.Group
 	if authChanged {

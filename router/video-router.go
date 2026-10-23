@@ -16,6 +16,7 @@ func SetVideoRouter(router *gin.Engine) {
 		"/video/generations",
 		middleware.PinTaskPluginEndpoint(),
 		middleware.TaskPluginEndpointOnly(middleware.ModelRequestRateLimit()),
+		middleware.UserRequestLimit(),
 		middleware.PrepareTaskPluginEndpoint(),
 		middleware.Distribute(),
 		func(c *gin.Context) {
@@ -28,6 +29,6 @@ func SetVideoRouter(router *gin.Engine) {
 	videoV1Router.Use(middleware.TokenAuth(), middleware.Distribute())
 	{
 		videoV1Router.GET("/video/generations/:task_id", controller.RelayTaskFetch)
-		videoV1Router.POST("/videos/:video_id/remix", controller.RelayTask)
+		videoV1Router.POST("/videos/:video_id/remix", middleware.UserRequestLimit(), controller.RelayTask)
 	}
 }

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"maps"
 	"strconv"
 	"strings"
@@ -144,6 +145,8 @@ func InitOptionMap() {
 	common.OptionMap["QuotaForNewUser"] = strconv.Itoa(common.QuotaForNewUser)
 	common.OptionMap["QuotaForInviter"] = strconv.Itoa(common.QuotaForInviter)
 	common.OptionMap["QuotaForInvitee"] = strconv.Itoa(common.QuotaForInvitee)
+	common.OptionMap["DefaultMaxConcurrentRequests"] = strconv.Itoa(common.DefaultMaxConcurrentRequests)
+	common.OptionMap["DefaultRequestsPerMinute"] = strconv.Itoa(common.DefaultRequestsPerMinute)
 	common.OptionMap["QuotaRemindThreshold"] = strconv.Itoa(common.QuotaRemindThreshold)
 	common.OptionMap["PreConsumedQuota"] = strconv.Itoa(common.PreConsumedQuota)
 	common.OptionMap["ModelRequestRateLimitCount"] = strconv.Itoa(setting.ModelRequestRateLimitCount)
@@ -249,6 +252,20 @@ func validateOptionValue(key string, value string) error {
 	}
 	if key == "MaxTokenAutoGroups" {
 		return setting.ValidateMaxTokenAutoGroups(value)
+	}
+	switch key {
+	case "DefaultMaxConcurrentRequests":
+		limit, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil {
+			return fmt.Errorf("%s must be an integer between 0 and %d", key, maxUserRelayLimit)
+		}
+		return ValidateUserRelayLimits(limit, 0)
+	case "DefaultRequestsPerMinute":
+		limit, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil {
+			return fmt.Errorf("%s must be an integer between 0 and %d", key, maxUserRelayLimit)
+		}
+		return ValidateUserRelayLimits(0, limit)
 	}
 	return nil
 }
@@ -622,6 +639,10 @@ func updateOptionMap(key string, value string) (err error) {
 		common.QuotaForInviter, _ = strconv.Atoi(value)
 	case "QuotaForInvitee":
 		common.QuotaForInvitee, _ = strconv.Atoi(value)
+	case "DefaultMaxConcurrentRequests":
+		common.DefaultMaxConcurrentRequests, _ = strconv.Atoi(value)
+	case "DefaultRequestsPerMinute":
+		common.DefaultRequestsPerMinute, _ = strconv.Atoi(value)
 	case "QuotaRemindThreshold":
 		common.QuotaRemindThreshold, _ = strconv.Atoi(value)
 	case "PreConsumedQuota":

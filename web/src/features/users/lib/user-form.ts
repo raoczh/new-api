@@ -27,7 +27,7 @@ import { quotaUnitsToDollars } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 
 import { DEFAULT_GROUP } from '../constants'
-import { type UserFormData, type User } from '../types'
+import type { UserFormData, User } from '../types'
 
 // ============================================================================
 // Form Schema
@@ -41,6 +41,13 @@ export const userFormSchema = z.object({
   quota_dollars: z.number().min(0).optional(),
   group: z.string().optional(),
   remark: z.string().optional(),
+  max_concurrent_requests: z
+    .number()
+    .int()
+    .min(0)
+    .max(1_000_000)
+    .optional(),
+  requests_per_minute: z.number().int().min(0).max(1_000_000).optional(),
   admin_permissions: z
     .record(z.string(), z.record(z.string(), z.boolean()))
     .optional(),
@@ -60,6 +67,8 @@ export const USER_FORM_DEFAULT_VALUES: UserFormValues = {
   quota_dollars: 0,
   group: DEFAULT_GROUP,
   remark: '',
+  max_concurrent_requests: 0,
+  requests_per_minute: 0,
   // Filled against the backend catalog at render time; see UsersMutateDrawer.
   admin_permissions: {},
 }
@@ -101,6 +110,8 @@ export function transformFormDataToPayload(
     // For update: quota is adjusted atomically via /api/user/manage, not sent here
     payload.group = data.group
     payload.remark = data.remark || undefined
+    payload.max_concurrent_requests = data.max_concurrent_requests ?? 0
+    payload.requests_per_minute = data.requests_per_minute ?? 0
     payload.id = userId
   }
 
@@ -121,6 +132,8 @@ export function transformUserToFormDefaults(user: User): UserFormValues {
     quota_dollars: quotaUnitsToDollars(user.quota),
     group: user.group || DEFAULT_GROUP,
     remark: user.remark || '',
+    max_concurrent_requests: user.max_concurrent_requests ?? 0,
+    requests_per_minute: user.requests_per_minute ?? 0,
     admin_permissions: user.admin_permissions ?? {},
   }
 }

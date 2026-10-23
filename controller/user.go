@@ -401,6 +401,7 @@ func GetUser(c *gin.Context) {
 		return
 	}
 	user.AdminPermissions = authz.Capabilities(user.Id, user.Role)
+	user.ApplyUserRelayLimitsToResponse()
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -684,6 +685,18 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 	updatedUser.Role = originUser.Role
+	if updatedUser.MaxConcurrentRequests != nil {
+		if err := model.ValidateUserRelayLimits(*updatedUser.MaxConcurrentRequests, 0); err != nil {
+			common.ApiErrorT(c, "Invalid input {{error}}", map[string]any{"error": err.Error()})
+			return
+		}
+	}
+	if updatedUser.RequestsPerMinute != nil {
+		if err := model.ValidateUserRelayLimits(0, *updatedUser.RequestsPerMinute); err != nil {
+			common.ApiErrorT(c, "Invalid input {{error}}", map[string]any{"error": err.Error()})
+			return
+		}
+	}
 	myRole := c.GetInt("role")
 	if !canManageTargetRole(myRole, originUser.Role) {
 		common.ApiErrorT(c, "No permission to update users of same or higher permission level")
@@ -693,6 +706,12 @@ func UpdateUser(c *gin.Context) {
 	auditParams := map[string]any{
 		"username": originUser.Username,
 		"id":       updatedUser.Id,
+	}
+	if updatedUser.MaxConcurrentRequests != nil {
+		auditParams["max_concurrent_requests"] = *updatedUser.MaxConcurrentRequests
+	}
+	if updatedUser.RequestsPerMinute != nil {
+		auditParams["requests_per_minute"] = *updatedUser.RequestsPerMinute
 	}
 	// Resetting a password or rewriting the admin permission matrix changes what
 	// the managed account can do or who can sign in to it.

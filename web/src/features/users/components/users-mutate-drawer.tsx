@@ -499,6 +499,82 @@ export function UsersMutateDrawer({
                 </SideDrawerSection>
               )}
 
+              {/* Per-user relay limits (Update only) */}
+              {isUpdate && (
+                <SideDrawerSection>
+                  <h3 className='text-sm font-medium'>{t('Request Limits')}</h3>
+                  <p className='text-muted-foreground text-xs'>
+                    {t(
+                      'Applies to this user across all API keys. 0 means unlimited.'
+                    )}
+                  </p>
+
+                  <FormField
+                    control={form.control}
+                    name='max_concurrent_requests'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {t('Max concurrent requests')}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type='number'
+                            min='0'
+                            max='1000000'
+                            step='1'
+                            value={field.value ?? 0}
+                            onChange={(e) =>
+                              field.onChange(
+                                Number.parseInt(e.target.value, 10) || 0
+                              )
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Requests this user may run at the same time. 0 means unlimited.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='requests_per_minute'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Requests per minute')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type='number'
+                            min='0'
+                            max='1000000'
+                            step='1'
+                            value={field.value ?? 0}
+                            onChange={(e) =>
+                              field.onChange(
+                                Number.parseInt(e.target.value, 10) || 0
+                              )
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Requests this user may start per minute. 0 means unlimited.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </SideDrawerSection>
+              )}
+
               {canEditAdminPermissions &&
                 targetIsAdmin &&
                 permissionCatalog.resources.length > 0 && (

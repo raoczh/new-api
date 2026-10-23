@@ -78,6 +78,8 @@ const createRateLimitSchema = (t: (key: string) => string) =>
       .refine(isValidJSON, {
         message: t('Invalid JSON format or values out of allowed range'),
       }),
+    DefaultMaxConcurrentRequests: z.number().min(0).max(1000000),
+    DefaultRequestsPerMinute: z.number().min(0).max(1000000),
   })
 
 type RateLimitFormValues = z.infer<ReturnType<typeof createRateLimitSchema>>
@@ -317,6 +319,79 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
               </FormItem>
             )}
           />
+          <div className='border-t pt-4'>
+            <h3 className='text-sm font-medium'>
+              {t('New user request limits')}
+            </h3>
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'Applied once at registration. Existing users keep their own limits. 0 means unlimited.'
+              )}
+            </p>
+            <div className='mt-3 grid gap-4 md:grid-cols-2'>
+              <FormField
+                control={form.control}
+                name='DefaultMaxConcurrentRequests'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Default max concurrent requests')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={0}
+                        max={1000000}
+                        step={1}
+                        value={field.value ?? 0}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value) || 0)
+                        }
+                        name={field.name}
+                        onBlur={field.onBlur}
+                        ref={field.ref}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Concurrent relay requests a new user may run at the same time. 0 means unlimited.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='DefaultRequestsPerMinute'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Default requests per minute')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={0}
+                        max={1000000}
+                        step={1}
+                        value={field.value ?? 0}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value) || 0)
+                        }
+                        name={field.name}
+                        onBlur={field.onBlur}
+                        ref={field.ref}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Relay requests a new user may start per minute. 0 means unlimited.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
         </SettingsForm>
       </Form>
     </SettingsSection>

@@ -235,6 +235,146 @@ func TestUpdateUserSettingOnlyUpdatesSetting(t *testing.T) {
 	assert.Equal(t, "zh", got.GetSetting().Language)
 }
 
+func TestEditWithTxMergesRelayLimitsIntoExistingSetting(t *testing.T) {
+	setupUserUpdateTestState(t)
+
+	user := User{
+		Id:       2,
+		Username: "relay-limit-user",
+		Password: "password",
+		Status:   common.UserStatusEnabled,
+	}
+	user.SetSetting(dto.UserSetting{Language: "zh", RecordIpLog: true})
+	require.NoError(t, DB.Create(&user).Error)
+
+	maxConcurrent := 4
+	edit := User{Id: user.Id, Username: "relay-limit-user", MaxConcurrentRequests: &maxConcurrent}
+	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
+		return edit.EditWithTx(tx, false)
+	}))
+
+	var got User
+	require.NoError(t, DB.First(&got, user.Id).Error)
+	setting := got.GetSetting()
+	assert.Equal(t, 4, setting.MaxConcurrentRequests)
+	assert.Equal(t, 0, setting.RequestsPerMinute, "an omitted limit must stay unchanged")
+	assert.Equal(t, "zh", setting.Language, "unrelated preferences must survive the merge")
+	assert.True(t, setting.RecordIpLog)
+
+	// A second update that only touches RPM keeps the stored concurrency limit.
+	rpm := 60
+	edit = User{Id: user.Id, Username: "relay-limit-user", RequestsPerMinute: &rpm}
+	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
+		return edit.EditWithTx(tx, false)
+	}))
+
+	require.NoError(t, DB.First(&got, user.Id).Error)
+	setting = got.GetSetting()
+	assert.Equal(t, 4, setting.MaxConcurrentRequests)
+	assert.Equal(t, 60, setting.RequestsPerMinute)
+}
+
+func TestInsertAppliesDefaultRelayLimits(t *testing.T) {
+	setupUserUpdateTestState(t)
+	previousConcurrency, previousRPM := common.DefaultMaxConcurrentRequests, common.DefaultRequestsPerMinute
+	t.Cleanup(func() {
+		common.DefaultMaxConcurrentRequests = previousConcurrency
+		common.DefaultRequestsPerMinute = previousRPM
+	})
+	common.DefaultMaxConcurrentRequests = 3
+	common.DefaultRequestsPerMinute = 60
+
+	user := &User{
+		Username: "default-limits-user",
+		Password: "password",
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+	}
+	require.NoError(t, user.Insert(0))
+
+	var stored User
+	require.NoError(t, DB.Where("username = ?", user.Username).First(&stored).Error)
+	setting := stored.GetSetting()
+	assert.Equal(t, 3, setting.MaxConcurrentRequests)
+	assert.Equal(t, 60, setting.RequestsPerMinute)
+}
+
+func TestInsertWithTxAppliesDefaultRelayLimits(t *testing.T) {
+	setupUserUpdateTestState(t)
+	previousConcurrency, previousRPM := common.DefaultMaxConcurrentRequests, common.DefaultRequestsPerMinute
+	t.Cleanup(func() {
+		common.DefaultMaxConcurrentRequests = previousConcurrency
+		common.DefaultRequestsPerMinute = previousRPM
+	})
+	common.DefaultMaxConcurrentRequests = 5
+	common.DefaultRequestsPerMinute = 120
+
+	user := &User{
+		Username: "oauth-default-limits-user",
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+	}
+	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
+		return user.InsertWithTx(tx, 0)
+	}))
+
+	var stored User
+	require.NoError(t, DB.Where("id = ?", user.Id).First(&stored).Error)
+	setting := stored.GetSetting()
+	assert.Equal(t, 5, setting.MaxConcurrentRequests)
+	assert.Equal(t, 120, setting.RequestsPerMinute)
+}
+
+func TestValidateOptionValueChecksDefaultRelayLimits(t *testing.T) {
+	for _, tc := range []struct {
+		key, value string
+		wantErr    bool
+	}{
+		{key: "DefaultMaxConcurrentRequests", value: "0"},
+		{key: "DefaultMaxConcurrentRequests", value: "1000000"},
+		{key: "DefaultMaxConcurrentRequests", value: "-1", wantErr: true},
+		{key: "DefaultMaxConcurrentRequests", value: "1.5", wantErr: true},
+		{key: "DefaultMaxConcurrentRequests", value: "1000001", wantErr: true},
+		{key: "DefaultRequestsPerMinute", value: "60"},
+		{key: "DefaultRequestsPerMinute", value: "-1", wantErr: true},
+		{key: "DefaultRequestsPerMinute", value: "abc", wantErr: true},
+	} {
+		t.Run(tc.key+"="+tc.value, func(t *testing.T) {
+			err := validateOptionValue(tc.key, tc.value)
+			if tc.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestValidateUserRelayLimits(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		concurrency, rpm int
+		wantErr          bool
+	}{
+		{name: "both disabled", concurrency: 0, rpm: 0},
+		{name: "positive values", concurrency: 10, rpm: 600},
+		{name: "upper bound", concurrency: 1_000_000, rpm: 1_000_000},
+		{name: "negative concurrency", concurrency: -1, wantErr: true},
+		{name: "concurrency above bound", concurrency: 1_000_001, wantErr: true},
+		{name: "negative rpm", rpm: -1, wantErr: true},
+		{name: "rpm above bound", rpm: 1_000_001, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateUserRelayLimits(tc.concurrency, tc.rpm)
+			if tc.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
 func TestEnsureEmailAvailableRejectsExistingEmailCaseInsensitive(t *testing.T) {
 	setupUserUpdateTestState(t)
 

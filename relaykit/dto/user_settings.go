@@ -23,6 +23,13 @@ type UserSetting struct {
 	// PromptPolishModel is the model used by the "AI polish" button in the
 	// image workbench. Empty hides the button; calls are billed normally.
 	PromptPolishModel string `json:"prompt_polish_model,omitempty"`
+
+	// MaxConcurrentRequests caps the number of relay requests this user may run
+	// at the same time. Zero means unlimited.
+	MaxConcurrentRequests int `json:"max_concurrent_requests,omitempty"`
+	// RequestsPerMinute caps how many relay requests this user may start per
+	// minute. Zero means unlimited.
+	RequestsPerMinute int `json:"requests_per_minute,omitempty"`
 }
 
 var (
