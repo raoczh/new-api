@@ -22,9 +22,11 @@ import { useTranslation } from 'react-i18next'
 
 import { ErrorState } from '@/components/error-state'
 import { SectionPageLayout } from '@/components/layout'
+import { cn } from '@/lib/utils'
 
 import { useSystemOptions, getOptionValue } from '../hooks/use-system-options'
 import type { SystemOption } from '../types'
+import type { SettingsContentWidth } from '../utils/section-registry'
 import { SettingsPageProvider } from './settings-page-context'
 
 type SettingsPageProps<
@@ -42,6 +44,7 @@ type SettingsPageProps<
   ) => ReactNode
   getSectionMeta: (sectionId: TSectionId) => {
     titleKey: string
+    contentWidth?: SettingsContentWidth
   }
   extraArgs?: TExtraArgs
   loadingMessage?: string
@@ -53,6 +56,7 @@ type SettingsPageProps<
 
 type SettingsPageFrameProps = {
   title: ReactNode
+  contentWidth: SettingsContentWidth
   children: ReactNode
 }
 
@@ -84,7 +88,12 @@ function SettingsPageFrame(props: SettingsPageFrameProps) {
           />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <div className='bg-card @container/settings mx-auto flex min-h-0 w-full max-w-6xl flex-col gap-6 rounded-xl border p-4 sm:p-6'>
+          <div
+            className={cn(
+              'bg-card @container/settings mx-auto flex min-h-0 w-full flex-col gap-6 rounded-xl border p-4 sm:p-6',
+              props.contentWidth === 'fluid' ? 'max-w-none' : 'max-w-6xl'
+            )}
+          >
             {props.children}
           </div>
         </SectionPageLayout.Content>
@@ -117,6 +126,7 @@ export function SettingsPage<
   const params = useParams({ from: routePath as any })
   const activeSection = (params?.section ?? defaultSection) as TSectionId
   const sectionMeta = getSectionMeta(activeSection)
+  const contentWidth = sectionMeta.contentWidth ?? 'default'
 
   const settings = useMemo(() => {
     const baseSettings = getOptionValue(
@@ -130,7 +140,10 @@ export function SettingsPage<
 
   if (isLoading) {
     return (
-      <SettingsPageFrame title={t(sectionMeta.titleKey)}>
+      <SettingsPageFrame
+        title={t(sectionMeta.titleKey)}
+        contentWidth={contentWidth}
+      >
         <div className='text-muted-foreground flex min-h-40 items-center justify-center text-sm'>
           {t(loadingMessage)}
         </div>
@@ -140,7 +153,10 @@ export function SettingsPage<
 
   if (isError && !data) {
     return (
-      <SettingsPageFrame title={t(sectionMeta.titleKey)}>
+      <SettingsPageFrame
+        title={t(sectionMeta.titleKey)}
+        contentWidth={contentWidth}
+      >
         <ErrorState
           title={t('Failed to load settings')}
           onRetry={() => void refetch()}
@@ -156,7 +172,10 @@ export function SettingsPage<
   )
 
   return (
-    <SettingsPageFrame title={t(sectionMeta.titleKey)}>
+    <SettingsPageFrame
+      title={t(sectionMeta.titleKey)}
+      contentWidth={contentWidth}
+    >
       {sectionContent}
     </SettingsPageFrame>
   )

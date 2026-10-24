@@ -20,11 +20,19 @@ import type { TFunction } from 'i18next'
 import type { ReactNode } from 'react'
 
 /**
+ * Content frame width for a settings section. `fluid` lets wide workspaces
+ * (tables with an adjacent editor) fill the page; `default` keeps the
+ * readable centered form width.
+ */
+export type SettingsContentWidth = 'default' | 'fluid'
+
+/**
  * Section definition for settings pages
  */
 export type SectionDefinition<TSettings, TExtraArgs extends unknown[] = []> = {
   id: string
   titleKey: string
+  contentWidth?: SettingsContentWidth
   build: (settings: TSettings, ...extraArgs: TExtraArgs) => ReactNode
 }
 

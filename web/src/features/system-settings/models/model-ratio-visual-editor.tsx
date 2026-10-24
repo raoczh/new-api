@@ -112,6 +112,18 @@ export type ModelRatioVisualEditorHandle = {
 
 const STORAGE_KEY = 'model-ratio-column-visibility'
 
+/**
+ * Width contract for the pricing table, keyed by column id. The model-name
+ * column has no entry so it absorbs the remaining width, while the action
+ * column stays compact instead of taking every spare pixel.
+ */
+const MODEL_RATIO_COLUMN_WIDTH_CLASS: Record<string, string> = {
+  select: 'w-10',
+  billingMode: 'w-[132px]',
+  priceSummary: 'w-[220px]',
+  actions: 'w-[84px]',
+}
+
 const ModelRatioVisualEditorComponent = forwardRef<
   ModelRatioVisualEditorHandle,
   ModelRatioVisualEditorProps
@@ -642,7 +654,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
       <div
         role='region'
         aria-label={t('Model prices')}
-        className='grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(300px,0.72fr)_minmax(520px,1.28fr)] xl:grid-cols-[minmax(320px,0.68fr)_minmax(640px,1.32fr)]'
+        className='grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(0,1fr)_minmax(340px,400px)]'
       >
         <div className='flex min-h-0 min-w-0 flex-col gap-3'>
           <DataTableToolbar
@@ -696,7 +708,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
               table={table}
               containerClassName='min-h-0 flex-1 rounded-md'
               tableContainerClassName='h-full'
-              tableClassName='min-w-[852px] table-fixed'
+              tableClassName='min-w-[720px] table-fixed'
               tableHeaderClassName='[&_tr]:border-b-0'
               splitHeaderScrollClassName='h-full'
               bodyContainerClassName='[scrollbar-gutter:stable]'
@@ -709,11 +721,12 @@ const ModelRatioVisualEditorComponent = forwardRef<
               ]}
               colgroup={
                 <colgroup>
-                  <col className='w-9' />
-                  <col className='w-[300px]' />
-                  <col className='w-[120px]' />
-                  <col className='w-[300px]' />
-                  <col className='w-auto' />
+                  {table.getVisibleLeafColumns().map((column) => (
+                    <col
+                      key={column.id}
+                      className={MODEL_RATIO_COLUMN_WIDTH_CLASS[column.id]}
+                    />
+                  ))}
                 </colgroup>
               }
               renderRow={(row, { getCellClassName }) => (
