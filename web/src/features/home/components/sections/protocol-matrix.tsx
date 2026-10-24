@@ -19,9 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 
 import { AnimateInView } from '@/components/animate-in-view'
-import { SectionHeading } from '@/features/home/components/section-heading'
-import { useGatewayFacts } from '@/features/home/hooks'
 import { getLobeIcon } from '@/lib/lobe-icon'
+
+import { useGatewayFacts } from '../../hooks'
+import { SectionHeading } from '../section-heading'
 
 /** Endpoints new-api relays natively; paths are appended to the Base URL. */
 const ENDPOINTS = [
@@ -55,7 +56,7 @@ export function ProtocolMatrix() {
   }
 
   return (
-    <section className='tc-landing-section'>
+    <section id='protocols' className='tc-landing-section'>
       <div className='tc-landing-container flex flex-col gap-12'>
         <SectionHeading
           eyebrow={t('Protocols')}

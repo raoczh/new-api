@@ -130,27 +130,16 @@ it('omits the Chinese brand name when none is configured', async () => {
   expect(within(header).queryByText('杜康')).not.toBeInTheDocument()
 })
 
-it.each([
-  ['shows', {}, true],
-  ['hides', { capabilities: false }, false],
-] as const)(
-  '%s the capabilities link from the header navigation setting',
-  async (_name, modules, visible) => {
-    queryClient.setQueryData(['status'], {
-      system_name: 'New API',
-      HeaderNavModules: JSON.stringify(modules),
-    })
-    await renderHeader()
-    const link = within(screen.getByRole('navigation')).queryByRole('link', {
-      name: 'Product Capabilities',
-    })
-    if (!visible) {
-      expect(link).not.toBeInTheDocument()
-      return
-    }
-    expect(link).toHaveAttribute('href', '/capabilities')
-  }
-)
+it('omits the removed rankings and capabilities entries from the header navigation', async () => {
+  await renderHeader()
+  const navigation = screen.getByRole('navigation')
+  expect(
+    within(navigation).queryByRole('link', { name: 'Rankings' })
+  ).not.toBeInTheDocument()
+  expect(
+    within(navigation).queryByRole('link', { name: 'Product Capabilities' })
+  ).not.toBeInTheDocument()
+})
 
 it('opens usage documentation in the current site despite an old external docs link', async () => {
   queryClient.setQueryData(['status'], {

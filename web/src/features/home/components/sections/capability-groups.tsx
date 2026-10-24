@@ -27,7 +27,8 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import { AnimateInView } from '@/components/animate-in-view'
-import { SectionHeading } from '@/features/home/components/section-heading'
+
+import { SectionHeading } from '../section-heading'
 
 type CapabilityGroup = {
   icon: LucideIcon
@@ -87,7 +88,10 @@ export function CapabilityGroups() {
   ]
 
   return (
-    <section className='tc-landing-section bg-muted/30 border-y'>
+    <section
+      id='capabilities'
+      className='tc-landing-section bg-muted/30 border-y'
+    >
       <div className='tc-landing-container flex flex-col gap-14'>
         <SectionHeading
           eyebrow={t('Platform')}

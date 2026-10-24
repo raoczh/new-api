@@ -160,7 +160,8 @@ export function Features() {
         </div>
         <AnimateInView className='flex justify-center'>
           <Link
-            to='/capabilities'
+            to='/'
+            hash='capabilities'
             className='text-foreground/80 hover:text-foreground inline-flex items-center gap-1.5 text-sm font-medium transition-colors'
           >
             {t('Explore all capabilities')}

@@ -238,7 +238,7 @@ export function Hero(props: HeroProps) {
       <div className='tc-landing-grid' aria-hidden='true' />
       <div className='tc-landing-container tc-hero-layout'>
         <div className='flex min-w-0 flex-col items-start gap-7'>
-          <Link to='/capabilities' className='tc-landing-pill'>
+          <Link to='/' hash='protocols' className='tc-landing-pill'>
             <span className='tc-landing-pill-tag'>{t('New')}</span>
             <span className='truncate'>
               {t('OpenAI, Claude and Gemini protocols on one endpoint')}

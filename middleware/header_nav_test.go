@@ -139,7 +139,7 @@ func TestDisabledPricingRequiresRootAuthentication(t *testing.T) {
 		{name: "tampered root token", role: common.RoleRootUser, credential: "tampered", wantStatus: http.StatusUnauthorized},
 		{name: "revoked root session", role: common.RoleRootUser, credential: "revoked", wantStatus: http.StatusUnauthorized},
 		{name: "disabled root account", role: common.RoleRootUser, credential: "banned", wantStatus: http.StatusUnauthorized},
-		{name: "root cannot bypass disabled rankings", module: "rankings", options: `{"rankings":false}`, role: common.RoleRootUser, wantStatus: http.StatusForbidden},
+		{name: "root cannot bypass disabled status monitor", module: "statusMonitor", options: `{"statusMonitor":false}`, role: common.RoleRootUser, wantStatus: http.StatusForbidden},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			setupDashboardAuthMiddlewareTest(t)
@@ -203,20 +203,20 @@ func TestHeaderNavModuleAuthRequiresLoginForPricing(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, recorder.Code)
 }
 
-func TestHeaderNavModuleAuthRequiresLoginForRankings(t *testing.T) {
-	raw := `{"rankings":{"enabled":true,"requireAuth":true}}`
+func TestHeaderNavModuleAuthRequiresLoginForStatusMonitor(t *testing.T) {
+	raw := `{"statusMonitor":{"enabled":true,"requireAuth":true}}`
 	withHeaderNavModules(t, raw)
 
-	recorder := performHeaderNavRequest(t, HeaderNavModuleAuth("rankings"), false)
+	recorder := performHeaderNavRequest(t, HeaderNavModuleAuth("statusMonitor"), false)
 
 	require.Equal(t, http.StatusUnauthorized, recorder.Code)
 }
 
 func TestHeaderNavModuleAuthRejectsLegacyDisabledModule(t *testing.T) {
-	raw := `{"rankings":false}`
+	raw := `{"statusMonitor":false}`
 	withHeaderNavModules(t, raw)
 
-	recorder := performHeaderNavRequest(t, HeaderNavModuleAuth("rankings"), false)
+	recorder := performHeaderNavRequest(t, HeaderNavModuleAuth("statusMonitor"), false)
 
 	require.Equal(t, http.StatusForbidden, recorder.Code)
 }

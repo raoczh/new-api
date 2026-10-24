@@ -51,11 +51,8 @@ import {
 const headerNavSchema = z.object({
   home: z.boolean(),
   console: z.boolean(),
-  capabilities: z.boolean(),
   pricingEnabled: z.boolean(),
   pricingRequireAuth: z.boolean(),
-  rankingsEnabled: z.boolean(),
-  rankingsRequireAuth: z.boolean(),
   statusMonitorEnabled: z.boolean(),
   statusMonitorRequireAuth: z.boolean(),
   docs: z.boolean(),
@@ -84,23 +81,11 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
     config.pricing?.requireAuth === undefined
       ? HEADER_NAV_DEFAULT.pricing.requireAuth
       : Boolean(config.pricing.requireAuth),
-  rankingsEnabled:
-    config.rankings?.enabled === undefined
-      ? HEADER_NAV_DEFAULT.rankings.enabled
-      : Boolean(config.rankings.enabled),
-  rankingsRequireAuth:
-    config.rankings?.requireAuth === undefined
-      ? HEADER_NAV_DEFAULT.rankings.requireAuth
-      : Boolean(config.rankings.requireAuth),
   statusMonitorEnabled:
     config.statusMonitor?.enabled ?? HEADER_NAV_DEFAULT.statusMonitor.enabled,
   statusMonitorRequireAuth:
     config.statusMonitor?.requireAuth ??
     HEADER_NAV_DEFAULT.statusMonitor.requireAuth,
-  capabilities:
-    config.capabilities === undefined
-      ? HEADER_NAV_DEFAULT.capabilities
-      : Boolean(config.capabilities),
   docs:
     config.docs === undefined ? HEADER_NAV_DEFAULT.docs : Boolean(config.docs),
   about:
@@ -131,18 +116,12 @@ export function HeaderNavigationSection({
       ...config,
       home: values.home,
       console: values.console,
-      capabilities: values.capabilities,
       docs: values.docs,
       about: values.about,
       pricing: {
         ...(config.pricing ?? HEADER_NAV_DEFAULT.pricing),
         enabled: values.pricingEnabled,
         requireAuth: values.pricingRequireAuth,
-      },
-      rankings: {
-        ...(config.rankings ?? HEADER_NAV_DEFAULT.rankings),
-        enabled: values.rankingsEnabled,
-        requireAuth: values.rankingsRequireAuth,
       },
       statusMonitor: {
         enabled: values.statusMonitorEnabled,
@@ -181,11 +160,6 @@ export function HeaderNavigationSection({
       description: t('User dashboard and quota controls.'),
     },
     {
-      key: 'capabilities',
-      title: t('Product Capabilities'),
-      description: t('Product capabilities page for visitors.'),
-    },
-    {
       key: 'docs',
       title: t('Usage Documentation'),
       description: t('Show usage documentation in the site navigation.'),
@@ -200,10 +174,7 @@ export function HeaderNavigationSection({
   const accessModules: Array<{
     enabledKey: keyof HeaderNavFormValues
     requireAuthKey: keyof HeaderNavFormValues
-    requireAuthDependsOn:
-      | 'pricingEnabled'
-      | 'rankingsEnabled'
-      | 'statusMonitorEnabled'
+    requireAuthDependsOn: 'pricingEnabled' | 'statusMonitorEnabled'
     title: string
     description: string
     requireAuthTitle: string
@@ -229,17 +200,6 @@ export function HeaderNavigationSection({
       requireAuthTitle: t('Require login to view models'),
       requireAuthDescription: t(
         'Visitors must authenticate before accessing the pricing directory.'
-      ),
-    },
-    {
-      enabledKey: 'rankingsEnabled',
-      requireAuthKey: 'rankingsRequireAuth',
-      requireAuthDependsOn: 'rankingsEnabled',
-      title: t('Rankings'),
-      description: t('Public rankings page based on live usage data.'),
-      requireAuthTitle: t('Require login to view rankings'),
-      requireAuthDescription: t(
-        'Visitors must authenticate before accessing the rankings page.'
       ),
     },
   ]

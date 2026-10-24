@@ -22,15 +22,13 @@ import { readCachedStatus, statusQueryOptions } from '@/lib/status-query'
 
 export type ModuleAccess = { enabled: boolean; requireAuth: boolean }
 
-export type HeaderNavModule = 'rankings' | 'pricing' | 'statusMonitor'
+export type HeaderNavModule = 'pricing' | 'statusMonitor'
 
 export type HeaderNavModules = {
   home: boolean
   console: boolean
   pricing: ModuleAccess
-  rankings: ModuleAccess
   statusMonitor: ModuleAccess
-  capabilities: boolean
   docs: boolean
   about: boolean
   [key: string]: boolean | ModuleAccess
@@ -40,16 +38,13 @@ const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
   home: true,
   console: true,
   pricing: { enabled: true, requireAuth: false },
-  rankings: { enabled: true, requireAuth: false },
   statusMonitor: { enabled: true, requireAuth: false },
-  capabilities: true,
   docs: true,
   about: true,
 }
 
 const DEFAULTS: Record<HeaderNavModule, ModuleAccess> = {
   pricing: DEFAULT_HEADER_NAV_MODULES.pricing,
-  rankings: DEFAULT_HEADER_NAV_MODULES.rankings,
   statusMonitor: DEFAULT_HEADER_NAV_MODULES.statusMonitor,
 }
 
@@ -57,7 +52,6 @@ function cloneHeaderNavDefaults(): HeaderNavModules {
   return {
     ...DEFAULT_HEADER_NAV_MODULES,
     pricing: { ...DEFAULT_HEADER_NAV_MODULES.pricing },
-    rankings: { ...DEFAULT_HEADER_NAV_MODULES.rankings },
     statusMonitor: { ...DEFAULT_HEADER_NAV_MODULES.statusMonitor },
   }
 }
@@ -120,10 +114,6 @@ export function parseHeaderNavModules(raw: unknown): HeaderNavModules {
   Object.entries(parsed).forEach(([key, value]) => {
     if (key === 'pricing') {
       result.pricing = parseAccess(value, result.pricing)
-      return
-    }
-    if (key === 'rankings') {
-      result.rankings = parseAccess(value, result.rankings)
       return
     }
     if (key === 'statusMonitor') {
@@ -200,24 +190,6 @@ export async function getModuleAccessForGuard(
     return getModuleAccessFromStatus(status, module)
   } catch {
     return { enabled: false, requireAuth: true }
-  }
-}
-
-/**
- * Resolve an on/off header page (such as `capabilities`) for a route guard.
- *
- * These pages are public marketing content with no backend gate, so a failed
- * status read keeps the page reachable instead of redirecting.
- */
-export async function isHeaderNavPageEnabledForGuard(
-  queryClient: QueryClient,
-  key: 'capabilities'
-): Promise<boolean> {
-  try {
-    const status = await queryClient.fetchQuery(statusQueryOptions)
-    return parseHeaderNavModulesFromStatus(status)[key] !== false
-  } catch {
-    return true
   }
 }
 

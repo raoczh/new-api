@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-/* Public landing pages: home and capabilities. */
+/* Public landing page: home. */
 .tc-landing {
   --tc-landing-max: 1240px;
   --tc-landing-glow: color-mix(

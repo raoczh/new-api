@@ -100,7 +100,7 @@ describe('shared status query deduplication', () => {
           STATUS_QUERY_KEY,
           {
             system_name: 'old',
-            HeaderNavModules: { pricing: false, rankings: false },
+            HeaderNavModules: { pricing: false, statusMonitor: false },
           },
           { updatedAt: Date.now() - 600_000 }
         )
@@ -109,7 +109,7 @@ describe('shared status query deduplication', () => {
         system_name: 'shared',
         HeaderNavModules: {
           pricing: { enabled: true, requireAuth: true },
-          rankings: { enabled: true, requireAuth: false },
+          statusMonitor: { enabled: true, requireAuth: false },
         },
       }
       let resolveStatus!: (value: { data: unknown }) => void
@@ -123,7 +123,7 @@ describe('shared status query deduplication', () => {
       let guardsResolved = false
       const guards = Promise.all([
         getModuleAccessForGuard(queryClient, 'pricing'),
-        getModuleAccessForGuard(queryClient, 'rankings'),
+        getModuleAccessForGuard(queryClient, 'statusMonitor'),
       ]).then((result) => {
         guardsResolved = true
         return result
@@ -261,19 +261,9 @@ describe('module guard status freshness', () => {
       after: { enabled: true, requireAuth: false },
     },
     {
-      module: 'rankings',
-      before: { enabled: true, requireAuth: false },
-      after: { enabled: false, requireAuth: false },
-    },
-    {
       module: 'pricing',
       before: { enabled: true, requireAuth: false },
       after: { enabled: true, requireAuth: true },
-    },
-    {
-      module: 'rankings',
-      before: { enabled: true, requireAuth: true },
-      after: { enabled: true, requireAuth: false },
     },
   ])('uses refreshed $module access: $before -> $after', async (scenario) => {
     const queryClient = createQueryClient()

@@ -47,7 +47,6 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/pricing":                    accessTokenAnyRule,
 	"GET /api/perf-metrics/summary":       accessTokenAnyRule,
 	"GET /api/perf-metrics":               accessTokenAnyRule,
-	"GET /api/rankings":                   accessTokenAnyRule,
 	"GET /api/status-monitor/groups":      accessTokenAnyRule,
 	"POST /api/oauth/state":               accessTokenSessionRule,
 	"POST /api/oauth/email/bind/start":    accessTokenScopeRule("account_security:write"),

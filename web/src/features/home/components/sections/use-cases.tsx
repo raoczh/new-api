@@ -21,7 +21,8 @@ import { ArrowRight, Bot, Building2, Code2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { AnimateInView } from '@/components/animate-in-view'
-import { SectionHeading } from '@/features/home/components/section-heading'
+
+import { SectionHeading } from '../section-heading'
 
 export function UseCases() {
   const { t } = useTranslation()

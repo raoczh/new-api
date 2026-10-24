@@ -36,12 +36,10 @@ import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as AuthenticatedChat2linkRouteImport } from './routes/_authenticated/chat2link'
 import { Route as AuthenticatedSystemSettingsRouteRouteImport } from './routes/_authenticated/system-settings/route'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
-import { Route as CapabilitiesIndexRouteImport } from './routes/capabilities/index'
 import { Route as DocsIndexRouteImport } from './routes/docs/index'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
-import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as StatusMonitorIndexRouteImport } from './routes/status-monitor/index'
 import { Route as authUserResetRouteImport } from './routes/(auth)/user/reset'
@@ -222,11 +220,6 @@ const AboutIndexRoute = AboutIndexRouteImport.update({
   path: '/about/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CapabilitiesIndexRoute = CapabilitiesIndexRouteImport.update({
-  id: '/capabilities/',
-  path: '/capabilities/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DocsIndexRoute = DocsIndexRouteImport.update({
   id: '/docs/',
   path: '/docs/',
@@ -245,11 +238,6 @@ const OauthProviderRoute = OauthProviderRouteImport.update({
 const PricingIndexRoute = PricingIndexRouteImport.update({
   id: '/pricing/',
   path: '/pricing/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RankingsIndexRoute = RankingsIndexRouteImport.update({
-  id: '/rankings/',
-  path: '/rankings/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SetupIndexRoute = SetupIndexRouteImport.update({
@@ -544,10 +532,8 @@ export interface FileRoutesByFullPath {
   '/docs/$': typeof DocsSplatRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
-  '/capabilities/': typeof CapabilitiesIndexRoute
   '/docs/': typeof DocsIndexRoute
   '/pricing/': typeof PricingIndexRoute
-  '/rankings/': typeof RankingsIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/status-monitor/': typeof StatusMonitorIndexRoute
   '/user/reset': typeof authUserResetRoute
@@ -621,10 +607,8 @@ export interface FileRoutesByTo {
   '/docs/$': typeof DocsSplatRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about': typeof AboutIndexRoute
-  '/capabilities': typeof CapabilitiesIndexRoute
   '/docs': typeof DocsIndexRoute
   '/pricing': typeof PricingIndexRoute
-  '/rankings': typeof RankingsIndexRoute
   '/setup': typeof SetupIndexRoute
   '/status-monitor': typeof StatusMonitorIndexRoute
   '/user/reset': typeof authUserResetRoute
@@ -702,10 +686,8 @@ export interface FileRoutesById {
   '/docs/$': typeof DocsSplatRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
-  '/capabilities/': typeof CapabilitiesIndexRoute
   '/docs/': typeof DocsIndexRoute
   '/pricing/': typeof PricingIndexRoute
-  '/rankings/': typeof RankingsIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/status-monitor/': typeof StatusMonitorIndexRoute
   '/(auth)/user/reset': typeof authUserResetRoute
@@ -782,10 +764,8 @@ export interface FileRouteTypes {
     | '/docs/$'
     | '/oauth/$provider'
     | '/about/'
-    | '/capabilities/'
     | '/docs/'
     | '/pricing/'
-    | '/rankings/'
     | '/setup/'
     | '/status-monitor/'
     | '/user/reset'
@@ -859,10 +839,8 @@ export interface FileRouteTypes {
     | '/docs/$'
     | '/oauth/$provider'
     | '/about'
-    | '/capabilities'
     | '/docs'
     | '/pricing'
-    | '/rankings'
     | '/setup'
     | '/status-monitor'
     | '/user/reset'
@@ -939,10 +917,8 @@ export interface FileRouteTypes {
     | '/docs/$'
     | '/oauth/$provider'
     | '/about/'
-    | '/capabilities/'
     | '/docs/'
     | '/pricing/'
-    | '/rankings/'
     | '/setup/'
     | '/status-monitor/'
     | '/(auth)/user/reset'
@@ -1011,10 +987,8 @@ export interface RootRouteChildren {
   DocsSplatRoute: typeof DocsSplatRoute
   OauthProviderRoute: typeof OauthProviderRoute
   AboutIndexRoute: typeof AboutIndexRoute
-  CapabilitiesIndexRoute: typeof CapabilitiesIndexRoute
   DocsIndexRoute: typeof DocsIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
-  RankingsIndexRoute: typeof RankingsIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
   StatusMonitorIndexRoute: typeof StatusMonitorIndexRoute
   PricingModelIdIndexRoute: typeof PricingModelIdIndexRoute
@@ -1211,13 +1185,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/capabilities/': {
-      id: '/capabilities/'
-      path: '/capabilities'
-      fullPath: '/capabilities/'
-      preLoaderRoute: typeof CapabilitiesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/docs/': {
       id: '/docs/'
       path: '/docs'
@@ -1244,13 +1211,6 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing/'
       preLoaderRoute: typeof PricingIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rankings/': {
-      id: '/rankings/'
-      path: '/rankings'
-      fullPath: '/rankings/'
-      preLoaderRoute: typeof RankingsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setup/': {
@@ -1745,10 +1705,8 @@ const rootRouteChildren: RootRouteChildren = {
   DocsSplatRoute: DocsSplatRoute,
   OauthProviderRoute: OauthProviderRoute,
   AboutIndexRoute: AboutIndexRoute,
-  CapabilitiesIndexRoute: CapabilitiesIndexRoute,
   DocsIndexRoute: DocsIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
-  RankingsIndexRoute: RankingsIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
   StatusMonitorIndexRoute: StatusMonitorIndexRoute,
   PricingModelIdIndexRoute: PricingModelIdIndexRoute,
