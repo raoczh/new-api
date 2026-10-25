@@ -1,8 +1,11 @@
 package relay
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,6 +22,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/model_setting"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	hosttypes "github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -313,4 +317,110 @@ func TestImageHelperKeepsAdaptorClassifiedConvertError(t *testing.T) {
 	assert.Equal(t, types.ErrorCodeInvalidRequest, apiErr.GetErrorCode())
 	assert.True(t, types.IsSkipRetryError(apiErr), "other channels must not be asked to serve the same name")
 	assert.Contains(t, apiErr.Error(), "not served by the alibaba task plugin")
+}
+
+func TestImageHelperSendsReferenceImagesAsURLsWhenChannelRequiresThem(t *testing.T) {
+	service.InitHttpClient()
+	settings := system_setting.GetImageStudioSettings()
+	originalStorageDir, originalPublicBaseURL := settings.StorageDir, settings.PublicBaseURL
+	t.Cleanup(func() { settings.StorageDir, settings.PublicBaseURL = originalStorageDir, originalPublicBaseURL })
+	settings.StorageDir, settings.PublicBaseURL = t.TempDir(), "https://img.example.com"
+	// Minimal PNG signature plus IHDR chunk is enough for content sniffing.
+	png := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R', 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0}
+	editForm := func() (string, string) {
+		var body bytes.Buffer
+		writer := multipart.NewWriter(&body)
+		require.NoError(t, writer.WriteField("model", "gpt-image-2"))
+		require.NoError(t, writer.WriteField("prompt", "a cat"))
+		require.NoError(t, writer.WriteField("output_format", "webp"))
+		for _, field := range []string{"image[]", "image[]", "mask"} {
+			part, err := writer.CreateFormFile(field, "ref.png")
+			require.NoError(t, err)
+			_, err = part.Write(png)
+			require.NoError(t, err)
+		}
+		require.NoError(t, writer.Close())
+		return body.String(), writer.FormDataContentType()
+	}
+
+	for _, tc := range []struct {
+		name, path   string
+		asURL, json  bool
+		wantPath     string
+		wantImages   int
+		wantKeptURLs []string
+	}{
+		{name: "multipart edit becomes JSON generation", path: "/v1/images/edits", asURL: true, wantPath: "/v1/images/generations", wantImages: 2},
+		{name: "inline references are published", path: "/v1/images/generations", asURL: true, json: true, wantPath: "/v1/images/generations", wantImages: 2, wantKeptURLs: []string{"https://cdn.example.com/a.png"}},
+		{name: "switch off keeps the multipart edit", path: "/v1/images/edits", wantPath: "/v1/images/edits"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			type upstreamRequest struct {
+				path, contentType string
+				body              []byte
+			}
+			received := make(chan upstreamRequest, 1)
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, err := io.ReadAll(r.Body)
+				if err == nil {
+					received <- upstreamRequest{r.URL.Path, r.Header.Get("Content-Type"), body}
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadGateway)
+				_, _ = io.WriteString(w, `{"error":{"message":"fixture upstream failure","type":"upstream_error"}}`)
+			}))
+			t.Cleanup(upstream.Close)
+
+			body, contentType := editForm()
+			relayMode := relayconstant.RelayModeImagesEdits
+			if tc.json {
+				body = `{"model":"gpt-image-2","prompt":"a cat","image":["https://cdn.example.com/a.png","data:image/png;base64,` +
+					base64.StdEncoding.EncodeToString(png) + `"]}`
+				contentType, relayMode = "application/json", relayconstant.RelayModeImagesGenerations
+			}
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(body))
+			c.Request.Header.Set("Content-Type", contentType)
+			common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeOpenAI)
+			common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, upstream.URL)
+			common.SetContextKey(c, constant.ContextKeyChannelSetting, dto.ChannelSettings{ImageReferenceAsURL: tc.asURL})
+			request, err := helper.GetAndValidOpenAIImageRequest(c, relayMode)
+			require.NoError(t, err)
+			info := &relaycommon.RelayInfo{Request: request, OriginModelName: "gpt-image-2", RelayMode: relayMode,
+				RequestURLPath: c.Request.URL.Path, Billing: &imageReservation{limit: 500000},
+				PriceData: hosttypes.PriceData{UsePrice: true, ModelPrice: 0.04, GroupRatioInfo: hosttypes.GroupRatioInfo{GroupRatio: 1}},
+			}
+
+			apiErr := ImageHelper(c, info)
+
+			require.NotNil(t, apiErr)
+			assert.Equal(t, http.StatusBadGateway, apiErr.StatusCode)
+			require.Len(t, received, 1)
+			got := <-received
+			assert.Equal(t, tc.wantPath, got.path)
+			// A retry on another channel must see the client's request again.
+			assert.Equal(t, relayMode, info.RelayMode)
+			assert.Equal(t, tc.path, info.RequestURLPath)
+			if !tc.asURL {
+				assert.True(t, strings.HasPrefix(got.contentType, "multipart/form-data"))
+				return
+			}
+			assert.Equal(t, contentType, c.Request.Header.Get("Content-Type"))
+			assert.Equal(t, "application/json", got.contentType)
+			var images []string
+			require.NoError(t, common.Unmarshal([]byte(gjson.GetBytes(got.body, "image").Raw), &images))
+			require.Len(t, images, tc.wantImages)
+			for _, kept := range tc.wantKeptURLs {
+				assert.Contains(t, images, kept)
+			}
+			for _, image := range images[len(tc.wantKeptURLs):] {
+				assert.True(t, strings.HasPrefix(image, "https://img.example.com/img/"), image)
+			}
+			if !tc.json {
+				assert.True(t, strings.HasPrefix(gjson.GetBytes(got.body, "mask").String(), "https://img.example.com/img/"))
+				assert.Equal(t, "webp", gjson.GetBytes(got.body, "output_format").String())
+				assert.Equal(t, "a cat", gjson.GetBytes(got.body, "prompt").String())
+			}
+		})
+	}
 }
