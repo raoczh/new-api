@@ -22,6 +22,13 @@ func SetWebRouter(router *gin.Engine, assets WebAssets, pluginDispatcher gin.Han
 	frontendFS := common.EmbedFolder(assets.BuildFS, "web/dist")
 	compress := gzip.Gzip(gzip.DefaultCompression)
 
+	// Crawler-facing resources are generated from the live configuration
+	// instead of shipping static files, so canonical URLs and the sitemap always
+	// match ServerAddress and the navigation modules the operator enabled.
+	router.GET("/robots.txt", seoRobotsHandler)
+	router.GET("/sitemap.xml", seoSitemapHandler)
+	router.GET("/llms.txt", seoLLMsHandler)
+
 	router.NoRoute(
 		pluginDispatcher,
 		middleware.RouteTag("web"),
@@ -40,8 +47,29 @@ func SetWebRouter(router *gin.Engine, assets WebAssets, pluginDispatcher gin.Han
 				controller.RelayNotFound(c)
 				return
 			}
-			c.Header("Cache-Control", "no-cache")
-			c.Data(http.StatusOK, "text/html; charset=utf-8", assets.IndexPage)
+			if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
+				c.Header("Allow", "GET, HEAD")
+				c.Status(http.StatusMethodNotAllowed)
+				return
+			}
+
+			path := seoNormalizePath(c.Request.URL.Path)
+			page, exists := seoPageForPath(path)
+			canonical := seoSiteURL() + path
+			if !exists {
+				// A real 404 keeps crawlers from indexing every unknown URL the
+				// SPA would otherwise answer with 200 and an empty shell.
+				c.Header("Cache-Control", "no-store")
+				c.Data(http.StatusNotFound, "text/html; charset=utf-8", injectSEOHead(assets.IndexPage, seoNotFoundPage(), canonical))
+				return
+			}
+
+			if page.Indexable {
+				c.Header("Cache-Control", "no-cache")
+			} else {
+				c.Header("Cache-Control", "no-store")
+			}
+			c.Data(http.StatusOK, "text/html; charset=utf-8", injectSEOHead(assets.IndexPage, page, canonical))
 		},
 	)
 }

@@ -101,6 +101,15 @@ func parseHeaderNavBool(value any, fallback bool) bool {
 	}
 }
 
+// HeaderNavModulePublic reports whether a navigation module is both enabled and
+// reachable without signing in. The sitemap and per-route meta tags use it so
+// pages the operator turned off, or gated behind login, are not advertised to
+// crawlers.
+func HeaderNavModulePublic(module string) bool {
+	access := getHeaderNavAccess(module)
+	return access.Enabled && !access.RequireAuth
+}
+
 func HeaderNavModuleAuth(module string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		access := getHeaderNavAccess(module)

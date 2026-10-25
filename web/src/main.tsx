@@ -65,27 +65,18 @@ const rootElement = document.querySelector<HTMLElement>('#root')
 if (!rootElement) {
   throw new Error('Root element not found')
 }
-// Set document.title and favicon from cached status, then refresh from network
+// Set the favicon from cached status, then refresh from network. The document
+// title is owned by the server-rendered head and kept in sync by usePageMeta,
+// so branding must not overwrite it here.
 ;(function initSystemBranding() {
   try {
     if (typeof window === 'undefined' || typeof document === 'undefined') return
     const apply = (status: Record<string, unknown>) => {
-      const name = status.system_name as string | undefined
-      if (!name) return
-      const chineseName = (
-        status.system_chinese_name as string | undefined
-      )?.trim()
-      const brandedTitle = chineseName ? `${name} · ${chineseName}` : name
-      document.title = brandedTitle
-      const metaTitle = document.querySelector(
-        'meta[name="title"]'
-      ) as HTMLMetaElement | null
-      if (metaTitle) metaTitle.setAttribute('content', brandedTitle)
+      if (status.logo) applyFaviconToDom(status.logo as string)
     }
     // Cache-first
     const cached = readCachedStatus()
     if (cached) apply(cached)
-    if (cached?.logo) applyFaviconToDom(cached.logo as string)
 
     // Background refresh through the shared cache. This primes ['status']
     // before React mounts, so the root guard and every status consumer reuse
@@ -95,7 +86,6 @@ if (!rootElement) {
       .ensureQueryData(statusQueryOptions)
       .then((s) => {
         if (s) apply(s)
-        if (s?.logo) applyFaviconToDom(s.logo as string)
       })
       .catch(() => {
         /* empty */

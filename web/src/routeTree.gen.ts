@@ -38,11 +38,11 @@ import { Route as AuthenticatedSystemSettingsRouteRouteImport } from './routes/_
 import { Route as AboutIndexRouteImport } from './routes/about/index'
 import { Route as DocsIndexRouteImport } from './routes/docs/index'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
+import { Route as IqMonitorIndexRouteImport } from './routes/iq-monitor/index'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as StatusMonitorIndexRouteImport } from './routes/status-monitor/index'
-import { Route as IqMonitorIndexRouteImport } from './routes/iq-monitor/index'
 import { Route as authUserResetRouteImport } from './routes/(auth)/user/reset'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedChatChatIdRouteImport } from './routes/_authenticated/chat/$chatId'
@@ -231,6 +231,11 @@ const DocsSplatRoute = DocsSplatRouteImport.update({
   path: '/docs/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IqMonitorIndexRoute = IqMonitorIndexRouteImport.update({
+  id: '/iq-monitor/',
+  path: '/iq-monitor/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OauthProviderRoute = OauthProviderRouteImport.update({
   id: '/oauth/$provider',
   path: '/oauth/$provider',
@@ -249,11 +254,6 @@ const SetupIndexRoute = SetupIndexRouteImport.update({
 const StatusMonitorIndexRoute = StatusMonitorIndexRouteImport.update({
   id: '/status-monitor/',
   path: '/status-monitor/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IqMonitorIndexRoute = IqMonitorIndexRouteImport.update({
-  id: '/iq-monitor/',
-  path: '/iq-monitor/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const authUserResetRoute = authUserResetRouteImport.update({
@@ -539,10 +539,10 @@ export interface FileRoutesByFullPath {
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
   '/docs/': typeof DocsIndexRoute
+  '/iq-monitor/': typeof IqMonitorIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/status-monitor/': typeof StatusMonitorIndexRoute
-  '/iq-monitor/': typeof IqMonitorIndexRoute
   '/user/reset': typeof authUserResetRoute
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
@@ -615,10 +615,10 @@ export interface FileRoutesByTo {
   '/oauth/$provider': typeof OauthProviderRoute
   '/about': typeof AboutIndexRoute
   '/docs': typeof DocsIndexRoute
+  '/iq-monitor': typeof IqMonitorIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/setup': typeof SetupIndexRoute
   '/status-monitor': typeof StatusMonitorIndexRoute
-  '/iq-monitor': typeof IqMonitorIndexRoute
   '/user/reset': typeof authUserResetRoute
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
@@ -695,10 +695,10 @@ export interface FileRoutesById {
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
   '/docs/': typeof DocsIndexRoute
+  '/iq-monitor/': typeof IqMonitorIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/status-monitor/': typeof StatusMonitorIndexRoute
-  '/iq-monitor/': typeof IqMonitorIndexRoute
   '/(auth)/user/reset': typeof authUserResetRoute
   '/_authenticated/chat/$chatId': typeof AuthenticatedChatChatIdRoute
   '/_authenticated/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
@@ -774,10 +774,10 @@ export interface FileRouteTypes {
     | '/oauth/$provider'
     | '/about/'
     | '/docs/'
+    | '/iq-monitor/'
     | '/pricing/'
     | '/setup/'
     | '/status-monitor/'
-    | '/iq-monitor/'
     | '/user/reset'
     | '/chat/$chatId'
     | '/dashboard/$section'
@@ -850,10 +850,10 @@ export interface FileRouteTypes {
     | '/oauth/$provider'
     | '/about'
     | '/docs'
+    | '/iq-monitor'
     | '/pricing'
     | '/setup'
     | '/status-monitor'
-    | '/iq-monitor'
     | '/user/reset'
     | '/chat/$chatId'
     | '/dashboard/$section'
@@ -929,10 +929,10 @@ export interface FileRouteTypes {
     | '/oauth/$provider'
     | '/about/'
     | '/docs/'
+    | '/iq-monitor/'
     | '/pricing/'
     | '/setup/'
     | '/status-monitor/'
-    | '/iq-monitor/'
     | '/(auth)/user/reset'
     | '/_authenticated/chat/$chatId'
     | '/_authenticated/dashboard/$section'
@@ -1000,10 +1000,10 @@ export interface RootRouteChildren {
   OauthProviderRoute: typeof OauthProviderRoute
   AboutIndexRoute: typeof AboutIndexRoute
   DocsIndexRoute: typeof DocsIndexRoute
+  IqMonitorIndexRoute: typeof IqMonitorIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
   StatusMonitorIndexRoute: typeof StatusMonitorIndexRoute
-  IqMonitorIndexRoute: typeof IqMonitorIndexRoute
   PricingModelIdIndexRoute: typeof PricingModelIdIndexRoute
 }
 
@@ -1212,6 +1212,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/iq-monitor/': {
+      id: '/iq-monitor/'
+      path: '/iq-monitor'
+      fullPath: '/iq-monitor/'
+      preLoaderRoute: typeof IqMonitorIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/oauth/$provider': {
       id: '/oauth/$provider'
       path: '/oauth/$provider'
@@ -1238,13 +1245,6 @@ declare module '@tanstack/react-router' {
       path: '/status-monitor'
       fullPath: '/status-monitor/'
       preLoaderRoute: typeof StatusMonitorIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/iq-monitor/': {
-      id: '/iq-monitor/'
-      path: '/iq-monitor'
-      fullPath: '/iq-monitor/'
-      preLoaderRoute: typeof IqMonitorIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/(auth)/user/reset': {
@@ -1726,10 +1726,10 @@ const rootRouteChildren: RootRouteChildren = {
   OauthProviderRoute: OauthProviderRoute,
   AboutIndexRoute: AboutIndexRoute,
   DocsIndexRoute: DocsIndexRoute,
+  IqMonitorIndexRoute: IqMonitorIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
   StatusMonitorIndexRoute: StatusMonitorIndexRoute,
-  IqMonitorIndexRoute: IqMonitorIndexRoute,
   PricingModelIdIndexRoute: PricingModelIdIndexRoute,
 }
 export const routeTree = rootRouteImport

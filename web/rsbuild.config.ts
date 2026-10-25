@@ -64,8 +64,9 @@ export default defineConfig(({ envMode }) => {
     },
     html: {
       template: './index.html',
-      // Shown until the configured system logo replaces it at runtime.
-      favicon: 'https://img.tokencome.org/logo.png',
+      // Local icon: rsbuild copies it to dist and injects the <link>. The
+      // configured system logo still replaces it at runtime.
+      favicon: './public/favicon.ico',
     },
     server: {
       host: '0.0.0.0',

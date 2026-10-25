@@ -397,7 +397,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true
     },
-    title: 'New API',
+    title: 'TokenCome · 杜康',
     icon: path.join(__dirname, 'icon.png')
   });
 
