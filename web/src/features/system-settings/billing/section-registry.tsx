@@ -53,6 +53,7 @@ const getGroupDefaults = (settings: BillingSettings) => ({
   DefaultUseAutoGroup: settings.DefaultUseAutoGroup,
   GroupSpecialUsableGroup:
     settings['group_ratio_setting.group_special_usable_group'],
+  IQGroupModels: settings['iq_monitor_setting.group_models'],
 })
 
 const BILLING_SECTIONS = [
@@ -121,6 +122,7 @@ const BILLING_SECTIONS = [
   {
     id: 'group-pricing',
     titleKey: 'Group Pricing',
+    contentWidth: 'fluid',
     build: (settings: BillingSettings) => (
       <RatioSettingsCard
         titleKey='Group Pricing'

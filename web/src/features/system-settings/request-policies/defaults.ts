@@ -31,6 +31,9 @@ export type HealthSettings = {
   AutomaticDisableKeywords: string
   AutomaticDisableStatusCodes: string
   'monitor_setting.auto_probe_enabled': boolean
+  'monitor_setting.auto_probe_minutes': number
+  'monitor_setting.iq_probe_enabled': boolean
+  'monitor_setting.iq_probe_minutes': number
   'monitor_setting.auto_test_channel_enabled': boolean
   'monitor_setting.auto_test_channel_minutes': number
   'monitor_setting.channel_test_concurrency': number
@@ -38,6 +41,7 @@ export type HealthSettings = {
     | 'scheduled_all'
     | 'auto_ban_only'
     | 'passive_recovery'
+  'iq_monitor_setting.prompt': string
 }
 export type FilteringSettings = Pick<
   SecuritySettings,
@@ -59,10 +63,14 @@ export const defaultRequestPolicySettings: RequestPolicySettings = {
   AutomaticDisableKeywords: '',
   AutomaticDisableStatusCodes: '401',
   'monitor_setting.auto_probe_enabled': true,
+  'monitor_setting.auto_probe_minutes': 30,
+  'monitor_setting.iq_probe_enabled': false,
+  'monitor_setting.iq_probe_minutes': 30,
   'monitor_setting.auto_test_channel_enabled': false,
   'monitor_setting.auto_test_channel_minutes': 10,
   'monitor_setting.channel_test_concurrency': 1,
   'monitor_setting.channel_test_mode': 'scheduled_all',
+  'iq_monitor_setting.prompt': '{}',
   'channel_affinity_setting.enabled': false,
   'channel_affinity_setting.session_mode': '',
   'channel_affinity_setting.switch_on_success': true,

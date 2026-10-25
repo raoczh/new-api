@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMemo, useRef, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, type Control } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import * as z from 'zod'
@@ -88,6 +88,15 @@ const createChannelHealthSchema = (
       AutomaticDisableStatusCodes: z.string(),
       monitor_setting: z.object({
         auto_probe_enabled: z.boolean(),
+        auto_probe_minutes: z.coerce
+          .number()
+          .int(t('Enter a positive integer'))
+          .min(1, t('Interval must be at least 1 minute')),
+        iq_probe_enabled: z.boolean(),
+        iq_probe_minutes: z.coerce
+          .number()
+          .int(t('Enter a positive integer'))
+          .min(1, t('Interval must be at least 1 minute')),
         auto_test_channel_enabled: z.boolean(),
         auto_test_channel_minutes: z.coerce
           .number()
@@ -138,6 +147,9 @@ type NormalizedChannelHealthValues = {
   AutomaticDisableKeywords: string
   AutomaticDisableStatusCodes: string
   'monitor_setting.auto_probe_enabled': boolean
+  'monitor_setting.auto_probe_minutes': number
+  'monitor_setting.iq_probe_enabled': boolean
+  'monitor_setting.iq_probe_minutes': number
   'monitor_setting.auto_test_channel_enabled': boolean
   'monitor_setting.auto_test_channel_minutes': number
   'monitor_setting.channel_test_concurrency': number
@@ -163,6 +175,9 @@ const buildFormDefaults = (
   AutomaticDisableStatusCodes: defaults.AutomaticDisableStatusCodes ?? '',
   monitor_setting: {
     auto_probe_enabled: defaults['monitor_setting.auto_probe_enabled'],
+    auto_probe_minutes: defaults['monitor_setting.auto_probe_minutes'],
+    iq_probe_enabled: defaults['monitor_setting.iq_probe_enabled'],
+    iq_probe_minutes: defaults['monitor_setting.iq_probe_minutes'],
     auto_test_channel_enabled:
       defaults['monitor_setting.auto_test_channel_enabled'],
     auto_test_channel_minutes:
@@ -189,6 +204,12 @@ const normalizeDefaults = (
   ).normalized,
   'monitor_setting.auto_probe_enabled':
     defaults['monitor_setting.auto_probe_enabled'],
+  'monitor_setting.auto_probe_minutes':
+    defaults['monitor_setting.auto_probe_minutes'],
+  'monitor_setting.iq_probe_enabled':
+    defaults['monitor_setting.iq_probe_enabled'],
+  'monitor_setting.iq_probe_minutes':
+    defaults['monitor_setting.iq_probe_minutes'],
   'monitor_setting.auto_test_channel_enabled':
     defaults['monitor_setting.auto_test_channel_enabled'],
   'monitor_setting.auto_test_channel_minutes':
@@ -214,6 +235,10 @@ const normalizeFormValues = (
   ).normalized,
   'monitor_setting.auto_probe_enabled':
     values.monitor_setting.auto_probe_enabled,
+  'monitor_setting.auto_probe_minutes':
+    values.monitor_setting.auto_probe_minutes,
+  'monitor_setting.iq_probe_enabled': values.monitor_setting.iq_probe_enabled,
+  'monitor_setting.iq_probe_minutes': values.monitor_setting.iq_probe_minutes,
   'monitor_setting.auto_test_channel_enabled':
     values.monitor_setting.auto_test_channel_enabled,
   'monitor_setting.auto_test_channel_minutes':
@@ -222,6 +247,39 @@ const normalizeFormValues = (
     values.monitor_setting.channel_test_concurrency,
   'monitor_setting.channel_test_mode': values.monitor_setting.channel_test_mode,
 })
+
+type ProbeMinutesFieldProps = {
+  control: Control<ChannelHealthFormInput, unknown, ChannelHealthFormValues>
+  name:
+    | 'monitor_setting.auto_probe_minutes'
+    | 'monitor_setting.iq_probe_minutes'
+  label: string
+  description: string
+}
+
+function ProbeMinutesField(props: ProbeMinutesFieldProps) {
+  return (
+    <FormField
+      control={props.control}
+      name={props.name}
+      render={({ field }) => (
+        <FormItem className='max-w-xs'>
+          <FormLabel>{props.label}</FormLabel>
+          <FormControl>
+            <Input
+              type='number'
+              min={1}
+              step={1}
+              {...safeNumberFieldProps(field)}
+            />
+          </FormControl>
+          <FormDescription>{props.description}</FormDescription>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  )
+}
 
 export function ChannelHealthSection({
   defaultValues,
@@ -253,6 +311,8 @@ export function ChannelHealthSection({
   }, [defaultValues])
 
   const autoDisableStatusCodes = form.watch('AutomaticDisableStatusCodes')
+  const autoProbeEnabled = form.watch('monitor_setting.auto_probe_enabled')
+  const iqProbeEnabled = form.watch('monitor_setting.iq_probe_enabled')
   const channelTestMode = form.watch('monitor_setting.channel_test_mode')
   let channelTestModeDescription: string
   switch (channelTestMode) {
@@ -341,7 +401,7 @@ export function ChannelHealthSection({
                         <FormLabel>{t('Automatic model probes')}</FormLabel>
                         <FormDescription>
                           {t(
-                            'Probe one eligible model per group every 30 minutes; results are recorded in request logs and status samples.'
+                            'Probe one eligible model per group on a fixed interval; results are recorded in request logs and status samples.'
                           )}
                         </FormDescription>
                       </SettingsSwitchContent>
@@ -354,6 +414,51 @@ export function ChannelHealthSection({
                     </SettingsSwitchItem>
                   )}
                 />
+                {autoProbeEnabled && (
+                  <SettingsControlChildren>
+                    <ProbeMinutesField
+                      control={form.control}
+                      name='monitor_setting.auto_probe_minutes'
+                      label={t('Probe interval (minutes)')}
+                      description={t('Time between automatic model probes')}
+                    />
+                  </SettingsControlChildren>
+                )}
+
+                <FormField
+                  control={form.control}
+                  name='monitor_setting.iq_probe_enabled'
+                  render={({ field }) => (
+                    <SettingsSwitchItem>
+                      <SettingsSwitchContent>
+                        <FormLabel>{t('Automatic IQ probes')}</FormLabel>
+                        <FormDescription>
+                          {t(
+                            'Ask one random model from each group pool to generate an SVG animation page, then show the result on the IQ monitor. Each probe is a real request and is billed to the admin account.'
+                          )}
+                        </FormDescription>
+                      </SettingsSwitchContent>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </SettingsSwitchItem>
+                  )}
+                />
+                {iqProbeEnabled && (
+                  <SettingsControlChildren>
+                    <ProbeMinutesField
+                      control={form.control}
+                      name='monitor_setting.iq_probe_minutes'
+                      label={t('IQ probe interval (minutes)')}
+                      description={t(
+                        'Model pools are configured per group under Group Pricing.'
+                      )}
+                    />
+                  </SettingsControlChildren>
+                )}
 
                 <FormField
                   control={form.control}

@@ -26,6 +26,7 @@ export type HeaderNavModulesConfig = {
   console: boolean
   pricing: HeaderNavAccessConfig
   statusMonitor: HeaderNavAccessConfig
+  iqMonitor: HeaderNavAccessConfig
   docs: boolean
   about: boolean
   [key: string]: boolean | HeaderNavAccessConfig
@@ -46,6 +47,7 @@ export const HEADER_NAV_DEFAULT: HeaderNavModulesConfig = {
     requireAuth: false,
   },
   statusMonitor: { enabled: true, requireAuth: false },
+  iqMonitor: { enabled: true, requireAuth: false },
   docs: true,
   about: true,
 }
@@ -98,6 +100,7 @@ const cloneHeaderNavDefault = (): HeaderNavModulesConfig => ({
   ...HEADER_NAV_DEFAULT,
   pricing: { ...HEADER_NAV_DEFAULT.pricing },
   statusMonitor: { ...HEADER_NAV_DEFAULT.statusMonitor },
+  iqMonitor: { ...HEADER_NAV_DEFAULT.iqMonitor },
 })
 
 const parseAccessModule = (
@@ -146,6 +149,7 @@ export function parseHeaderNavModules(
       ...base,
       pricing: { ...base.pricing },
       statusMonitor: { ...base.statusMonitor },
+      iqMonitor: { ...base.iqMonitor },
     }
 
     Object.entries(parsed).forEach(([key, raw]) => {
@@ -155,6 +159,10 @@ export function parseHeaderNavModules(
       }
       if (key === 'statusMonitor') {
         result.statusMonitor = parseAccessModule(raw, base.statusMonitor)
+        return
+      }
+      if (key === 'iqMonitor') {
+        result.iqMonitor = parseAccessModule(raw, base.iqMonitor)
         return
       }
 

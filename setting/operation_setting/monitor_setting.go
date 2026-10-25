@@ -2,14 +2,19 @@ package operation_setting
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/QuantumNous/new-api/setting/config"
 )
 
 type MonitorSetting struct {
 	AutoProbeEnabled       bool    `json:"auto_probe_enabled"`
+	AutoProbeMinutes       float64 `json:"auto_probe_minutes"`
+	IQProbeEnabled         bool    `json:"iq_probe_enabled"`
+	IQProbeMinutes         float64 `json:"iq_probe_minutes"`
 	AutoTestChannelEnabled bool    `json:"auto_test_channel_enabled"`
 	AutoTestChannelMinutes float64 `json:"auto_test_channel_minutes"`
 	ChannelTestMode        string  `json:"channel_test_mode"`
@@ -24,11 +29,17 @@ const (
 	ChannelTestConcurrencyOptionKey = "monitor_setting.channel_test_concurrency"
 	DefaultChannelTestConcurrency   = 1
 	MaxChannelTestConcurrency       = 32
+
+	DefaultProbeMinutes = 30
+	MinProbeMinutes     = 1
 )
 
 // 默认配置
 var monitorSetting = MonitorSetting{
 	AutoProbeEnabled:       true,
+	AutoProbeMinutes:       DefaultProbeMinutes,
+	IQProbeEnabled:         false,
+	IQProbeMinutes:         DefaultProbeMinutes,
 	AutoTestChannelEnabled: false,
 	AutoTestChannelMinutes: 10,
 	ChannelTestMode:        ChannelTestModeScheduledAll,
@@ -62,6 +73,15 @@ func GetMonitorSetting() *MonitorSetting {
 	}
 	monitorSetting.ChannelTestConcurrency = NormalizeChannelTestConcurrency(monitorSetting.ChannelTestConcurrency)
 	return &monitorSetting
+}
+
+// ProbeInterval converts a configured probe interval in minutes to a duration,
+// falling back to the default for unset or out-of-range values.
+func ProbeInterval(minutes float64) time.Duration {
+	if math.IsNaN(minutes) || minutes < MinProbeMinutes {
+		minutes = DefaultProbeMinutes
+	}
+	return time.Duration(minutes * float64(time.Minute))
 }
 
 func NormalizeChannelTestConcurrency(concurrency int) int {

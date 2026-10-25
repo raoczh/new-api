@@ -41,6 +41,10 @@ func SetApiRouter(router *gin.Engine) {
 			perfMetricsRoute.GET("", controller.GetPerfMetrics)
 		}
 		apiRouter.GET("/status-monitor/groups", middleware.DisableCache(), middleware.HeaderNavModuleAuth("statusMonitor"), controller.GetGroupStatus)
+		apiRouter.GET("/iq-monitor", middleware.DisableCache(), middleware.HeaderNavModuleAuth("iqMonitor"), controller.GetIQMonitorOverview)
+		apiRouter.GET("/iq-monitor/results/:id", middleware.DisableCache(), middleware.HeaderNavModuleAuth("iqMonitor"), controller.GetIQMonitorResult)
+		apiRouter.POST("/iq-monitor/run", middleware.AdminAuth(), middleware.CriticalRateLimit(), controller.RunIQMonitorProbe)
+		apiRouter.DELETE("/iq-monitor/results/:id", middleware.RootAuth(), middleware.CriticalRateLimit(), controller.DeleteIQMonitorResult)
 		apiRouter.GET("/verification", middleware.EmailVerificationRateLimit(), middleware.TurnstileCheck(), controller.SendEmailVerification)
 		apiRouter.GET("/reset_password", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.SendPasswordResetEmail)
 		apiRouter.POST("/user/reset", middleware.CriticalRateLimit(), anonymousRequestBodyLimit, controller.ResetPassword)

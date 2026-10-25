@@ -55,6 +55,8 @@ const headerNavSchema = z.object({
   pricingRequireAuth: z.boolean(),
   statusMonitorEnabled: z.boolean(),
   statusMonitorRequireAuth: z.boolean(),
+  iqMonitorEnabled: z.boolean(),
+  iqMonitorRequireAuth: z.boolean(),
   docs: z.boolean(),
   about: z.boolean(),
 })
@@ -86,6 +88,10 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
   statusMonitorRequireAuth:
     config.statusMonitor?.requireAuth ??
     HEADER_NAV_DEFAULT.statusMonitor.requireAuth,
+  iqMonitorEnabled:
+    config.iqMonitor?.enabled ?? HEADER_NAV_DEFAULT.iqMonitor.enabled,
+  iqMonitorRequireAuth:
+    config.iqMonitor?.requireAuth ?? HEADER_NAV_DEFAULT.iqMonitor.requireAuth,
   docs:
     config.docs === undefined ? HEADER_NAV_DEFAULT.docs : Boolean(config.docs),
   about:
@@ -126,6 +132,10 @@ export function HeaderNavigationSection({
       statusMonitor: {
         enabled: values.statusMonitorEnabled,
         requireAuth: values.statusMonitorRequireAuth,
+      },
+      iqMonitor: {
+        enabled: values.iqMonitorEnabled,
+        requireAuth: values.iqMonitorRequireAuth,
       },
     }
 
@@ -174,7 +184,10 @@ export function HeaderNavigationSection({
   const accessModules: Array<{
     enabledKey: keyof HeaderNavFormValues
     requireAuthKey: keyof HeaderNavFormValues
-    requireAuthDependsOn: 'pricingEnabled' | 'statusMonitorEnabled'
+    requireAuthDependsOn:
+      | 'pricingEnabled'
+      | 'statusMonitorEnabled'
+      | 'iqMonitorEnabled'
     title: string
     description: string
     requireAuthTitle: string
@@ -189,6 +202,17 @@ export function HeaderNavigationSection({
       requireAuthTitle: t('Require login to view status'),
       requireAuthDescription: t(
         'Visitors must authenticate before accessing the status monitor.'
+      ),
+    },
+    {
+      enabledKey: 'iqMonitorEnabled',
+      requireAuthKey: 'iqMonitorRequireAuth',
+      requireAuthDependsOn: 'iqMonitorEnabled',
+      title: t('IQ Monitor'),
+      description: t('Periodic generation checks for model degradation.'),
+      requireAuthTitle: t('Require login to view IQ monitor'),
+      requireAuthDescription: t(
+        'Visitors must authenticate before accessing the IQ monitor.'
       ),
     },
     {

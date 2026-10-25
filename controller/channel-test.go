@@ -42,6 +42,9 @@ type testResult struct {
 	context     *gin.Context
 	localErr    error
 	newAPIError *types.NewAPIError
+	// IQ probes keep the client-format response and usage for HTML extraction.
+	responseBody []byte
+	usage        *dto.Usage
 }
 
 // channelTestOptions distinguishes synthetic probes from administrator tests.
@@ -49,7 +52,12 @@ type channelTestOptions struct {
 	group  string
 	probe  bool
 	manual bool
+	// iqPrompt replaces the "hi" message for IQ monitor generations.
+	iqPrompt string
 }
+
+// iqProbeMaxOutputTokens bounds IQ generations, including reasoning tokens.
+const iqProbeMaxOutputTokens = 32000
 
 func normalizeChannelTestEndpoint(channel *model.Channel, endpointType string) string {
 	normalized := strings.TrimSpace(endpointType)
@@ -246,7 +254,11 @@ func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int,
 	}
 
 	request := buildTestRequest(testModel, endpointType, channel, isStream)
-	if options.probe {
+	if options.iqPrompt != "" {
+		if err := applyIQProbePrompt(request, testModel, options.iqPrompt); err != nil {
+			return testResult{context: c, localErr: err, newAPIError: types.NewError(err, types.ErrorCodeConvertRequestFailed)}
+		}
+	} else if options.probe {
 		// Bound synthetic calls without weakening any client request limits.
 		switch req := request.(type) {
 		case *dto.GeneralOpenAIRequest:
@@ -277,25 +289,30 @@ func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int,
 
 	info.IsChannelTest = true
 	upstreamAttempted := false
-	if options.probe {
+	if options.probe || options.iqPrompt != "" {
 		defer func() {
 			if !upstreamAttempted {
 				return
 			}
 			if result.localErr != nil || result.newAPIError != nil {
 				other := model.NewLogOther()
+				tokenName, failure, failureWithError := "Group auto probe", "Group auto probe failed", "Group auto probe failed: {{error}}"
 				other.SetPublic("source", "auto_probe")
-				message := common.NewMessage("Group auto probe failed")
+				if options.iqPrompt != "" {
+					tokenName, failure, failureWithError = "IQ probe", "IQ probe failed", "IQ probe failed: {{error}}"
+					other.SetPublic("source", "iq_probe")
+				}
+				message := common.NewMessage(failure)
 				if result.newAPIError != nil {
-					message = common.NewMessage("Group auto probe failed: {{error}}", map[string]any{"error": result.newAPIError.MaskSensitiveErrorWithStatusCode()})
+					message = common.NewMessage(failureWithError, map[string]any{"error": result.newAPIError.MaskSensitiveErrorWithStatusCode()})
 				}
 				model.RecordConsumeLog(c, testUserID, model.RecordConsumeLogParams{
 					ChannelId: channel.Id, ModelName: info.OriginModelName,
-					TokenName: "Group auto probe", Content: []*common.Message{message},
+					TokenName: tokenName, Content: []*common.Message{message},
 					UseTimeSeconds: int(time.Since(tik).Seconds()), IsStream: info.IsStream, Group: group, Other: other,
 				})
 			}
-			if errors.Is(ctx.Err(), context.Canceled) {
+			if !options.probe || errors.Is(ctx.Err(), context.Canceled) {
 				return
 			}
 			probe := model.StatusProbe{
@@ -553,7 +570,7 @@ func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int,
 		}
 	}
 	httpResult := w.Result()
-	respBody, err := readTestResponseBody(httpResult.Body, isStream)
+	respBody, err := readTestResponseBody(httpResult.Body, isStream && options.iqPrompt == "")
 	if err != nil {
 		return testResult{
 			context:     c,
@@ -570,6 +587,16 @@ func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int,
 	}
 	info.SetEstimatePromptTokens(usage.PromptTokens)
 	quota, tieredResult := settleTestQuota(info, priceData, usage)
+	if options.iqPrompt != "" {
+		other := buildTestLogOther(c, info, priceData, usage, tieredResult)
+		other.SetPublic("source", "iq_probe")
+		model.RecordConsumeLog(c, testUserID, model.RecordConsumeLogParams{
+			ChannelId: channel.Id, PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens,
+			ModelName: info.OriginModelName, TokenName: "IQ probe", Quota: quota, Content: []*common.Message{common.NewMessage("IQ probe")},
+			UseTimeSeconds: int(time.Since(tik).Seconds()), IsStream: info.IsStream, Group: group, Other: other,
+		})
+		return testResult{context: c, responseBody: respBody, usage: usage}
+	}
 	if options.probe {
 		other := buildTestLogOther(c, info, priceData, usage, tieredResult)
 		other.SetPublic("source", "auto_probe")

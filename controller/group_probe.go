@@ -12,15 +12,18 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
 
 type groupProbeHandler struct{}
 
-func (groupProbeHandler) Type() string            { return model.SystemTaskTypeGroupProbe }
-func (groupProbeHandler) Enabled() bool           { return model.CurrentRequestPolicy().AutoProbeEnabled }
-func (groupProbeHandler) Interval() time.Duration { return 30 * time.Minute }
-func (groupProbeHandler) NewPayload() any         { return nil }
+func (groupProbeHandler) Type() string  { return model.SystemTaskTypeGroupProbe }
+func (groupProbeHandler) Enabled() bool { return model.CurrentRequestPolicy().AutoProbeEnabled }
+func (groupProbeHandler) Interval() time.Duration {
+	return operation_setting.ProbeInterval(model.CurrentRequestPolicy().AutoProbeMinutes)
+}
+func (groupProbeHandler) NewPayload() any { return nil }
 
 type groupProbeRotation struct {
 	LastModel string   `json:"last_model"`
@@ -103,6 +106,28 @@ func probeEndpoint(modelName string, endpoints []constant.EndpointType) string {
 	return ""
 }
 
+// channelProbeEndpoint chooses the protocol supported by the selected channel,
+// since pricing combines capabilities from all channels that offer a model.
+func channelProbeEndpoint(channel *model.Channel, name string) string {
+	channelEndpoints := common.GetEndpointTypesByChannelType(channel.Type, name)
+	config := channel.GetOtherSettings().AdvancedCustom
+	if config != nil {
+		channelEndpoints = config.SupportedEndpointTypesForModel(name)
+	} else if slices.Contains(channelEndpoints, constant.EndpointTypeOpenAI) {
+		// Catalog metadata also identifies embedding/rerank aliases whose
+		// names cannot be inferred by the generic channel test.
+		for _, endpoint := range model.GetModelSupportEndpointTypes(name) {
+			if endpoint == constant.EndpointTypeEmbeddings || endpoint == constant.EndpointTypeJinaRerank {
+				channelEndpoints = append(channelEndpoints, endpoint)
+			}
+		}
+	}
+	if channel.Type == constant.ChannelTypeMokaAI {
+		channelEndpoints = []constant.EndpointType{constant.EndpointTypeEmbeddings}
+	}
+	return probeEndpoint(name, channelEndpoints)
+}
+
 func (groupProbeHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
 	if !(groupProbeHandler{}).Enabled() {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, nil, nil)
@@ -179,25 +204,7 @@ func (groupProbeHandler) Run(ctx context.Context, task *model.SystemTask, runner
 			if channel.Type == constant.ChannelTypeTaskPlugin {
 				continue
 			}
-			// Choose the protocol supported by the selected channel, since pricing
-			// combines capabilities from all channels that offer the same model.
-			channelEndpoints := common.GetEndpointTypesByChannelType(channel.Type, name)
-			config := channel.GetOtherSettings().AdvancedCustom
-			if config != nil {
-				channelEndpoints = config.SupportedEndpointTypesForModel(name)
-			} else if slices.Contains(channelEndpoints, constant.EndpointTypeOpenAI) {
-				// Catalog metadata also identifies embedding/rerank aliases whose
-				// names cannot be inferred by the generic channel test.
-				for _, endpoint := range model.GetModelSupportEndpointTypes(name) {
-					if endpoint == constant.EndpointTypeEmbeddings || endpoint == constant.EndpointTypeJinaRerank {
-						channelEndpoints = append(channelEndpoints, endpoint)
-					}
-				}
-			}
-			if channel.Type == constant.ChannelTypeMokaAI {
-				channelEndpoints = []constant.EndpointType{constant.EndpointTypeEmbeddings}
-			}
-			endpoint := probeEndpoint(name, channelEndpoints)
+			endpoint := channelProbeEndpoint(channel, name)
 			if endpoint == "" {
 				continue
 			}

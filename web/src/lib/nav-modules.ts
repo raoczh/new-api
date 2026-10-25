@@ -22,13 +22,14 @@ import { readCachedStatus, statusQueryOptions } from '@/lib/status-query'
 
 export type ModuleAccess = { enabled: boolean; requireAuth: boolean }
 
-export type HeaderNavModule = 'pricing' | 'statusMonitor'
+export type HeaderNavModule = 'pricing' | 'statusMonitor' | 'iqMonitor'
 
 export type HeaderNavModules = {
   home: boolean
   console: boolean
   pricing: ModuleAccess
   statusMonitor: ModuleAccess
+  iqMonitor: ModuleAccess
   docs: boolean
   about: boolean
   [key: string]: boolean | ModuleAccess
@@ -39,6 +40,7 @@ const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
   console: true,
   pricing: { enabled: true, requireAuth: false },
   statusMonitor: { enabled: true, requireAuth: false },
+  iqMonitor: { enabled: true, requireAuth: false },
   docs: true,
   about: true,
 }
@@ -46,6 +48,7 @@ const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
 const DEFAULTS: Record<HeaderNavModule, ModuleAccess> = {
   pricing: DEFAULT_HEADER_NAV_MODULES.pricing,
   statusMonitor: DEFAULT_HEADER_NAV_MODULES.statusMonitor,
+  iqMonitor: DEFAULT_HEADER_NAV_MODULES.iqMonitor,
 }
 
 function cloneHeaderNavDefaults(): HeaderNavModules {
@@ -53,6 +56,7 @@ function cloneHeaderNavDefaults(): HeaderNavModules {
     ...DEFAULT_HEADER_NAV_MODULES,
     pricing: { ...DEFAULT_HEADER_NAV_MODULES.pricing },
     statusMonitor: { ...DEFAULT_HEADER_NAV_MODULES.statusMonitor },
+    iqMonitor: { ...DEFAULT_HEADER_NAV_MODULES.iqMonitor },
   }
 }
 
@@ -118,6 +122,10 @@ export function parseHeaderNavModules(raw: unknown): HeaderNavModules {
     }
     if (key === 'statusMonitor') {
       result.statusMonitor = parseAccess(value, result.statusMonitor)
+      return
+    }
+    if (key === 'iqMonitor') {
+      result.iqMonitor = parseAccess(value, result.iqMonitor)
       return
     }
 

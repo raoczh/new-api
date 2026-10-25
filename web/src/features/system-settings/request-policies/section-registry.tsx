@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { createSectionRegistry } from '../utils/section-registry'
 import { ChannelHealthSection } from './channel-health-section'
 import type { RequestPolicySettings } from './defaults'
+import { IQ_PROMPT_OPTION_KEY, IQPromptsSection } from './iq-prompts-section'
 import { RequestChecksSection } from './request-checks-section'
 import { RoutingPolicySection } from './routing-section'
 
@@ -46,6 +47,13 @@ const POLICY_SECTIONS = [
     titleKey: 'Channel health',
     build: (settings: RequestPolicySettings) => (
       <ChannelHealthSection defaultValues={settings} />
+    ),
+  },
+  {
+    id: 'iq-prompts',
+    titleKey: 'IQ probe prompts',
+    build: (settings: RequestPolicySettings) => (
+      <IQPromptsSection value={settings[IQ_PROMPT_OPTION_KEY]} />
     ),
   },
 ] as const

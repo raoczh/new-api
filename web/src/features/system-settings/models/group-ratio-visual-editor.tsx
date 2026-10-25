@@ -85,6 +85,7 @@ import { formatNumber } from '@/lib/format'
 
 import { safeJsonParse } from '../utils/json-parser'
 import { GroupSpecialUsableRulesEditor } from './group-special-usable-editor'
+import { findInvalidIQModels, normalizeIQModelList } from './iq-group-models'
 
 export type GroupSettingsSection =
   | 'pricing'
@@ -99,6 +100,7 @@ type GroupRatioVisualEditorProps = {
   groupRatio: string
   groupOrder?: string
   groupVendors?: string
+  iqGroupModels?: string
   vendors?: PricingVendor[]
   topupGroupRatio: string
   userUsableGroups: string
@@ -117,6 +119,8 @@ type GroupPricingRow = {
   selectable: boolean
   description: string
   vendorId: number
+  iqEnabled: boolean
+  iqModels: string
 }
 
 type RegistryEntry = {
@@ -166,12 +170,14 @@ function buildGroupPricingRows(
   userUsableGroups: string,
   topupGroupRatio: string,
   groupOrder: string,
-  groupVendors: string
+  groupVendors: string,
+  iqGroupModels: string
 ): GroupPricingRow[] {
   const ratioMap = parseRatioMap(groupRatio)
   const usableMap = parseUsableMap(userUsableGroups)
   const topupMap = parseRatioMap(topupGroupRatio)
   const vendorMap = parseRatioMap(groupVendors)
+  const iqMap = parseUsableMap(iqGroupModels)
   const order = safeJsonParse<string[]>(groupOrder, {
     fallback: [],
     silent: true,
@@ -194,6 +200,8 @@ function buildGroupPricingRows(
     selectable: Object.hasOwn(usableMap, name),
     description: String(usableMap[name] ?? ''),
     vendorId: vendorMap[name] ?? 0,
+    iqEnabled: Object.hasOwn(iqMap, name),
+    iqModels: String(iqMap[name] ?? ''),
   }))
 }
 
@@ -203,6 +211,7 @@ function serializeGroupPricingRows(rows: GroupPricingRow[]) {
   const topupGroupRatio: Record<string, number> = {}
   const groupOrder: string[] = []
   const groupVendors: Record<string, number> = {}
+  const iqGroupModels: Record<string, string> = {}
 
   for (const row of rows) {
     const name = row.name.trim()
@@ -212,6 +221,9 @@ function serializeGroupPricingRows(rows: GroupPricingRow[]) {
     groupRatio[name] = normalizeRatio(row.ratio)
     if (row.selectable) {
       userUsableGroups[name] = row.description
+    }
+    if (row.iqEnabled) {
+      iqGroupModels[name] = normalizeIQModelList(row.iqModels)
     }
     const topup = row.topupRatio.trim()
     if (topup !== '' && Number.isFinite(Number(topup))) {
@@ -225,6 +237,7 @@ function serializeGroupPricingRows(rows: GroupPricingRow[]) {
     TopupGroupRatio: JSON.stringify(topupGroupRatio, null, 2),
     GroupOrder: JSON.stringify(groupOrder, null, 2),
     GroupVendors: JSON.stringify(groupVendors, null, 2),
+    IQGroupModels: JSON.stringify(iqGroupModels, null, 2),
   }
 }
 
@@ -239,6 +252,7 @@ function groupPricingSignature(rows: GroupPricingRow[]): string {
       silent: true,
     }),
     groupVendors: parseRatioMap(serialized.GroupVendors),
+    iqGroupModels: parseUsableMap(serialized.IQGroupModels),
   })
 }
 
@@ -247,7 +261,8 @@ function sourceGroupPricingSignature(
   userUsableGroups: string,
   topupGroupRatio: string,
   groupOrder: string,
-  groupVendors: string
+  groupVendors: string,
+  iqGroupModels: string
 ): string {
   return JSON.stringify({
     groupRatio: parseRatioMap(groupRatio),
@@ -258,6 +273,7 @@ function sourceGroupPricingSignature(
       silent: true,
     }),
     groupVendors: parseRatioMap(groupVendors),
+    iqGroupModels: parseUsableMap(iqGroupModels),
   })
 }
 
@@ -308,6 +324,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   groupRatio,
   groupOrder = '[]',
   groupVendors = '{}',
+  iqGroupModels = '{}',
   vendors = [],
   topupGroupRatio,
   userUsableGroups,
@@ -408,6 +425,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
           groupRatio={groupRatio}
           groupOrder={groupOrder}
           groupVendors={groupVendors}
+          iqGroupModels={iqGroupModels}
           vendors={vendors}
           userUsableGroups={userUsableGroups}
           topupGroupRatio={topupGroupRatio}
@@ -515,6 +533,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
 type GroupPricingTableProps = {
   groupOrder: string
   groupVendors: string
+  iqGroupModels: string
   vendors: PricingVendor[]
   groupRatio: string
   userUsableGroups: string
@@ -526,6 +545,7 @@ type GroupPricingTableProps = {
 function GroupPricingTable({
   groupOrder,
   groupVendors,
+  iqGroupModels,
   vendors,
   groupRatio,
   userUsableGroups,
@@ -541,7 +561,8 @@ function GroupPricingTable({
       userUsableGroups,
       topupGroupRatio,
       groupOrder,
-      groupVendors
+      groupVendors,
+      iqGroupModels
     )
   )
 
@@ -551,7 +572,8 @@ function GroupPricingTable({
       userUsableGroups,
       topupGroupRatio,
       groupOrder,
-      groupVendors
+      groupVendors,
+      iqGroupModels
     )
     setRows((currentRows) => {
       if (groupPricingSignature(currentRows) === incomingSignature) {
@@ -562,10 +584,18 @@ function GroupPricingTable({
         userUsableGroups,
         topupGroupRatio,
         groupOrder,
-        groupVendors
+        groupVendors,
+        iqGroupModels
       )
     })
-  }, [groupRatio, userUsableGroups, topupGroupRatio, groupOrder, groupVendors])
+  }, [
+    groupRatio,
+    userUsableGroups,
+    topupGroupRatio,
+    groupOrder,
+    groupVendors,
+    iqGroupModels,
+  ])
 
   const emitRows = useCallback(
     (nextRows: GroupPricingRow[]) => {
@@ -576,6 +606,7 @@ function GroupPricingTable({
       onChange('TopupGroupRatio', serialized.TopupGroupRatio)
       onChange('GroupOrder', serialized.GroupOrder)
       onChange('GroupVendors', serialized.GroupVendors)
+      onChange('IQGroupModels', serialized.IQGroupModels)
     },
     [onChange]
   )
@@ -611,6 +642,8 @@ function GroupPricingTable({
         selectable: true,
         description: '',
         vendorId: 0,
+        iqEnabled: false,
+        iqModels: '',
       },
       ...rows,
     ])
@@ -634,6 +667,19 @@ function GroupPricingTable({
       .filter(([, count]) => count > 1)
       .map(([name]) => name)
   }, [rows])
+
+  const invalidIQGroups = useMemo(
+    () =>
+      rows
+        .filter(
+          (row) =>
+            row.iqEnabled &&
+            (normalizeIQModelList(row.iqModels) === '' ||
+              findInvalidIQModels(row.iqModels).length > 0)
+        )
+        .map((row) => row.name.trim() || '-'),
+    [rows]
+  )
 
   const query = search.trim().toLowerCase()
   const visibleRows = rows.filter(
@@ -696,7 +742,7 @@ function GroupPricingTable({
                 ? { onReorder: emitRows, getLabel: (row) => row.name }
                 : undefined
             }
-            tableClassName='min-w-[760px]'
+            tableClassName='min-w-[1080px]'
             tableProps={{ 'aria-label': t('Pricing groups') }}
             data={visibleRows}
             getRowKey={(row) => row._id}
@@ -833,6 +879,44 @@ function GroupPricingTable({
                 ),
               },
               {
+                id: 'iq-monitor',
+                header: t('IQ monitoring'),
+                className: 'min-w-72',
+                cell: (row) => (
+                  <div className='flex items-center gap-2'>
+                    <Checkbox
+                      checked={row.iqEnabled}
+                      onCheckedChange={(checked) =>
+                        updateRow(row._id, 'iqEnabled', checked === true)
+                      }
+                      aria-label={t('Join IQ monitoring for {{group}}', {
+                        group: row.name,
+                      })}
+                    />
+                    {row.iqEnabled ? (
+                      <Input
+                        value={row.iqModels}
+                        aria-label={t('IQ monitoring models for {{group}}', {
+                          group: row.name,
+                        })}
+                        placeholder='gpt-5.1[high],claude-sonnet-4-5'
+                        className='font-mono text-xs'
+                        aria-invalid={invalidIQGroups.includes(
+                          row.name.trim() || '-'
+                        )}
+                        onChange={(event) =>
+                          updateRow(row._id, 'iqModels', event.target.value)
+                        }
+                      />
+                    ) : (
+                      <span className='text-muted-foreground px-1 text-sm'>
+                        {t('Not joined')}
+                      </span>
+                    )}
+                  </div>
+                ),
+              },
+              {
                 id: 'actions',
                 header: t('Actions'),
                 className: 'text-right',
@@ -869,6 +953,19 @@ function GroupPricingTable({
               })}
             </p>
           )}
+          {invalidIQGroups.length > 0 && (
+            <p className='text-destructive text-sm'>
+              {t(
+                'Invalid IQ monitoring models in: {{names}}. Use model[thinking level] separated by commas; levels are none, minimal, low, medium, high, xhigh, max.',
+                { names: invalidIQGroups.join(', ') }
+              )}
+            </p>
+          )}
+          <p className='text-muted-foreground text-xs'>
+            {t(
+              'Groups that join IQ monitoring are probed periodically with a random model from their pool. Example: gpt-5.1[high],gpt-5.1-codex[medium]'
+            )}
+          </p>
         </div>
       </CardContent>
     </Card>

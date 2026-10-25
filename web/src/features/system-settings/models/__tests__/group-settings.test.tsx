@@ -45,6 +45,7 @@ const defaults = {
   MaxTokenAutoGroups: 5,
   DefaultUseAutoGroup: false,
   GroupSpecialUsableGroup: '{}',
+  IQGroupModels: '{}',
 }
 
 const schema = z.object({
@@ -58,6 +59,7 @@ const schema = z.object({
   MaxTokenAutoGroups: positiveIntegerSchema('Enter a positive integer'),
   DefaultUseAutoGroup: z.boolean(),
   GroupSpecialUsableGroup: z.string(),
+  IQGroupModels: z.string(),
 })
 
 function Fixture(props: {
@@ -136,7 +138,9 @@ describe('group settings workspace', () => {
         .map((input) => input.value)
     ).toEqual(['group_2', 'group_1', 'default', 'vip'])
 
-    await user.click(screen.getByRole('button', { name: 'Save group settings' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Save group settings' })
+    )
     await waitFor(() => expect(onSave).toHaveBeenCalled())
     const saved = onSave.mock.calls[0][0]
     expect(JSON.parse(saved.GroupRatio)).toEqual({

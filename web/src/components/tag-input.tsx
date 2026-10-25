@@ -30,6 +30,8 @@ interface TagInputProps {
   placeholder?: string
   className?: string
   disabled?: boolean
+  /** Id of the text input, so a `<label htmlFor>` can name it. */
+  id?: string
 }
 
 export function TagInput({
@@ -38,6 +40,7 @@ export function TagInput({
   placeholder,
   className,
   disabled = false,
+  id,
 }: TagInputProps) {
   const { t } = useTranslation()
   const placeholderText = placeholder ?? t('Add tags...')
@@ -101,6 +104,7 @@ export function TagInput({
       ))}
       <input
         ref={inputRef}
+        id={id}
         type='text'
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}

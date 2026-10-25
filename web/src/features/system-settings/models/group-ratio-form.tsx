@@ -77,7 +77,14 @@ type GroupFormValues = {
   MaxTokenAutoGroups: number
   DefaultUseAutoGroup: boolean
   GroupSpecialUsableGroup: string
+  IQGroupModels: string
 }
+
+const JSON_FIELD_LABEL_KEYS = {
+  GroupOrder: 'Group display order',
+  GroupVendors: 'Group vendors',
+  IQGroupModels: 'IQ monitoring models',
+} as const
 
 type GroupRatioFormProps = {
   form: UseFormReturn<GroupFormValues>
@@ -175,6 +182,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
             groupRatio={values.GroupRatio ?? ''}
             groupOrder={values.GroupOrder ?? '[]'}
             groupVendors={values.GroupVendors ?? '{}'}
+            iqGroupModels={values.IQGroupModels ?? '{}'}
             vendors={vendors}
             topupGroupRatio={values.TopupGroupRatio ?? ''}
             userUsableGroups={values.UserUsableGroups ?? ''}
@@ -239,32 +247,30 @@ export const GroupRatioForm = memo(function GroupRatioForm({
           />
         ) : (
           <SettingsForm onSubmit={form.handleSubmit(onSave)}>
-            {(['GroupOrder', 'GroupVendors'] as const).map((name) => (
-              <FormField
-                key={name}
-                control={form.control}
-                name={name}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      {name === 'GroupOrder'
-                        ? t('Group display order')
-                        : t('Group vendors')}
-                    </FormLabel>
-                    <FormControl>
-                      <JsonCodeEditor
-                        value={field.value}
-                        onChange={field.onChange}
-                        name={field.name}
-                        onBlur={field.onBlur}
-                        textareaRef={field.ref}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            ))}
+            {(['GroupOrder', 'GroupVendors', 'IQGroupModels'] as const).map(
+              (name) => (
+                <FormField
+                  key={name}
+                  control={form.control}
+                  name={name}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t(JSON_FIELD_LABEL_KEYS[name])}</FormLabel>
+                      <FormControl>
+                        <JsonCodeEditor
+                          value={field.value}
+                          onChange={field.onChange}
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          textareaRef={field.ref}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )
+            )}
             <FormField
               control={form.control}
               name='GroupRatio'

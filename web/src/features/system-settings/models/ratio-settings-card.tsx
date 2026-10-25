@@ -163,6 +163,14 @@ const createGroupSchema = (t: Translate) =>
     MaxTokenAutoGroups: positiveIntegerSchema(t('Enter a positive integer')),
     DefaultUseAutoGroup: z.boolean(),
     GroupSpecialUsableGroup: createJsonStringField(t),
+    IQGroupModels: createJsonStringField(t, {
+      predicate: (parsed) =>
+        parsed != null &&
+        !Array.isArray(parsed) &&
+        typeof parsed === 'object' &&
+        Object.values(parsed).every((value) => typeof value === 'string'),
+      predicateMessage: 'Expected a JSON map of groups to model lists',
+    }),
   })
 
 type ModelFormValues = z.infer<ReturnType<typeof createModelSchema>>
@@ -273,6 +281,7 @@ export function RatioSettingsCard({
     GroupSpecialUsableGroup: normalizeJsonString(
       groupDefaults.GroupSpecialUsableGroup
     ),
+    IQGroupModels: normalizeJsonString(groupDefaults.IQGroupModels),
   })
   const modelSchema = useMemo(() => createModelSchema(t), [t])
   const groupSchema = useMemo(() => createGroupSchema(t), [t])
@@ -313,6 +322,7 @@ export function RatioSettingsCard({
       GroupSpecialUsableGroup: formatJsonForTextarea(
         groupDefaults.GroupSpecialUsableGroup
       ),
+      IQGroupModels: formatJsonForTextarea(groupDefaults.IQGroupModels),
     },
   })
 
@@ -367,6 +377,7 @@ export function RatioSettingsCard({
       GroupSpecialUsableGroup: normalizeJsonString(
         groupDefaults.GroupSpecialUsableGroup
       ),
+      IQGroupModels: normalizeJsonString(groupDefaults.IQGroupModels),
     }
 
     groupForm.reset({
@@ -381,6 +392,7 @@ export function RatioSettingsCard({
       GroupSpecialUsableGroup: formatJsonForTextarea(
         groupDefaults.GroupSpecialUsableGroup
       ),
+      IQGroupModels: formatJsonForTextarea(groupDefaults.IQGroupModels),
     })
   }, [groupDefaults, groupForm])
 
@@ -449,12 +461,14 @@ export function RatioSettingsCard({
         GroupSpecialUsableGroup: normalizeJsonString(
           values.GroupSpecialUsableGroup
         ),
+        IQGroupModels: normalizeJsonString(values.IQGroupModels),
       }
 
       // Map form field names to API keys (most are 1:1, except GroupSpecialUsableGroup)
       const apiKeyMap: Record<string, string> = {
         GroupSpecialUsableGroup:
           'group_ratio_setting.group_special_usable_group',
+        IQGroupModels: 'iq_monitor_setting.group_models',
       }
 
       const updates = (

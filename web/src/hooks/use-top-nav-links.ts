@@ -85,6 +85,16 @@ export function useTopNavLinks(): TopNavLink[] {
     })
   }
 
+  // IQ monitor
+  const iqMonitor = modules.iqMonitor
+  if (iqMonitor.enabled) {
+    links.push({
+      title: t('IQ Monitor'),
+      href: '/iq-monitor',
+      requiresAuth: iqMonitor.requireAuth && !isAuthed,
+    })
+  }
+
   // Usage documentation
   if (modules?.docs !== false) {
     links.push({ title: t('Usage Documentation'), href: '/docs' })

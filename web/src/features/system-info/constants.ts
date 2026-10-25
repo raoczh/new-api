@@ -22,6 +22,7 @@ export const SYSTEM_TASK_TYPE_LABEL: Record<string, string> = {
   log_cleanup: 'Log cleanup',
   channel_test: 'Batch channel test',
   group_probe: 'Automatic group probes',
+  iq_probe: 'IQ probes',
   model_update: 'Batch upstream model update',
   midjourney_poll: 'Drawing task polling',
   async_task_poll: 'Async task polling',

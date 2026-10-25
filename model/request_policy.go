@@ -24,6 +24,9 @@ import (
 type RequestPolicySnapshot struct {
 	Affinity         operation_setting.ChannelAffinitySetting
 	AutoProbeEnabled bool
+	AutoProbeMinutes float64
+	IQProbeEnabled   bool
+	IQProbeMinutes   float64
 	RetryTimes       int
 	RetryCodes       []operation_setting.StatusCodeRange
 	DisableCodes     []operation_setting.StatusCodeRange
@@ -71,7 +74,7 @@ func IsRequestPolicyOption(key string) bool {
 		return true
 	}
 	switch key {
-	case "CheckSensitiveEnabled", "CheckSensitiveOnPromptEnabled", "SensitiveWords", "AutomaticEnableChannelEnabled", "ChannelDisableThreshold", "monitor_setting.auto_probe_enabled", "monitor_setting.auto_test_channel_enabled", "monitor_setting.auto_test_channel_minutes", "monitor_setting.channel_test_concurrency", "monitor_setting.channel_test_mode", "RetryTimes", "AutomaticRetryStatusCodes", "AutomaticRetryTimeoutEnabled", "AutomaticDisableChannelEnabled", "AutomaticDisableStatusCodes", "AutomaticDisableKeywords":
+	case "CheckSensitiveEnabled", "CheckSensitiveOnPromptEnabled", "SensitiveWords", "AutomaticEnableChannelEnabled", "ChannelDisableThreshold", "monitor_setting.auto_probe_enabled", "monitor_setting.auto_probe_minutes", "monitor_setting.iq_probe_enabled", "monitor_setting.iq_probe_minutes", "monitor_setting.auto_test_channel_enabled", "monitor_setting.auto_test_channel_minutes", "monitor_setting.channel_test_concurrency", "monitor_setting.channel_test_mode", "RetryTimes", "AutomaticRetryStatusCodes", "AutomaticRetryTimeoutEnabled", "AutomaticDisableChannelEnabled", "AutomaticDisableStatusCodes", "AutomaticDisableKeywords":
 		return true
 	}
 	return false
@@ -145,12 +148,20 @@ func BuildRequestPolicy(options map[string]string) (*RequestPolicySnapshot, erro
 		return nil, err
 	}
 	snapshot.DisableKeywords = strings.Split(raw["AutomaticDisableKeywords"], "\n")
-	for _, key := range []string{"CheckSensitiveEnabled", "CheckSensitiveOnPromptEnabled", "AutomaticEnableChannelEnabled", "AutomaticRetryTimeoutEnabled", "monitor_setting.auto_probe_enabled", "monitor_setting.auto_test_channel_enabled"} {
+	for _, key := range []string{"CheckSensitiveEnabled", "CheckSensitiveOnPromptEnabled", "AutomaticEnableChannelEnabled", "AutomaticRetryTimeoutEnabled", "monitor_setting.auto_probe_enabled", "monitor_setting.iq_probe_enabled", "monitor_setting.auto_test_channel_enabled"} {
 		if _, err := strconv.ParseBool(raw[key]); err != nil {
 			return nil, fmt.Errorf("invalid boolean: %s", key)
 		}
 	}
 	snapshot.AutoProbeEnabled = raw["monitor_setting.auto_probe_enabled"] == "true"
+	snapshot.IQProbeEnabled = raw["monitor_setting.iq_probe_enabled"] == "true"
+	for key, target := range map[string]*float64{"monitor_setting.auto_probe_minutes": &snapshot.AutoProbeMinutes, "monitor_setting.iq_probe_minutes": &snapshot.IQProbeMinutes} {
+		value, err := strconv.ParseFloat(raw[key], 64)
+		if err != nil || value < operation_setting.MinProbeMinutes || math.IsNaN(value) || math.IsInf(value, 0) {
+			return nil, fmt.Errorf("probe interval must be at least %d minute: %s", operation_setting.MinProbeMinutes, key)
+		}
+		*target = value
+	}
 	snapshot.CheckText = raw["CheckSensitiveEnabled"] == "true" && raw["CheckSensitiveOnPromptEnabled"] == "true"
 	for word := range strings.SplitSeq(raw["SensitiveWords"], "\n") {
 		if word = strings.TrimSpace(word); word != "" {
