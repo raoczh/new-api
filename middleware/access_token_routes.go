@@ -255,6 +255,8 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/data/flow/self":                   accessTokenScopeRule("usage:read"),
 	"GET /api/data/self/token_usage":            accessTokenScopeRule("usage:read"),
 	"GET /api/data/self/model_distribution":     accessTokenScopeRule("usage:read"),
+	"GET /api/data/token_usage":                 accessTokenScopeRule("log:read"),
+	"GET /api/data/model_distribution":          accessTokenScopeRule("log:read"),
 
 	// router/api-router.go: /api/ticket. Support tickets have no token scope,
 	// so they stay limited to browser sessions.

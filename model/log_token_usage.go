@@ -60,9 +60,32 @@ func splitLogTokenUsage(row tokenUsageLogRow) tokenUsageSplit {
 	if row.Other != "" {
 		_ = common.UnmarshalJsonStr(row.Other, &other)
 	}
+	return splitLogTokenUsageValues(row.PromptTokens, row.CompletionTokens, tokenUsageOtherValues{
+		Claude:              other.Claude,
+		UsageSemantic:       other.UsageSemantic,
+		CacheTokens:         other.CacheTokens,
+		CacheCreationTokens: other.CacheCreationTokens,
+		CacheCreation5m:     other.CacheCreation5m,
+		CacheCreation1h:     other.CacheCreation1h,
+	})
+}
+
+// tokenUsageOtherValues mirrors the token-relevant subset of a log's other
+// metadata. Callers that already hold the in-memory LogOther use it directly so
+// the dashboard and the raw log aggregation apply one token definition.
+type tokenUsageOtherValues struct {
+	Claude              bool
+	UsageSemantic       string
+	CacheTokens         int
+	CacheCreationTokens int
+	CacheCreation5m     int
+	CacheCreation1h     int
+}
+
+func splitLogTokenUsageValues(promptTokens int, completionTokens int, other tokenUsageOtherValues) tokenUsageSplit {
 	cacheRead := int64(max(other.CacheTokens, 0))
 	cacheCreation := int64(max(other.CacheCreationTokens, other.CacheCreation5m+other.CacheCreation1h, 0))
-	input := int64(max(row.PromptTokens, 0))
+	input := int64(max(promptTokens, 0))
 	anthropicSemantic := other.Claude
 	if other.UsageSemantic != "" {
 		anthropicSemantic = other.UsageSemantic == "anthropic"
@@ -72,7 +95,7 @@ func splitLogTokenUsage(row tokenUsageLogRow) tokenUsageSplit {
 	}
 	return tokenUsageSplit{
 		inputTokens:         input,
-		outputTokens:        int64(max(row.CompletionTokens, 0)),
+		outputTokens:        int64(max(completionTokens, 0)),
 		cacheCreationTokens: cacheCreation,
 		cacheReadTokens:     cacheRead,
 	}
@@ -80,11 +103,24 @@ func splitLogTokenUsage(row tokenUsageLogRow) tokenUsageSplit {
 
 // GetUserHourlyTokenUsage aggregates a user's consume logs into hourly buckets.
 func GetUserHourlyTokenUsage(userId int, startTimestamp int64, endTimestamp int64) ([]HourlyTokenUsage, error) {
-	rows, err := LOG_DB.Table("logs").
+	return queryHourlyTokenUsage(userId, startTimestamp, endTimestamp)
+}
+
+// GetHourlyTokenUsage aggregates every user's consume logs into hourly buckets
+// for the administrator overview.
+func GetHourlyTokenUsage(startTimestamp int64, endTimestamp int64) ([]HourlyTokenUsage, error) {
+	return queryHourlyTokenUsage(0, startTimestamp, endTimestamp)
+}
+
+func queryHourlyTokenUsage(userId int, startTimestamp int64, endTimestamp int64) ([]HourlyTokenUsage, error) {
+	query := LOG_DB.Table("logs").
 		Select("created_at, prompt_tokens, completion_tokens, other").
-		Where("user_id = ? AND type = ? AND created_at >= ? AND created_at <= ?",
-			userId, LogTypeConsume, startTimestamp, endTimestamp).
-		Rows()
+		Where("type = ? AND created_at >= ? AND created_at <= ?",
+			LogTypeConsume, startTimestamp, endTimestamp)
+	if userId > 0 {
+		query = query.Where("user_id = ?", userId)
+	}
+	rows, err := query.Rows()
 	if err != nil {
 		common.SysError("failed to query token usage logs: " + err.Error())
 		return nil, errors.New("查询 Token 用量失败")

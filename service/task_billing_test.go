@@ -60,6 +60,7 @@ func TestMain(m *testing.M) {
 		&model.UserSubscription{},
 		&model.SystemTask{},
 		&model.SystemTaskLock{},
+		&model.QuotaData{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}
@@ -84,6 +85,7 @@ func truncate(t *testing.T) {
 		model.DB.Exec("DELETE FROM user_subscriptions")
 		model.DB.Exec("DELETE FROM system_task_locks")
 		model.DB.Exec("DELETE FROM system_tasks")
+		model.DB.Exec("DELETE FROM quota_data")
 	})
 }
 
@@ -1001,6 +1003,50 @@ func TestRefundTaskQuota_NoToken(t *testing.T) {
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
 	assert.Zero(t, getTaskQuota(t, task.ID))
+}
+
+// A refunded task must also reverse its dashboard bucket: the admin totals
+// would otherwise keep counting a request whose charge was returned.
+func TestRefundTaskQuotaAdjustsQuotaDataBucket(t *testing.T) {
+	truncate(t)
+	model.SaveQuotaDataCache()
+	require.NoError(t, model.DB.Exec("DELETE FROM quota_data").Error)
+	ctx := context.Background()
+
+	const userID, channelID = 6, 6
+	const preConsumed = 1800
+	seedUser(t, userID, 5000)
+	seedChannel(t, channelID)
+	seedChargedAccounting(t, userID, channelID, 0, preConsumed, 1)
+
+	task := makeTask(userID, channelID, preConsumed, 0, BillingSourceWallet, 0)
+	task.CreatedAt = 7200 + 30
+	task.PrivateData.NodeName = "node-a"
+	require.NoError(t, model.DB.Create(task).Error)
+
+	// Submission writes one request with the full pre-charge and no token
+	// split; a failed task never reports a token total.
+	model.LogQuotaData(model.QuotaDataLogParams{
+		UserID:    userID,
+		Username:  "test_user",
+		ModelName: "test-model",
+		CreatedAt: task.CreatedAt,
+		Quota:     preConsumed,
+		UseGroup:  task.Group,
+		ChannelID: channelID,
+		NodeName:  "node-a",
+	})
+
+	assert.True(t, RefundTaskQuota(ctx, task, "task failed"))
+
+	model.SaveQuotaDataCache()
+
+	var rows []model.QuotaData
+	require.NoError(t, model.DB.Find(&rows).Error)
+	require.Len(t, rows, 1)
+	assert.Equal(t, 1, rows[0].Count, "a refund must not remove the request itself")
+	assert.Zero(t, rows[0].Quota)
+	assert.Zero(t, rows[0].TokenUsed)
 }
 
 func TestRefundTaskQuota_FundingFailureKeepsAccountingAndPendingMarker(t *testing.T) {

@@ -156,7 +156,7 @@ func RecordLog(userId int, logType int, content *common.Message) {
 		Username:  username,
 		CreatedAt: common.GetTimestamp(),
 		Type:      logType,
-		Content:   other.setContent([]*common.Message{content}),
+		Content:   other.SetContent([]*common.Message{content}),
 		Other:     other.JSONString(),
 	}
 	err := createLog(log)
@@ -265,7 +265,7 @@ func RecordTopupLog(userId int, content *common.Message, callerIp string, paymen
 		Username:  username,
 		CreatedAt: common.GetTimestamp(),
 		Type:      LogTypeTopup,
-		Content:   other.setContent([]*common.Message{content}),
+		Content:   other.SetContent([]*common.Message{content}),
 		Ip:        callerIp,
 		Other:     other.JSONString(),
 	}
@@ -322,18 +322,21 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 }
 
 type RecordConsumeLogParams struct {
-	ChannelId        int               `json:"channel_id"`
-	PromptTokens     int               `json:"prompt_tokens"`
-	CompletionTokens int               `json:"completion_tokens"`
-	ModelName        string            `json:"model_name"`
-	TokenName        string            `json:"token_name"`
-	Quota            int               `json:"quota"`
-	Content          []*common.Message `json:"content"`
-	TokenId          int               `json:"token_id"`
-	UseTimeSeconds   int               `json:"use_time_seconds"`
-	IsStream         bool              `json:"is_stream"`
-	Group            string            `json:"group"`
-	Other            *LogOther         `json:"other"`
+	ChannelId        int `json:"channel_id"`
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	// StatTokenUsed overrides the token total written to the dashboard when the
+	// caller has one normalized number but no prompt/completion split (tasks).
+	StatTokenUsed  int               `json:"stat_token_used,omitempty"`
+	ModelName      string            `json:"model_name"`
+	TokenName      string            `json:"token_name"`
+	Quota          int               `json:"quota"`
+	Content        []*common.Message `json:"content"`
+	TokenId        int               `json:"token_id"`
+	UseTimeSeconds int               `json:"use_time_seconds"`
+	IsStream       bool              `json:"is_stream"`
+	Group          string            `json:"group"`
+	Other          *LogOther         `json:"other"`
 }
 
 func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
@@ -346,7 +349,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
 	createdAt := common.GetTimestamp()
 	other := params.Other
-	content := other.setContent(params.Content)
+	content := other.SetContent(params.Content)
 	otherStr := other.JSONString()
 	// 判断是否需要记录 IP
 	needRecordIp := false
@@ -386,12 +389,27 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		logger.LogError(c, common.LogText("failed to record log: %s", err.Error()))
 	}
 	if common.DataExportEnabled {
+		tokenUsed := params.StatTokenUsed
+		if tokenUsed <= 0 {
+			var tokenOther tokenUsageOtherValues
+			if other != nil {
+				tokenOther = tokenUsageOtherValues{
+					Claude:              logOtherBool(other, "claude"),
+					UsageSemantic:       logOtherString(other, "usage_semantic"),
+					CacheTokens:         logOtherInt(other, "cache_tokens"),
+					CacheCreationTokens: logOtherInt(other, "cache_creation_tokens"),
+					CacheCreation5m:     logOtherInt(other, "cache_creation_tokens_5m"),
+					CacheCreation1h:     logOtherInt(other, "cache_creation_tokens_1h"),
+				}
+			}
+			// Use the same non-overlapping definition as the raw-log token charts:
+			// input + output + cache read + cache creation.
+			tokenUsed = int(splitLogTokenUsageValues(params.PromptTokens, params.CompletionTokens, tokenOther).total())
+		}
 		var cacheReadTokens, cacheCreationTokens int
 		if other != nil {
-			cacheReadTokens, _ = other.public["cache_tokens"].(int)
-			// The settlement path already normalizes the cache creation total.
-			// Do not add the 5m/1h breakdown again or infer tokens from prices.
-			cacheCreationTokens, _ = other.public["cache_write_tokens"].(int)
+			cacheReadTokens = logOtherInt(other, "cache_tokens")
+			cacheCreationTokens = logOtherCacheCreationTokens(other)
 		}
 		LogQuotaData(QuotaDataLogParams{
 			UserID:              userId,
@@ -399,7 +417,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 			ModelName:           params.ModelName,
 			Quota:               params.Quota,
 			CreatedAt:           createdAt,
-			TokenUsed:           params.PromptTokens + params.CompletionTokens,
+			TokenUsed:           tokenUsed,
 			CacheReadTokens:     int64(cacheReadTokens),
 			CacheCreationTokens: int64(cacheCreationTokens),
 			UseGroup:            params.Group,
@@ -408,6 +426,57 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 			NodeName:            common.NodeName,
 		})
 	}
+}
+
+func logOtherInt(other *LogOther, key string) int {
+	if other == nil {
+		return 0
+	}
+	switch value := other.public[key].(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return 0
+	}
+}
+
+func logOtherString(other *LogOther, key string) string {
+	if other == nil {
+		return ""
+	}
+	value, _ := other.public[key].(string)
+	return value
+}
+
+func logOtherBool(other *LogOther, key string) bool {
+	if other == nil {
+		return false
+	}
+	value, _ := other.public[key].(bool)
+	return value
+}
+
+// logOtherCacheCreationTokens returns the normalized cache creation total for
+// the dashboard. The log metadata carries both the raw total and the 5m/1h
+// breakdown; when only the breakdown exists (some Anthropic responses), their
+// sum is the total. cache_write_tokens is preferred when present because the
+// settlement path already resolved the two forms into one number.
+func logOtherCacheCreationTokens(other *LogOther) int {
+	if other == nil {
+		return 0
+	}
+	if value := logOtherInt(other, "cache_write_tokens"); value > 0 {
+		return value
+	}
+	return max(
+		logOtherInt(other, "cache_creation_tokens"),
+		logOtherInt(other, "cache_creation_tokens_5m")+logOtherInt(other, "cache_creation_tokens_1h"),
+		0,
+	)
 }
 
 type RecordTaskBillingLogParams struct {
@@ -421,6 +490,12 @@ type RecordTaskBillingLogParams struct {
 	Group     string
 	Other     *LogOther
 	NodeName  string // 任务发起节点；为空时回退当前节点
+	// StatCreatedAt aligns the dashboard bucket with the original consume row.
+	// Zero falls back to now.
+	StatCreatedAt int64
+	// StatTokenUsed is the task's normalized token total. Task submissions have
+	// no prompt/completion split, so settlement backfills this value.
+	StatTokenUsed int
 }
 
 func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
@@ -441,7 +516,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		Username:  username,
 		CreatedAt: createdAt,
 		Type:      params.LogType,
-		Content:   other.setContent(params.Content),
+		Content:   other.SetContent(params.Content),
 		TokenName: tokenName,
 		ModelName: params.ModelName,
 		Quota:     params.Quota,
@@ -454,17 +529,30 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	if err != nil {
 		common.SysLog(common.LogText("failed to record task billing log: %s", err.Error()))
 	}
-	if params.LogType == LogTypeConsume && common.DataExportEnabled {
+	if common.DataExportEnabled && (params.LogType == LogTypeConsume || params.LogType == LogTypeRefund) {
 		nodeName := params.NodeName
 		if nodeName == "" {
 			nodeName = common.NodeName
 		}
-		LogQuotaData(QuotaDataLogParams{
+		statCreatedAt := params.StatCreatedAt
+		if statCreatedAt == 0 {
+			statCreatedAt = createdAt
+		}
+		statQuota := params.Quota
+		statTokenUsed := params.StatTokenUsed
+		if params.LogType == LogTypeRefund {
+			// Refund rows and settlement back-charges correct the original bucket:
+			// they must not create a request count of their own.
+			statQuota = -statQuota
+			statTokenUsed = -statTokenUsed
+		}
+		LogQuotaDataAdjustment(QuotaDataLogParams{
 			UserID:    params.UserId,
 			Username:  username,
 			ModelName: params.ModelName,
-			Quota:     params.Quota,
-			CreatedAt: createdAt,
+			Quota:     statQuota,
+			CreatedAt: statCreatedAt,
+			TokenUsed: statTokenUsed,
 			UseGroup:  params.Group,
 			TokenID:   params.TokenId,
 			ChannelID: params.ChannelId,
@@ -723,8 +811,15 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 		rpmTpmQuery = rpmTpmQuery.Where(logGroupCol+" = ?", group)
 	}
 
-	tx = tx.Where("type = ?", LogTypeConsume)
-	rpmTpmQuery = rpmTpmQuery.Where("type = ?", LogTypeConsume)
+	// An explicit log type filter (error, refund, ...) must be honored; the
+	// unfiltered view keeps reporting consume usage. Folding both into
+	// LogTypeConsume made the stat cards lie whenever the list was filtered.
+	statLogType := logType
+	if statLogType == LogTypeUnknown {
+		statLogType = LogTypeConsume
+	}
+	tx = tx.Where("type = ?", statLogType)
+	rpmTpmQuery = rpmTpmQuery.Where("type = ?", statLogType)
 
 	// 只统计最近60秒的rpm和tpm
 	rpmTpmQuery = rpmTpmQuery.Where("created_at >= ?", time.Now().Add(-60*time.Second).Unix())
@@ -765,7 +860,11 @@ func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	if modelName != "" {
 		tx = tx.Where("model_name = ?", modelName)
 	}
-	tx.Where("type = ?", LogTypeConsume).Scan(&token)
+	statLogType := logType
+	if statLogType == LogTypeUnknown {
+		statLogType = LogTypeConsume
+	}
+	tx.Where("type = ?", statLogType).Scan(&token)
 	return token
 }
 

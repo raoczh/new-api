@@ -20,20 +20,28 @@ import { useQuery } from '@tanstack/react-query'
 
 import { getUserTokenUsage } from '../api'
 
-export function useTokenUsage(startTimestamp: number, endTimestamp: number) {
+export function useTokenUsage(
+  startTimestamp: number,
+  endTimestamp: number,
+  isAdmin = false
+) {
   return useQuery({
     queryKey: [
       'dashboard',
       'overview',
       'token-usage',
+      isAdmin,
       startTimestamp,
       endTimestamp,
     ],
     queryFn: async () => {
-      const result = await getUserTokenUsage({
-        start_timestamp: startTimestamp,
-        end_timestamp: endTimestamp,
-      })
+      const result = await getUserTokenUsage(
+        {
+          start_timestamp: startTimestamp,
+          end_timestamp: endTimestamp,
+        },
+        isAdmin
+      )
       return result.data ?? []
     },
     enabled: startTimestamp > 0 && endTimestamp > 0,

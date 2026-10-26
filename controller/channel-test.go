@@ -306,11 +306,9 @@ func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int,
 				if result.newAPIError != nil {
 					message = common.NewMessage(failureWithError, map[string]any{"error": result.newAPIError.MaskSensitiveErrorWithStatusCode()})
 				}
-				model.RecordConsumeLog(c, testUserID, model.RecordConsumeLogParams{
-					ChannelId: channel.Id, ModelName: info.OriginModelName,
-					TokenName: tokenName, Content: []*common.Message{message},
-					UseTimeSeconds: int(time.Since(tik).Seconds()), IsStream: info.IsStream, Group: group, Other: other,
-				})
+				content := other.SetContent([]*common.Message{message})
+				model.RecordErrorLog(c, testUserID, channel.Id, info.OriginModelName, tokenName, content, 0,
+					int(time.Since(tik).Seconds()), info.IsStream, group, other)
 			}
 			if !options.probe || errors.Is(ctx.Err(), context.Canceled) {
 				return

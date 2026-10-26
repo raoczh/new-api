@@ -643,6 +643,11 @@ func finalizeTerminalTask(ctx context.Context, adaptor TaskPollingAdaptor, task 
 	if task.Status == model.TaskStatusFailure && !billingSettled && task.Quota != 0 {
 		RefundTaskQuota(ctx, task, task.FailReason)
 	}
+	// The consume row for an asynchronous task is written at submission with no
+	// token split; backfill the total once polling reports it.
+	if task.Status == model.TaskStatusSuccess {
+		recordTaskCompletionTokens(task, TaskResultTokens(taskResult))
+	}
 }
 
 func redactVideoResponseBody(body []byte) []byte {

@@ -27,11 +27,24 @@ type modelUsageLogRow struct {
 // GetUserModelDistribution aggregates a user's consume logs per model, ordered
 // by request count so callers can show the most used models first.
 func GetUserModelDistribution(userId int, startTimestamp int64, endTimestamp int64) ([]ModelUsageSummary, error) {
-	rows, err := LOG_DB.Table("logs").
+	return queryModelDistribution(userId, startTimestamp, endTimestamp)
+}
+
+// GetModelDistribution aggregates every user's consume logs per model for the
+// administrator overview.
+func GetModelDistribution(startTimestamp int64, endTimestamp int64) ([]ModelUsageSummary, error) {
+	return queryModelDistribution(0, startTimestamp, endTimestamp)
+}
+
+func queryModelDistribution(userId int, startTimestamp int64, endTimestamp int64) ([]ModelUsageSummary, error) {
+	query := LOG_DB.Table("logs").
 		Select("model_name, prompt_tokens, completion_tokens, quota, other").
-		Where("user_id = ? AND type = ? AND created_at >= ? AND created_at <= ?",
-			userId, LogTypeConsume, startTimestamp, endTimestamp).
-		Rows()
+		Where("type = ? AND created_at >= ? AND created_at <= ?",
+			LogTypeConsume, startTimestamp, endTimestamp)
+	if userId > 0 {
+		query = query.Where("user_id = ?", userId)
+	}
+	rows, err := query.Rows()
 	if err != nil {
 		common.SysError("failed to query model distribution logs: " + err.Error())
 		return nil, errors.New("查询模型用量失败")

@@ -65,6 +65,8 @@ func TestDashboardModelFilterDatabaseMatrix(t *testing.T) {
 			}
 			require.NoError(t, db.Create(&rows).Error)
 
+			// Model filters are exact matches unless the caller passes a wildcard
+			// pattern, so a partial name must not leak other models into the totals.
 			for _, tc := range []struct {
 				name      string
 				modelName string
@@ -73,10 +75,10 @@ func TestDashboardModelFilterDatabaseMatrix(t *testing.T) {
 				role      int
 				wantCount int
 			}{
-				{"self substring", "alpha", "bob", 1, common.RoleCommonUser, 5},
+				{"self partial name", "alpha", "bob", 1, common.RoleCommonUser, 0},
 				{"self empty", "", "", 1, common.RoleCommonUser, 12},
-				{"admin combined", "gpt", "alice", 0, common.RoleAdminUser, 5},
-				{"admin all users", "alpha", "", 0, common.RoleAdminUser, 16},
+				{"admin partial name", "gpt", "alice", 0, common.RoleAdminUser, 0},
+				{"admin wildcard", "%alpha%", "", 0, common.RoleAdminUser, 16},
 				{"root combined", "gpt-alpha", "alice", 0, common.RoleRootUser, 5},
 				{"root empty", "", "", 0, common.RoleRootUser, 23},
 				{"no match", "missing", "", 0, common.RoleRootUser, 0},
@@ -113,6 +115,15 @@ func TestDashboardModelFilterDatabaseMatrix(t *testing.T) {
 func seedFlowQuotaData(t *testing.T, quotaData QuotaData) {
 	t.Helper()
 	require.NoError(t, DB.Create(&quotaData).Error)
+}
+
+// resetQuotaDataCache clears the in-memory dashboard buffer so a test observes
+// only the rows it produced.
+func resetQuotaDataCache(t *testing.T) {
+	t.Helper()
+	CacheQuotaDataLock.Lock()
+	CacheQuotaData = make(map[string]*QuotaData)
+	CacheQuotaDataLock.Unlock()
 }
 
 func seedFlowLookupData(t *testing.T) {
@@ -293,4 +304,59 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 	require.Equal(t, 60, rows[0].TokenUsed)
 	require.Equal(t, "default", rows[1].UseGroup)
 	require.Equal(t, 25, rows[1].Quota)
+}
+
+// One account's rows must stay in one bucket even when a settle path resolves
+// the display name at a different time than the consume row did.
+func TestLogQuotaDataKeepsRenamedUserInSameBucket(t *testing.T) {
+	truncateTables(t)
+	resetQuotaDataCache(t)
+
+	LogQuotaData(QuotaDataLogParams{
+		UserID:    1,
+		Username:  "alice",
+		ModelName: "gpt-a",
+		CreatedAt: 3600,
+		Quota:     100,
+	})
+	LogQuotaData(QuotaDataLogParams{
+		UserID:    1,
+		Username:  "alice-renamed",
+		ModelName: "gpt-a",
+		CreatedAt: 3700,
+		Quota:     50,
+	})
+
+	SaveQuotaDataCache()
+
+	var rows []QuotaData
+	require.NoError(t, DB.Find(&rows).Error)
+	require.Len(t, rows, 1)
+	assert.Equal(t, 2, rows[0].Count)
+	assert.Equal(t, 150, rows[0].Quota)
+}
+
+func TestGetQuotaDataGroupByUserKeepsAccountsWithSameNameApart(t *testing.T) {
+	truncateTables(t)
+
+	rows := []QuotaData{
+		{UserID: 1, Username: "shared", ModelName: "gpt-a", CreatedAt: 3600, Count: 2, Quota: 100},
+		{UserID: 2, Username: "shared", ModelName: "gpt-a", CreatedAt: 3600, Count: 1, Quota: 70},
+	}
+	require.NoError(t, DB.Create(&rows).Error)
+
+	grouped, err := GetQuotaDataGroupByUser(0, 7200)
+	require.NoError(t, err)
+	require.Len(t, grouped, 2)
+
+	byUser := map[int]*QuotaData{}
+	for _, row := range grouped {
+		byUser[row.UserID] = row
+	}
+	require.Contains(t, byUser, 1)
+	require.Contains(t, byUser, 2)
+	assert.Equal(t, 2, byUser[1].Count)
+	assert.Equal(t, 100, byUser[1].Quota)
+	assert.Equal(t, 1, byUser[2].Count)
+	assert.Equal(t, 70, byUser[2].Quota)
 }

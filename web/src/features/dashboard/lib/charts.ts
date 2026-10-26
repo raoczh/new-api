@@ -755,27 +755,49 @@ export function processUserChartData(
 
   if (!data || data.length === 0) return emptyResult
 
+  // Group by user id so users sharing a display name stay separate, falling
+  // back to the name only for rows without an id.
+  const userIds = new Map<string, string>()
   const userQuotaTotal = new Map<string, number>()
   data.forEach((item) => {
-    const username = item.username || 'unknown'
-    const prev = userQuotaTotal.get(username) || 0
-    userQuotaTotal.set(username, prev + (Number(item.quota) || 0))
+    const userId =
+      item.user_id === undefined || item.user_id === null
+        ? `name:${item.username || 'unknown'}`
+        : String(item.user_id)
+    if (!userIds.has(userId)) {
+      userIds.set(userId, item.username || 'unknown')
+    }
+    const prev = userQuotaTotal.get(userId) || 0
+    userQuotaTotal.set(userId, prev + (Number(item.quota) || 0))
   })
 
   const sorted = [...userQuotaTotal.entries()].sort((a, b) => b[1] - a[1])
-  const topUsers = sorted.slice(0, limit).map(([u]) => u)
+  const topUsers = sorted.slice(0, limit).map(([id]) => id)
   const topUserSet = new Set(topUsers)
-  const totalQuota = sorted.slice(0, limit).reduce((s, [, q]) => s + q, 0)
+  // The chart title reports site-wide spend, so it must include the users that
+  // the ranking itself truncates away.
+  const totalQuota = sorted.reduce((s, [, q]) => s + q, 0)
 
-  const rankValues = sorted.slice(0, limit).map(([username, quota]) => ({
-    User: username,
+  // Duplicate display names would collapse identical series labels, so append
+  // the id when the same name belongs to more than one user.
+  const labelCounts = new Map<string, number>()
+  userIds.forEach((name) => {
+    labelCounts.set(name, (labelCounts.get(name) ?? 0) + 1)
+  })
+  const displayName = (userId: string) => {
+    const name = userIds.get(userId) ?? 'unknown'
+    return (labelCounts.get(name) ?? 0) > 1 ? `${name} (#${userId})` : name
+  }
+
+  const rankValues = sorted.slice(0, limit).map(([userId, quota]) => ({
+    User: displayName(userId),
     rawQuota: quota,
     Usage: Number((quota / quotaPerUnit).toFixed(4)),
   }))
 
   const userColorMap = topUsers.reduce<Record<string, string>>(
-    (acc, user, i) => {
-      acc[user] = USER_COLORS[i % USER_COLORS.length]
+    (acc, userId, i) => {
+      acc[displayName(userId)] = USER_COLORS[i % USER_COLORS.length]
       return acc
     },
     {}
@@ -788,14 +810,17 @@ export function processUserChartData(
     const ts = Number(item.created_at)
     const timeKey = formatChartTime(ts, timeGranularity)
     timeTimestamps.set(timeKey, Math.min(timeTimestamps.get(timeKey) ?? ts, ts))
-    const user = item.username || 'unknown'
-    if (!topUserSet.has(user)) return
+    const userId =
+      item.user_id === undefined || item.user_id === null
+        ? `name:${item.username || 'unknown'}`
+        : String(item.user_id)
+    if (!topUserSet.has(userId)) return
     let map = timeUserMap.get(timeKey)
     if (!map) {
       map = new Map()
       timeUserMap.set(timeKey, map)
     }
-    map.set(user, (map.get(user) || 0) + (Number(item.quota) || 0))
+    map.set(userId, (map.get(userId) || 0) + (Number(item.quota) || 0))
   })
 
   const sortedTimePoints = [...timeTimestamps]
@@ -809,11 +834,11 @@ export function processUserChartData(
   }> = []
 
   sortedTimePoints.forEach((time) => {
-    topUsers.forEach((user) => {
-      const q = timeUserMap.get(time)?.get(user) || 0
+    topUsers.forEach((userId) => {
+      const q = timeUserMap.get(time)?.get(userId) || 0
       trendValues.push({
         Time: time,
-        User: user,
+        User: displayName(userId),
         rawQuota: q,
         Usage: Number((q / quotaPerUnit).toFixed(4)),
       })

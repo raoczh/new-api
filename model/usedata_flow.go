@@ -45,10 +45,11 @@ func getSelfFlowQuotaData(startTime int64, endTime int64, modelName string, user
 	query := flowQuotaBaseQuery(startTime, endTime).
 		Select("token_id, use_group, model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
 		Where("user_id = ?", userID)
-	if modelName != "" {
-		query = query.Where("model_name LIKE ?", "%"+modelName+"%")
+	var err error
+	if query, err = filterQuotaDataModel(query, modelName); err != nil {
+		return nil, err
 	}
-	err := query.Group("token_id, use_group, model_name").
+	err = query.Group("token_id, use_group, model_name").
 		Order("quota DESC").
 		Find(&rows).Error
 	if err != nil {
@@ -60,15 +61,16 @@ func getSelfFlowQuotaData(startTime int64, endTime int64, modelName string, user
 func getAdminFlowQuotaData(startTime int64, endTime int64, username string, modelName string) ([]*FlowQuotaData, error) {
 	rows := make([]*FlowQuotaData, 0)
 	query := flowQuotaBaseQuery(startTime, endTime).
-		Select("user_id, username, use_group, model_name, channel_id, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used")
+		Select("user_id, max(username) as username, use_group, model_name, channel_id, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used")
 	if username != "" {
 		query = query.Where("username = ?", username)
 	}
-	if modelName != "" {
-		query = query.Where("model_name LIKE ?", "%"+modelName+"%")
+	var err error
+	if query, err = filterQuotaDataModel(query, modelName); err != nil {
+		return nil, err
 	}
-	err := query.
-		Group("user_id, username, use_group, model_name, channel_id").
+	err = query.
+		Group("user_id, use_group, model_name, channel_id").
 		Order("quota DESC").
 		Find(&rows).Error
 	if err != nil {
@@ -80,15 +82,16 @@ func getAdminFlowQuotaData(startTime int64, endTime int64, username string, mode
 func getRootFlowQuotaData(startTime int64, endTime int64, username string, modelName string) ([]*FlowQuotaData, error) {
 	rows := make([]*FlowQuotaData, 0)
 	query := flowQuotaBaseQuery(startTime, endTime).
-		Select("user_id, username, node_name, token_id, use_group, model_name, channel_id, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used")
+		Select("user_id, max(username) as username, node_name, token_id, use_group, model_name, channel_id, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used")
 	if username != "" {
 		query = query.Where("username = ?", username)
 	}
-	if modelName != "" {
-		query = query.Where("model_name LIKE ?", "%"+modelName+"%")
+	var err error
+	if query, err = filterQuotaDataModel(query, modelName); err != nil {
+		return nil, err
 	}
-	err := query.
-		Group("user_id, username, node_name, token_id, use_group, model_name, channel_id").
+	err = query.
+		Group("user_id, node_name, token_id, use_group, model_name, channel_id").
 		Order("quota DESC").
 		Find(&rows).Error
 	if err != nil {

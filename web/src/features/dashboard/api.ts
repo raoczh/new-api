@@ -53,27 +53,41 @@ export async function getUserQuotaDates(
   return res.data
 }
 
-// Get the current user's hourly token usage split by prompt cache category
-export async function getUserTokenUsage(params: {
-  start_timestamp: number
-  end_timestamp: number
-}) {
+// Get hourly token usage split by prompt cache category. Administrators get the
+// whole site when isAdmin is set.
+export async function getUserTokenUsage(
+  params: {
+    start_timestamp: number
+    end_timestamp: number
+  },
+  isAdmin = false
+) {
+  const endpoint = isAdmin
+    ? '/api/data/token_usage'
+    : '/api/data/self/token_usage'
   const res = await api.get<{ success: boolean; data: HourlyTokenUsage[] }>(
-    '/api/data/self/token_usage',
+    endpoint,
     { params }
   )
   return res.data
 }
 
-// Get the current user's per-model consume totals
-export async function getUserModelDistribution(params: {
-  start_timestamp: number
-  end_timestamp: number
-}) {
+// Get per-model consume totals. Administrators get the whole site when isAdmin
+// is set.
+export async function getUserModelDistribution(
+  params: {
+    start_timestamp: number
+    end_timestamp: number
+  },
+  isAdmin = false
+) {
+  const endpoint = isAdmin
+    ? '/api/data/model_distribution'
+    : '/api/data/self/model_distribution'
   const res = await api.get<{
     success: boolean
     data: ModelDistributionItem[]
-  }>('/api/data/self/model_distribution', { params })
+  }>(endpoint, { params })
   return res.data
 }
 

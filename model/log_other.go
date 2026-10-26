@@ -76,10 +76,10 @@ func (o *LogOther) MergePublic(values map[string]any) {
 	}
 }
 
-// setContent stores structured content under content_parts, which the web
+// SetContent stores structured content under content_parts, which the web
 // console renders in the viewer's language, and returns the English text kept
 // in the content column for exports and API callers.
-func (o *LogOther) setContent(parts []*common.Message) string {
+func (o *LogOther) SetContent(parts []*common.Message) string {
 	if len(parts) == 0 {
 		return ""
 	}

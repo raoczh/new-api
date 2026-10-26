@@ -398,6 +398,8 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute.GET("/self", middleware.UserAuth(), controller.GetUserQuotaDates)
 		dataRoute.GET("/self/token_usage", middleware.UserAuth(), controller.GetUserTokenUsage)
 		dataRoute.GET("/self/model_distribution", middleware.UserAuth(), controller.GetUserModelDistribution)
+		dataRoute.GET("/token_usage", middleware.AdminAuth(), controller.GetSiteTokenUsage)
+		dataRoute.GET("/model_distribution", middleware.AdminAuth(), controller.GetSiteModelDistribution)
 		dataRoute.GET("/flow", middleware.AdminAuth(), controller.GetAllFlowQuotaDates)
 		dataRoute.GET("/flow/self", middleware.UserAuth(), controller.GetUserFlowQuotaDates)
 

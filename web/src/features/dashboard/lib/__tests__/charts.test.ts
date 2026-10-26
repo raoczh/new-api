@@ -81,6 +81,7 @@ function unorderedUsage(start: string, interval: number): QuotaDataItem[] {
   const rows = Array.from({ length: 8 }, (_, i) => ({
     created_at: first + i * interval,
     model_name: 'model-a',
+    user_id: 1,
     username: 'alice',
     quota: (i + 1) * 500000,
     count: i + 1,
@@ -104,6 +105,48 @@ function unorderedUsage(start: string, interval: number): QuotaDataItem[] {
     rows[3],
   ]
 }
+
+describe('user chart grouping', () => {
+  const baseRow: QuotaDataItem = {
+    created_at: 1000,
+    username: 'alice',
+    quota: 500000,
+    count: 1,
+  }
+
+  test('keeps users with the same display name as separate ranking entries', () => {
+    const data: QuotaDataItem[] = [
+      { ...baseRow, user_id: 1, quota: 500000 },
+      { ...baseRow, user_id: 2, quota: 1500000 },
+    ]
+
+    const result = processUserChartData(data, 'hour')
+    const values: Array<{ User: string; rawQuota: number }> =
+      result.spec_user_rank.data[0].values
+
+    expect(values.map((row) => row.rawQuota)).toEqual([1500000, 500000])
+    expect(values.map((row) => row.User)).toEqual(['alice (#2)', 'alice (#1)'])
+  })
+
+  test('reports the total across every user rather than only the ranked top N', () => {
+    const data: QuotaDataItem[] = [
+      { ...baseRow, user_id: 1, quota: 500000 },
+      { ...baseRow, user_id: 2, username: 'bob', quota: 250000 },
+      { ...baseRow, user_id: 3, username: 'carol', quota: 100000 },
+    ]
+
+    const limited = processUserChartData(data, 'hour', undefined, 1)
+    const all = processUserChartData(data, 'hour', undefined, 10)
+
+    expect(limited.spec_user_rank.data[0].values).toHaveLength(1)
+    expect(limited.spec_user_rank.title.subtext).toBe(
+      all.spec_user_rank.title.subtext
+    )
+    expect(limited.spec_user_trend.title.subtext).toBe(
+      all.spec_user_trend.title.subtext
+    )
+  })
+})
 
 describe.each(cases)('dashboard $granularity chart chronology', (scenario) => {
   test('orders model buckets across New Year while aggregating repeated labels', () => {

@@ -82,15 +82,19 @@ func testModelTestRecords(t *testing.T, dialect, dsn string) {
 		"vector-alias": `tier("base", p * 1)`, "rank-alias": `tier("base", p * 1)`,
 	})
 	oldCache, oldLogConsume := common.MemoryCacheEnabled, common.LogConsumeEnabled
+	oldDataExport := common.DataExportEnabled
 	perfSetting := perf_metrics_setting.GetSetting()
 	oldPerfEnabled := perfSetting.Enabled
 	perfSetting.Enabled = true
 	oldRatios := ratio_setting.GroupRatio2JSONString()
-	common.MemoryCacheEnabled, common.LogConsumeEnabled = false, true
+	common.MemoryCacheEnabled, common.LogConsumeEnabled, common.DataExportEnabled = false, true, true
 	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"vip":0.35}`))
 	t.Cleanup(func() {
-		common.MemoryCacheEnabled, common.LogConsumeEnabled = oldCache, oldLogConsume
+		common.MemoryCacheEnabled, common.LogConsumeEnabled, common.DataExportEnabled = oldCache, oldLogConsume, oldDataExport
 		perfSetting.Enabled = oldPerfEnabled
+		model.CacheQuotaDataLock.Lock()
+		model.CacheQuotaData = make(map[string]*model.QuotaData)
+		model.CacheQuotaDataLock.Unlock()
 		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(oldRatios))
 		model.InvalidatePricingCache()
 	})
@@ -132,14 +136,20 @@ func testModelTestRecords(t *testing.T, dialect, dsn string) {
 		count        int
 		source       string
 		expectedType int
+		expectLog    bool
 	}{
-		{"successful manual", channelTestOptions{manual: true}, false, 2, "manual_test", 0},
-		{"failed manual", channelTestOptions{manual: true}, true, 0, "manual_test", 0},
-		{"successful automatic", channelTestOptions{probe: true, group: "default"}, false, 1, "auto_probe", model.LogTypeConsume},
-		{"failed automatic", channelTestOptions{probe: true, group: "vip"}, true, 1, "auto_probe", model.LogTypeConsume},
+		{"successful manual", channelTestOptions{manual: true}, false, 2, "manual_test", 0, false},
+		{"failed manual", channelTestOptions{manual: true}, true, 0, "manual_test", 0, false},
+		{"successful automatic", channelTestOptions{probe: true, group: "default"}, false, 1, "auto_probe", model.LogTypeConsume, true},
+		{"failed automatic", channelTestOptions{probe: true, group: "vip"}, true, 1, "auto_probe", model.LogTypeError, true},
+		{"successful IQ", channelTestOptions{iqPrompt: "Reply with 42", group: "default"}, false, 0, "iq_probe", model.LogTypeConsume, true},
+		{"failed IQ", channelTestOptions{iqPrompt: "Reply with 42", group: "vip"}, true, 0, "iq_probe", model.LogTypeError, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.NoError(t, db.Where("1 = 1").Delete(&model.StatusProbe{}).Error)
+			model.CacheQuotaDataLock.Lock()
+			model.CacheQuotaData = make(map[string]*model.QuotaData)
+			model.CacheQuotaDataLock.Unlock()
 			var logsBefore int64
 			require.NoError(t, db.Model(&model.Log{}).Count(&logsBefore).Error)
 			reject.Store(tc.fail)
@@ -150,42 +160,56 @@ func testModelTestRecords(t *testing.T, dialect, dsn string) {
 				require.NoError(t, result.localErr)
 				require.Nil(t, result.newAPIError)
 			}
+			if tc.fail {
+				assert.Empty(t, model.CacheQuotaData, "failed probes must not enter the dashboard aggregation")
+			} else if tc.expectLog {
+				assert.NotEmpty(t, model.CacheQuotaData, "successful probes still record upstream usage in the dashboard aggregation")
+			}
 			var probes []model.StatusProbe
 			require.NoError(t, db.Order("id ASC").Find(&probes).Error)
 			require.Len(t, probes, tc.count)
-			if tc.count == 0 {
-				return
-			}
-			assert.Equal(t, tc.source, probes[len(probes)-1].Source)
-			assert.Equal(t, "gpt-4o-mini", probes[len(probes)-1].ModelName)
 			if tc.options.probe {
+				assert.Equal(t, tc.source, probes[len(probes)-1].Source)
+				assert.Equal(t, "gpt-4o-mini", probes[len(probes)-1].ModelName)
 				assert.Equal(t, tc.options.group, probes[len(probes)-1].GroupName)
 				assert.Equal(t, !tc.fail, probes[len(probes)-1].Success)
-				var logsAfter int64
-				require.NoError(t, db.Model(&model.Log{}).Count(&logsAfter).Error)
-				assert.Equal(t, logsBefore+1, logsAfter, "each upstream probe must create one usage record")
-				var log model.Log
-				require.NoError(t, db.Order("id DESC").First(&log).Error)
-				assert.Equal(t, tc.options.group, log.Group)
-				assert.Equal(t, "gpt-4o-mini", log.ModelName)
-				assert.Equal(t, channel.Id, log.ChannelId)
-				assert.Equal(t, user.Id, log.UserId)
-				assert.Equal(t, "Group auto probe", log.TokenName)
+			}
+			if !tc.expectLog {
+				return
+			}
+			var logsAfter int64
+			require.NoError(t, db.Model(&model.Log{}).Count(&logsAfter).Error)
+			assert.Equal(t, logsBefore+1, logsAfter, "each upstream probe must create one usage record")
+			var log model.Log
+			require.NoError(t, db.Order("id DESC").First(&log).Error)
+			assert.Equal(t, tc.options.group, log.Group)
+			assert.Equal(t, "gpt-4o-mini", log.ModelName)
+			assert.Equal(t, channel.Id, log.ChannelId)
+			assert.Equal(t, user.Id, log.UserId)
+			assert.Equal(t, tc.expectedType, log.Type)
+			assert.NotEmpty(t, log.RequestId)
+			if tc.fail {
+				assert.Zero(t, log.Quota, "failed probes have no upstream usage to settle")
+				assert.Zero(t, log.PromptTokens)
+				assert.Zero(t, log.CompletionTokens)
+			} else {
+				assert.Greater(t, log.Quota, 0, "successful probes should record the upstream usage cost")
+				assert.Equal(t, 1, log.PromptTokens)
+				assert.Equal(t, 1, log.CompletionTokens)
+			}
+			if tc.options.iqPrompt != "" {
+				assert.Equal(t, "IQ probe", log.TokenName)
+				assert.Contains(t, log.Content, "IQ probe")
 				if tc.fail {
-					assert.Zero(t, log.Quota, "failed probes have no upstream usage to settle")
-				} else {
-					assert.Greater(t, log.Quota, 0, "successful probes should record the upstream usage cost")
+					assert.Contains(t, log.Content, "IQ probe failed")
 				}
-				assert.NotEmpty(t, log.RequestId)
-				assert.Equal(t, tc.expectedType, log.Type)
-				if tc.fail {
-					assert.Contains(t, log.Content, "Group auto probe failed")
-					assert.Zero(t, log.PromptTokens)
-					assert.Zero(t, log.CompletionTokens)
-				} else {
-					assert.Equal(t, 1, log.PromptTokens)
-					assert.Equal(t, 1, log.CompletionTokens)
-				}
+				assert.Contains(t, log.Other, `"content_parts"`)
+				return
+			}
+			assert.Equal(t, "Group auto probe", log.TokenName)
+			if tc.fail {
+				assert.Contains(t, log.Content, "Group auto probe failed")
+				assert.Contains(t, log.Other, `"content_parts"`)
 			}
 		})
 	}

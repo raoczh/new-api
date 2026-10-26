@@ -30,6 +30,7 @@ import type {
 import { useStatus } from '@/hooks/use-status'
 import { getCurrencyLabel, isCurrencyDisplayEnabled } from '@/lib/currency'
 import { formatCompactNumber, formatNumber, formatQuota } from '@/lib/format'
+import { ROLE } from '@/lib/roles'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { computeTimeRange } from '@/lib/time'
 import { useAuthStore } from '@/stores/auth-store'
@@ -96,22 +97,27 @@ export function SummaryCards(props: SummaryCardsProps) {
   const remainQuota = Number(user?.quota ?? 0)
   const usedQuota = Number(user?.used_quota ?? 0)
   const requestCount = Number(user?.request_count ?? 0)
+  const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
 
   const usageTrendQuery = useQuery({
     queryKey: [
       'dashboard',
       'overview',
       'summary-sparklines',
+      isAdmin,
       sparklineTimeRange.start_timestamp,
       sparklineTimeRange.end_timestamp,
     ],
     queryFn: async () =>
       requireServerSuccess(
-        await getUserQuotaDates({
-          start_timestamp: sparklineTimeRange.start_timestamp,
-          end_timestamp: sparklineTimeRange.end_timestamp,
-          default_time: 'hour',
-        })
+        await getUserQuotaDates(
+          {
+            start_timestamp: sparklineTimeRange.start_timestamp,
+            end_timestamp: sparklineTimeRange.end_timestamp,
+            default_time: 'hour',
+          },
+          isAdmin
+        )
       ),
     staleTime: 60 * 1000,
   })

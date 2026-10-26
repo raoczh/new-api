@@ -22,21 +22,26 @@ import { getUserModelDistribution } from '../api'
 
 export function useModelDistribution(
   startTimestamp: number,
-  endTimestamp: number
+  endTimestamp: number,
+  isAdmin = false
 ) {
   return useQuery({
     queryKey: [
       'dashboard',
       'overview',
       'model-distribution',
+      isAdmin,
       startTimestamp,
       endTimestamp,
     ],
     queryFn: async () => {
-      const result = await getUserModelDistribution({
-        start_timestamp: startTimestamp,
-        end_timestamp: endTimestamp,
-      })
+      const result = await getUserModelDistribution(
+        {
+          start_timestamp: startTimestamp,
+          end_timestamp: endTimestamp,
+        },
+        isAdmin
+      )
       return result.data ?? []
     },
     enabled: startTimestamp > 0 && endTimestamp > 0,

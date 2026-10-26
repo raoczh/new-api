@@ -480,13 +480,24 @@ export function OverviewDashboard() {
     return { start, end: now }
   }, [])
 
-  const tokenUsageQuery = useTokenUsage(timeRange.start, timeRange.end)
-  const modelDistQuery = useModelDistribution(timeRange.start, timeRange.end)
+  const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
+
+  // Administrators see whole-site throughput in the overview, matching the
+  // totals shown by the admin dashboard rather than their own usage only.
+  const tokenUsageQuery = useTokenUsage(
+    timeRange.start,
+    timeRange.end,
+    isAdmin
+  )
+  const modelDistQuery = useModelDistribution(
+    timeRange.start,
+    timeRange.end,
+    isAdmin
+  )
 
   const requestCount = Number(user?.request_count ?? 0)
   const remainQuota = Number(user?.quota ?? 0)
   const usedQuota = Number(user?.used_quota ?? 0)
-  const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
 
   const apiKeysQuery = useQuery({
     queryKey: ['dashboard', 'overview', 'api-keys'],
