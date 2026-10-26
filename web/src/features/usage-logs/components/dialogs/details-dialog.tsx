@@ -82,7 +82,8 @@ import {
   getTieredBillingSummary,
   hasAnyCacheTokens,
   isViolationFeeLog,
-  getTimeColor,
+  getFirstResponseTimeColor,
+  getResponseTimeColor,
   getReasoningEffortVariant,
   logTokenName,
   renderAuditContent,
@@ -111,9 +112,8 @@ const CHANNEL_FIELD_LABELS: Record<string, string> = {
 }
 
 function timingTextColorClass(
-  variant: ReturnType<typeof getTimeColor>
+  variant: ReturnType<typeof getResponseTimeColor>
 ): string {
-  if (variant === 'orange') return 'text-orange-700 dark:text-orange-400'
   return textColorMap[variant]
 }
 
@@ -744,7 +744,12 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 <span
                   className={cn(
                     'font-medium',
-                    timingTextColorClass(getTimeColor(props.log.use_time))
+                    timingTextColorClass(
+                      getResponseTimeColor(
+                        props.log.use_time,
+                        props.log.completion_tokens
+                      )
+                    )
                   )}
                 >
                   {formatUseTime(props.log.use_time)}
@@ -754,7 +759,9 @@ export function DetailsDialog(props: DetailsDialogProps) {
                       <span
                         className={cn(
                           'font-normal',
-                          timingTextColorClass(getTimeColor(other.frt / 1000))
+                          timingTextColorClass(
+                            getFirstResponseTimeColor(other.frt / 1000)
+                          )
                         )}
                       >
                         {' '}
@@ -1149,13 +1156,14 @@ export function DetailsDialog(props: DetailsDialogProps) {
           />
         )}
 
-        {other?.response_model && (
+        {other?.response_model && (props.isAdmin || !other.is_model_mapped) && (
           <DetailSection label={t('Response Model')}>
             <ResponseModelDetails observation={other.response_model} />
           </DetailSection>
         )}
         {/* Model mapping for logs without response observations */}
-        {!other?.response_model &&
+        {props.isAdmin &&
+          !other?.response_model &&
           other?.is_model_mapped &&
           other?.upstream_model_name && (
             <DetailSection label={t('Model Mapping')}>

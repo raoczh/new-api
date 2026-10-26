@@ -300,35 +300,55 @@ it.each([false, true])(
 )
 
 it.each([
-  { seconds: 9.999, color: 'text-success' },
-  { seconds: 10, color: 'text-success' },
-  { seconds: 10.001, color: 'text-warning' },
-  { seconds: 20, color: 'text-warning' },
-  { seconds: 20.001, color: 'text-orange-700' },
-  { seconds: 30, color: 'text-orange-700' },
-  { seconds: 30.001, color: 'text-destructive' },
+  { seconds: 7.999, color: 'text-success' },
+  { seconds: 8, color: 'text-warning' },
+  { seconds: 14.999, color: 'text-warning' },
+  { seconds: 15, color: 'text-destructive' },
 ])(
-  'colors first token and duration at $seconds seconds by elapsed time',
+  'colors first token at $seconds seconds by first-token latency',
   ({ seconds, color }) => {
     renderLogs({
       logs: [
         {
           ...log,
           is_stream: true,
-          use_time: seconds,
+          use_time: 120,
           completion_tokens: 6000,
           other: JSON.stringify({ frt: seconds * 1000 }),
         },
       ],
     })
-    const values = screen.getAllByText(formatUseTime(seconds))
-    expect(values).toHaveLength(2)
-    for (const value of values) {
-      expect(value).toHaveClass(color)
-      if (color === 'text-orange-700') {
-        expect(value).toHaveClass('dark:text-orange-400')
-      }
-    }
+    expect(screen.getByText(formatUseTime(seconds))).toHaveClass(color)
+  }
+)
+
+it.each([
+  { tokens: 2000, color: 'text-success' },
+  { tokens: 1999, color: 'text-warning' },
+  { tokens: 1000, color: 'text-warning' },
+  { tokens: 999, color: 'text-destructive' },
+])(
+  'colors a 100 second duration with $tokens output tokens by throughput',
+  ({ tokens, color }) => {
+    renderLogs({
+      logs: [{ ...log, use_time: 100, completion_tokens: tokens }],
+    })
+    expect(screen.getByText(formatUseTime(100))).toHaveClass(color)
+  }
+)
+
+it.each([
+  { seconds: 14.999, color: 'text-success' },
+  { seconds: 15, color: 'text-warning' },
+  { seconds: 44.999, color: 'text-warning' },
+  { seconds: 45, color: 'text-destructive' },
+])(
+  'colors a $seconds second duration with few output tokens by elapsed time',
+  ({ seconds, color }) => {
+    renderLogs({
+      logs: [{ ...log, use_time: seconds, completion_tokens: 99 }],
+    })
+    expect(screen.getByText(formatUseTime(seconds))).toHaveClass(color)
   }
 )
 
@@ -373,29 +393,44 @@ it('labels a task whose result was returned in the response as synchronous', () 
   expect(screen.queryByText('Async')).not.toBeInTheDocument()
 })
 
-it('shows mapped model names in full when inspecting a mobile model badge', async () => {
-  const user = userEvent.setup()
-  renderLogs({
-    logs: [
-      {
-        ...log,
-        other: JSON.stringify({
-          is_model_mapped: true,
-          upstream_model_name:
-            'provider-production-mapped-model-with-a-long-name',
-        }),
-      },
-    ],
-  })
-  await user.click(screen.getByRole('button', { name: `Model: ${longName}` }))
-  const dialog = await screen.findByRole('dialog', { name: 'Model' })
-  expect(within(dialog).getByText('Actual Model')).toBeVisible()
-  expect(
-    within(dialog).getByText(
-      'provider-production-mapped-model-with-a-long-name'
-    )
-  ).toBeVisible()
-})
+const mappedLog = {
+  ...log,
+  other: JSON.stringify({
+    is_model_mapped: true,
+    upstream_model_name: 'provider-production-mapped-model-with-a-long-name',
+  }),
+}
+
+function withUserRole(role: number, run: () => Promise<void>) {
+  const previousUser = useAuthStore.getState().auth.user
+  useAuthStore.getState().auth.setUser({ id: 1, username: 'viewer', role })
+  return run().finally(() => useAuthStore.getState().auth.setUser(previousUser))
+}
+
+it('shows mapped model names in full when an admin inspects a mobile model badge', () =>
+  withUserRole(ROLE.ADMIN, async () => {
+    const user = userEvent.setup()
+    renderLogs({ logs: [mappedLog] })
+    await user.click(screen.getByRole('button', { name: `Model: ${longName}` }))
+    const dialog = await screen.findByRole('dialog', { name: 'Model' })
+    expect(within(dialog).getByText('Actual Model')).toBeVisible()
+    expect(
+      within(dialog).getByText(
+        'provider-production-mapped-model-with-a-long-name'
+      )
+    ).toBeVisible()
+  }))
+
+it('hides the mapped model when a common user inspects a mobile model badge', () =>
+  withUserRole(ROLE.USER, async () => {
+    const user = userEvent.setup()
+    renderLogs({ admin: false, logs: [mappedLog] })
+    await user.click(screen.getByRole('button', { name: `Model: ${longName}` }))
+    expect(screen.queryByText('Actual Model')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('provider-production-mapped-model-with-a-long-name')
+    ).not.toBeInTheDocument()
+  }))
 
 it('shows loading placeholders without displaying stale log fields', () => {
   renderLogs({ loading: true })

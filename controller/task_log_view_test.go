@@ -135,3 +135,26 @@ func TestTaskLogDTOKeepsFailureReasonAndDoesNotMarkPluginTaskLegacy(t *testing.T
 	assert.Empty(t, pluginView.ResultURL)
 	assert.Empty(t, pluginView.FailReason)
 }
+
+func TestTaskLogDTOHidesUpstreamModelFromCommonUsers(t *testing.T) {
+	task := &model.Task{
+		TaskID:   "task_mapped",
+		Platform: "jimeng",
+		Properties: model.Properties{
+			OriginModelName:   "video-alias",
+			UpstreamModelName: "video-upstream-canary",
+		},
+	}
+
+	userView := tasksToDto([]*model.Task{task}, false, common.RoleCommonUser)[0]
+	userJSON, err := common.Marshal(userView)
+	require.NoError(t, err)
+	assert.NotContains(t, string(userJSON), "video-upstream-canary")
+	assert.Contains(t, string(userJSON), "video-alias")
+	assert.Equal(t, "video-upstream-canary", task.Properties.UpstreamModelName)
+
+	adminView := tasksToDto([]*model.Task{task}, false, common.RoleAdminUser)[0]
+	adminJSON, err := common.Marshal(adminView)
+	require.NoError(t, err)
+	assert.Contains(t, string(adminJSON), "video-upstream-canary")
+}

@@ -69,6 +69,7 @@ type groupProbeState struct {
 func probeEndpoint(modelName string, endpoints []constant.EndpointType) string {
 	name := strings.ToLower(modelName)
 	if common.IsImageGenerationModel(name) || strings.Contains(name, "image") ||
+		strings.Contains(name, "nano-banana") ||
 		strings.Contains(name, "seedream") || strings.Contains(name, "video") ||
 		strings.Contains(name, "sora") || strings.Contains(name, "audio") ||
 		strings.Contains(name, "tts") || strings.Contains(name, "whisper") ||

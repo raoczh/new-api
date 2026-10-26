@@ -459,6 +459,12 @@ func tasksToDto(tasks []*model.Task, fillUser bool, viewerRole int) []*dto.TaskD
 		item := relay.TaskModel2Dto(task)
 		item.LegacyVideoAvailable = legacyVideoAvailable(task)
 		item.ResultDiscarded = task.PrivateData.ResultDiscarded
+		if viewerRole < common.RoleAdminUser {
+			// The mapped upstream model is channel configuration, so only admins see it.
+			properties := task.Properties
+			properties.UpstreamModelName = ""
+			item.Properties = properties
+		}
 		if task.Status == model.TaskStatusSuccess {
 			item.ResultURL = ""
 			if taskFailReasonIsLegacyResultURL(task.FailReason) {

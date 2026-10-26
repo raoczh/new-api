@@ -194,17 +194,54 @@ export function getReasoningEffortVariant(
  */
 export function getTimeColor(
   seconds: number
-): 'success' | 'warning' | 'orange' | 'danger' {
-  if (seconds <= 10) return 'success'
-  if (seconds <= 20) return 'warning'
-  if (seconds <= 30) return 'orange'
+): 'success' | 'warning' | 'danger' {
+  if (seconds < 15) return 'success'
+  if (seconds < 45) return 'warning'
   return 'danger'
 }
 
 /**
- * Format model name with mapping indicator
+ * Get first-response-token color based on latency (in seconds)
  */
-export function formatModelName(log: UsageLog): {
+export function getFirstResponseTimeColor(
+  seconds: number
+): 'success' | 'warning' | 'danger' {
+  if (seconds < 8) return 'success'
+  if (seconds < 15) return 'warning'
+  return 'danger'
+}
+
+/**
+ * Get throughput color based on generated tokens per second
+ */
+export function getThroughputColor(
+  tokensPerSecond: number
+): 'success' | 'warning' | 'danger' {
+  if (tokensPerSecond >= 20) return 'success'
+  if (tokensPerSecond >= 10) return 'warning'
+  return 'danger'
+}
+
+/**
+ * Get response color using throughput only when enough output tokens exist.
+ */
+export function getResponseTimeColor(
+  seconds: number,
+  completionTokens: number
+): 'success' | 'warning' | 'danger' {
+  if (completionTokens < 100 || seconds <= 0) return getTimeColor(seconds)
+  return getThroughputColor(completionTokens / seconds)
+}
+
+/**
+ * Format model name with mapping indicator. Model mapping is channel
+ * configuration, so the mapped upstream model (and the response observation
+ * that would reveal it) is only exposed when `showMapping` is true.
+ */
+export function formatModelName(
+  log: UsageLog,
+  showMapping: boolean
+): {
   name: string
   isMapped: boolean
   actualModel?: string
@@ -216,12 +253,14 @@ export function formatModelName(log: UsageLog): {
     other?.upstream_model_name &&
     other.upstream_model_name !== ''
   )
+  const hideMapping = !showMapping && !!other?.is_model_mapped
 
   return {
     name: log.model_name,
-    isMapped,
-    actualModel: isMapped ? other.upstream_model_name : undefined,
-    responseModel: other?.response_model,
+    isMapped: showMapping && isMapped,
+    actualModel:
+      showMapping && isMapped ? other.upstream_model_name : undefined,
+    responseModel: hideMapping ? undefined : other?.response_model,
   }
 }
 

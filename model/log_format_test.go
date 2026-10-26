@@ -242,3 +242,55 @@ func TestLogFormattingPreservesLargeIntegerLexemes(t *testing.T) {
 		assert.Equal(t, unprivileged, adminLogs[0].Other)
 	})
 }
+
+func TestUserLogsHideModelMapping(t *testing.T) {
+	mappedOther := common.MapToJsonStr(map[string]any{
+		"model_price":         1.25,
+		"is_model_mapped":     true,
+		"upstream_model_name": "upstream-canary",
+		"response_model": map[string]any{
+			"requested_model": "alias-model",
+			"upstream_model":  "upstream-canary",
+			"returned_model":  "upstream-canary",
+		},
+	})
+
+	t.Run("user drops mapping and mapped response model", func(t *testing.T) {
+		logs := []*Log{{Other: mappedOther}}
+		formatUserLogs(logs, 0)
+
+		assert.NotContains(t, logs[0].Other, "upstream-canary")
+		parsed, err := common.StrToMap(logs[0].Other)
+		require.NoError(t, err)
+		assert.NotContains(t, parsed, "is_model_mapped")
+		assert.NotContains(t, parsed, "upstream_model_name")
+		assert.NotContains(t, parsed, "response_model")
+		assert.Equal(t, 1.25, parsed["model_price"])
+	})
+
+	t.Run("admin keeps mapping", func(t *testing.T) {
+		logs := []*Log{{Other: mappedOther}}
+		FormatAdminLogs(logs)
+
+		parsed, err := common.StrToMap(logs[0].Other)
+		require.NoError(t, err)
+		assert.Equal(t, true, parsed["is_model_mapped"])
+		assert.Equal(t, "upstream-canary", parsed["upstream_model_name"])
+		assert.Contains(t, parsed, "response_model")
+	})
+
+	t.Run("user keeps response model when not mapped", func(t *testing.T) {
+		other := common.MapToJsonStr(map[string]any{
+			"response_model": map[string]any{
+				"requested_model": "gpt-a",
+				"returned_model":  "gpt-b",
+			},
+		})
+		logs := []*Log{{Other: other}}
+		formatUserLogs(logs, 0)
+
+		parsed, err := common.StrToMap(logs[0].Other)
+		require.NoError(t, err)
+		assert.Contains(t, parsed, "response_model")
+	})
+}

@@ -229,6 +229,28 @@ func normalizeLegacyRejectReason(values map[string]json.RawMessage) bool {
 // formatLogOtherJSON applies the role projection while keeping untouched JSON
 // values as RawMessage. This preserves integers larger than JavaScript's safe
 // range instead of round-tripping them through float64.
+// stripUserModelMapping hides channel model mapping from log owners. When the
+// request was mapped, response_model carries the mapped upstream/returned model
+// names as well, so it is dropped together with the mapping fields.
+func stripUserModelMapping(values map[string]json.RawMessage) bool {
+	changed := false
+	if raw, exists := values["is_model_mapped"]; exists {
+		var mapped bool
+		if err := common.Unmarshal(raw, &mapped); err != nil || mapped {
+			if _, hasResponseModel := values["response_model"]; hasResponseModel {
+				delete(values, "response_model")
+			}
+		}
+		delete(values, "is_model_mapped")
+		changed = true
+	}
+	if _, exists := values["upstream_model_name"]; exists {
+		delete(values, "upstream_model_name")
+		changed = true
+	}
+	return changed
+}
+
 func formatLogOtherJSON(value string, visibility logOtherVisibility) string {
 	if value == "" {
 		return ""
@@ -255,6 +277,9 @@ func formatLogOtherJSON(value string, visibility logOtherVisibility) string {
 				delete(values, key)
 				changed = true
 			}
+		}
+		if stripUserModelMapping(values) {
+			changed = true
 		}
 	} else {
 		changed = normalizeLegacyRejectReason(values)

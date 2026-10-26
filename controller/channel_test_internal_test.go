@@ -46,6 +46,7 @@ func TestGroupProbeRotation(t *testing.T) {
 	}{
 		{"gpt-image-1", []constant.EndpointType{constant.EndpointTypeImageGeneration, constant.EndpointTypeOpenAI}, ""},
 		{"gemini-2.5-flash-image", []constant.EndpointType{constant.EndpointTypeGemini, constant.EndpointTypeOpenAI}, ""},
+		{"gemini-nano-banana-2.1", []constant.EndpointType{constant.EndpointTypeGemini, constant.EndpointTypeOpenAI}, ""},
 		{"seedream-4", []constant.EndpointType{constant.EndpointTypeOpenAI}, ""},
 		{"video-alias", []constant.EndpointType{constant.EndpointTypeOpenAIVideo, constant.EndpointTypeOpenAI}, ""},
 		{"text-embedding-3-small", []constant.EndpointType{constant.EndpointTypeOpenAI}, constant.EndpointTypeEmbeddings},
