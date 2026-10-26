@@ -98,8 +98,10 @@ export type NotifyType = 'email' | 'webhook' | 'bark' | 'gotify'
 export interface UserSettings {
   /** Notification type */
   notify_type?: NotifyType
-  /** Quota warning threshold */
+  /** Quota warning threshold in quota units; 0 or absent uses the site default */
   quota_warning_threshold?: number
+  /** Receive low balance reminders; absent means on */
+  quota_warning_enabled?: boolean
   /** Webhook URL */
   webhook_url?: string
   /** Webhook secret */
@@ -124,6 +126,8 @@ export interface UserSettings {
   image_task_email_notify?: boolean
   /** Model used by the "Polish" button in AI 绘图 */
   prompt_polish_model?: string
+  /** Receive channel notifications (admin only); absent means on for root only */
+  channel_notify_enabled?: boolean
   /** Preferred interface/API response language */
   language?: string
 }
@@ -156,6 +160,7 @@ export interface EmailBindingFlow extends AccountSecurityResult {
 export interface UpdateUserSettingsRequest {
   notify_type?: string
   quota_warning_threshold?: number
+  quota_warning_enabled?: boolean
   webhook_url?: string
   webhook_secret?: string
   notification_email?: string
@@ -170,6 +175,7 @@ export interface UpdateUserSettingsRequest {
   image_task_email_notify?: boolean
   /** Model used by the "Polish" button in AI 绘图; empty hides the button. */
   prompt_polish_model?: string
+  channel_notify_enabled?: boolean
 }
 
 /**

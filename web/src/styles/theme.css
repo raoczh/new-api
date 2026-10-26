@@ -184,6 +184,9 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 .dark {
+  /* Native controls follow the theme; Dark Reader also reads this to detect
+     the built-in dark theme. */
+  color-scheme: dark;
   /* Deep indigo night surfaces keep dense console pages comfortable. */
   --background: #0b1020;
   --foreground: #e8ecf7;

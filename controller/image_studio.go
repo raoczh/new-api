@@ -497,7 +497,7 @@ func GetImageStudioConfig(c *gin.Context) {
 		"upload_max_mb":          settings.UploadMaxMB,
 		"queue_max_wait_minutes": settings.QueueMaxWaitMinutes,
 		"image_models":           settings.ImageModels,
-		"smtp_configured":        common.SMTPServer != "" || common.SMTPAccount != "",
+		"smtp_configured":        common.EmailDeliveryConfigured(),
 	})
 }
 

@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { TFunction } from 'i18next'
 
 import { SYSTEM_SETTINGS_VIEW } from '../config/system-settings.config'
 import type { NavGroup, SidebarView } from '../types'
@@ -61,23 +60,4 @@ export function filterNavGroupsByRole(
       return items.length === group.items.length ? group : { ...group, items }
     })
     .filter((group) => group.items.length > 0)
-}
-
-/**
- * Backwards-compatible helper for consumers (e.g. command palette) that
- * just need the navigation groups for the current path, without caring
- * about the view metadata.
- *
- * @returns Nav groups for the matched view, or `null` if no nested view
- *          matches (callers should then fall back to root nav groups).
- */
-export function getNavGroupsForPath(
-  pathname: string,
-  t: TFunction,
-  role?: number
-): NavGroup[] | null {
-  const view = resolveSidebarView(pathname)
-  if (!view) return null
-  const navGroups = view.getNavGroups(t)
-  return role === undefined ? navGroups : filterNavGroupsByRole(navGroups, role)
 }
