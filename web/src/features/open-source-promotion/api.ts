@@ -25,6 +25,7 @@ import type {
   PromotionListResult,
   PromotionRecipientStats,
   PromotionTask,
+  PromotionTaskStatusSnapshot,
 } from './types'
 
 export async function getPromotionRecipients(
@@ -52,6 +53,13 @@ export async function getEmailPreview(): Promise<
   ApiResponse<{ previews: PromotionEmailPreview[] }>
 > {
   const res = await api.get('/api/open-source-promotion/email-preview')
+  return res.data
+}
+
+export async function getPromotionTaskStatus(): Promise<
+  ApiResponse<PromotionTaskStatusSnapshot>
+> {
+  const res = await api.get('/api/open-source-promotion/task-status')
   return res.data
 }
 

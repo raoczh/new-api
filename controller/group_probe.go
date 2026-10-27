@@ -68,12 +68,21 @@ type groupProbeState struct {
 // Generative media and async task plugins require a different probe contract.
 func probeEndpoint(modelName string, endpoints []constant.EndpointType) string {
 	name := strings.ToLower(modelName)
-	if common.IsImageGenerationModel(name) || strings.Contains(name, "image") ||
+	// A configured type is authoritative in both directions: "text" keeps the
+	// model probeable even when its name looks like a media model, and "image"
+	// or "video" always skips the probe.
+	if modelType := common.ConfiguredModelType(modelName); modelType != "" {
+		if modelType != common.ModelTypeText {
+			return ""
+		}
+	} else if common.IsImageGenerationModel(name) || strings.Contains(name, "image") ||
 		strings.Contains(name, "nano-banana") ||
 		strings.Contains(name, "seedream") || strings.Contains(name, "video") ||
 		strings.Contains(name, "sora") || strings.Contains(name, "audio") ||
-		strings.Contains(name, "tts") || strings.Contains(name, "whisper") ||
-		slices.Contains(endpoints, constant.EndpointTypeImageGeneration) ||
+		strings.Contains(name, "tts") || strings.Contains(name, "whisper") {
+		return ""
+	}
+	if slices.Contains(endpoints, constant.EndpointTypeImageGeneration) ||
 		slices.Contains(endpoints, constant.EndpointTypeOpenAIVideo) {
 		return ""
 	}

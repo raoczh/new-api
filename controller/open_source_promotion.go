@@ -177,6 +177,29 @@ func GetOpenSourcePromotionEmailPreview(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{"previews": service.OpenSourcePromotionBuiltinEmailPreview()})
 }
 
+// GetOpenSourcePromotionTaskStatus returns the newest harvest and delivery
+// tasks so the promotion page can show live progress. It lives under the
+// promotion routes because /api/system-task is restricted to the root account,
+// while any administrator may open the promotion page.
+func GetOpenSourcePromotionTaskStatus(c *gin.Context) {
+	tasks, err := model.GetLatestSystemTasks([]string{
+		model.SystemTaskTypeOpenSourcePromotionFetch,
+		model.SystemTaskTypeOpenSourcePromotionEmail,
+	})
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	response := gin.H{"fetch": nil, "email": nil}
+	if task := tasks[model.SystemTaskTypeOpenSourcePromotionFetch]; task != nil {
+		response["fetch"] = task.ToResponse()
+	}
+	if task := tasks[model.SystemTaskTypeOpenSourcePromotionEmail]; task != nil {
+		response["email"] = task.ToResponse()
+	}
+	common.ApiSuccess(c, response)
+}
+
 // FetchOpenSourcePromotionAuthors enqueues one harvest run. The optional
 // max_repos body field overrides the configured per-run limit.
 func FetchOpenSourcePromotionAuthors(c *gin.Context) {

@@ -36,3 +36,56 @@ func TestDeepSeekToolRoutingNamesReportTheirEndpoint(t *testing.T) {
 	}
 	assert.Equal(t, []constant.EndpointType{constant.EndpointTypeOpenAI}, common.GetEndpointTypesByChannelType(constant.ChannelTypeDeepSeek, "deepseek-flash"))
 }
+
+func withModelTypeResolver(t *testing.T, resolver func(string) string) {
+	t.Helper()
+	original := common.ModelTypeResolver
+	t.Cleanup(func() { common.ModelTypeResolver = original })
+	common.ModelTypeResolver = resolver
+}
+
+func TestResolveModelTypeFallsBackToNameHeuristic(t *testing.T) {
+	withModelTypeResolver(t, nil)
+
+	assert.Equal(t, "", common.ConfiguredModelType("qwen-image-max"))
+	assert.Equal(t, common.ModelTypeImage, common.ResolveModelType("qwen-image-max"))
+	assert.Equal(t, common.ModelTypeImage, common.ResolveModelType("dall-e-3"))
+	assert.Equal(t, "", common.ResolveModelType("gpt-4o"))
+	// Names outside the built-in heuristic stay unknown until they are
+	// configured.
+	assert.Equal(t, "", common.ResolveModelType("gemini-3-pro-image"))
+}
+
+func TestConfiguredModelTypeOverridesNameHeuristic(t *testing.T) {
+	withModelTypeResolver(t, func(modelName string) string {
+		switch modelName {
+		case "my-plain-text-model":
+			return common.ModelTypeText
+		case "my-image-model":
+			return common.ModelTypeImage
+		case "dall-e-3":
+			return common.ModelTypeText
+		}
+		return ""
+	})
+
+	// A configured image model the name heuristic would miss.
+	assert.Equal(t, common.ModelTypeImage, common.ConfiguredModelType("my-image-model"))
+	// An explicit text entry is authoritative even when the name looks like an
+	// image model.
+	assert.Equal(t, common.ModelTypeText, common.ResolveModelType("dall-e-3"))
+	assert.Equal(t, common.ModelTypeText, common.ConfiguredModelType("my-plain-text-model"))
+	assert.Equal(t, "", common.ConfiguredModelType("gpt-4o"))
+}
+
+func TestConfiguredImageModelGetsImageGenerationEndpoint(t *testing.T) {
+	withModelTypeResolver(t, func(modelName string) string {
+		if modelName == "my-image-model" {
+			return common.ModelTypeImage
+		}
+		return ""
+	})
+
+	endpoints := common.GetEndpointTypesByChannelType(constant.ChannelTypeOpenAI, "my-image-model")
+	assert.Equal(t, constant.EndpointTypeImageGeneration, endpoints[0])
+}

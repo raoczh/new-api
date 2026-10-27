@@ -976,8 +976,10 @@ func (info *RelayInfo) ConvOptions() *convmeta.Options {
 			ThinkingAdapterEnabled:                geminiSettings.ThinkingAdapterEnabled,
 			ThinkingAdapterBudgetTokensPercentage: geminiSettings.ThinkingAdapterBudgetTokensPercentage,
 			FunctionCallThoughtSignatureEnabled:   geminiSettings.FunctionCallThoughtSignatureEnabled,
-			SupportsImagine:                       model_setting.IsGeminiModelSupportImagine,
-			SafetySetting:                         model_setting.GetGeminiSafetySetting,
+			SupportsImagine: func(modelName string) bool {
+				return model_setting.IsImageModel(modelName) || model_setting.IsGeminiModelSupportImagine(modelName)
+			},
+			SafetySetting: model_setting.GetGeminiSafetySetting,
 			// Gemini API v1 has no parametersJsonSchema; v1beta and Vertex AI
 			// accept it.
 			SupportsJSONSchema: func(modelName string) bool {

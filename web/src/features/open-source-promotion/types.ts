@@ -86,11 +86,52 @@ export type PromotionListResult = {
   total: number
 }
 
+export type PromotionTaskStatus = 'pending' | 'running' | 'succeeded' | 'failed'
+
+// PromotionTaskState is the live progress a running task writes after every
+// repository (harvest) or message (delivery).
+export type PromotionTaskState = {
+  total?: number
+  processed?: number
+  progress?: number
+  cursor_page?: number
+  cursor_repo_index?: number
+  authors_seen?: number
+  current_repository?: string
+  sent?: number
+  failed?: number
+  skipped?: number
+}
+
+// PromotionTaskResult is the summary persisted when the task finishes.
+export type PromotionTaskResult = {
+  repositories?: number
+  authors_found?: number
+  inserted?: number
+  skipped_duplicate?: number
+  skipped_filtered?: number
+  rate_limited?: boolean
+  cursor_reset?: boolean
+  sent?: number
+  failed?: number
+  skipped?: number
+  recovered?: number
+  skipped_reason?: string
+}
+
 export type PromotionTask = {
   id: number
   task_id: string
   type: string
-  status: string
-  result?: Record<string, unknown>
+  status: PromotionTaskStatus
+  state?: PromotionTaskState
+  result?: PromotionTaskResult
   error?: string
+  created_at: number
+  updated_at: number
+}
+
+export type PromotionTaskStatusSnapshot = {
+  fetch: PromotionTask | null
+  email: PromotionTask | null
 }

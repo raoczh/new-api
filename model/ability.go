@@ -175,8 +175,13 @@ func abilityChatEndpointTypes(ability AbilityWithChannelSettings) []constant.End
 }
 
 // isNonChatModelName reports whether the model name belongs to image, video,
-// audio or embedding families, or is declared by a task plugin.
+// audio or embedding families, or is declared by a task plugin. A configured
+// model type is authoritative: "text" overrides the name heuristics, while
+// "image" and "video" are non-chat regardless of what the name looks like.
 func isNonChatModelName(modelName string) bool {
+	if modelType := common.ConfiguredModelType(modelName); modelType != "" {
+		return modelType != common.ModelTypeText
+	}
 	if common.IsImageGenerationModel(modelName) {
 		return true
 	}

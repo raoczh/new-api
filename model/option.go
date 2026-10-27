@@ -783,6 +783,10 @@ func handleConfigUpdate(key, value string) bool {
 	} else if configName == "billing_setting" {
 		InvalidatePricingCache()
 		ratio_setting.InvalidateExposedDataCache()
+	} else if configName == "global" && configKey == "model_types" {
+		// Pricing rows cache SupportedEndpointTypes, which depends on the model
+		// type mapping.
+		InvalidatePricingCache()
 	}
 
 	return true // 已处理

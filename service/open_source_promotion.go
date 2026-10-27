@@ -36,6 +36,19 @@ type PromotionFetchState struct {
 	CursorPage      int `json:"cursor_page"`
 	CursorRepoIndex int `json:"cursor_repo_index"`
 	AuthorsSeen     int `json:"authors_seen"`
+	// CurrentRepository is the repository being harvested right now, so the
+	// admin page can show concrete progress instead of only a percentage.
+	CurrentRepository string `json:"current_repository,omitempty"`
+}
+
+// PromotionEmailState is the live progress of one sending run.
+type PromotionEmailState struct {
+	Total     int `json:"total"`
+	Processed int `json:"processed"`
+	Progress  int `json:"progress"`
+	Sent      int `json:"sent"`
+	Failed    int `json:"failed"`
+	Skipped   int `json:"skipped"`
 }
 
 // PromotionFetchSummary is the task result persisted for administrators.
@@ -90,6 +103,14 @@ func RunOpenSourcePromotionFetch(
 	state.Total = maxRepos
 	state.Processed = 0
 	state.Progress = 0
+	// A crashed run may have left the repository it was working on; clear it so
+	// the monitor never shows a stale name before this run actually starts.
+	state.CurrentRepository = ""
+	// Publish the run size immediately so the monitor shows "0/N" instead of an
+	// empty card while the first search request is in flight.
+	if err := saveState(*state); err != nil {
+		return summary, err
+	}
 
 	processedRepos := 0
 	for processedRepos < maxRepos {
@@ -123,6 +144,10 @@ func RunOpenSourcePromotionFetch(
 				return summary, err
 			}
 			repo := repos[state.CursorRepoIndex]
+			state.CurrentRepository = repo.FullName
+			if err := saveState(*state); err != nil {
+				return summary, err
+			}
 			harvest, harvestErr := client.harvestRepository(ctx, settings, &repo)
 			if harvestErr != nil {
 				if errors.Is(harvestErr, errGitHubRateLimited) {
@@ -175,6 +200,7 @@ func RunOpenSourcePromotionFetch(
 
 	// Persist the final cursor even when the run ended on a limit, so the next
 	// cycle continues where this one stopped.
+	state.CurrentRepository = ""
 	if err := saveState(*state); err != nil {
 		return summary, err
 	}
@@ -220,8 +246,9 @@ func promotionRowsForRepo(repo *githubRepository, authors []githubAuthorCandidat
 // When ids is non-empty only those rows are considered and the daily quota is
 // bypassed, because an administrator explicitly asked for them. manual marks a
 // "send all pending" action, which bypasses the automatic-sending switch but
-// still respects the daily quota.
-func RunOpenSourcePromotionEmailTask(ctx context.Context, ids []int, manual bool) (PromotionEmailSummary, error) {
+// still respects the daily quota. saveState persists the live progress so the
+// admin page can follow the run.
+func RunOpenSourcePromotionEmailTask(ctx context.Context, ids []int, manual bool, saveState func(PromotionEmailState) error) (PromotionEmailSummary, error) {
 	summary := PromotionEmailSummary{}
 	settings := operation_setting.GetOpenSourcePromotionSettings()
 	if len(ids) == 0 && !manual && !settings.AutoSendEnabled {
@@ -275,6 +302,12 @@ func RunOpenSourcePromotionEmailTask(ctx context.Context, ids []int, manual bool
 	}
 
 	sentInThisRun := 0
+	state := PromotionEmailState{Total: len(rows)}
+	if saveState != nil {
+		if err := saveState(state); err != nil {
+			return summary, err
+		}
+	}
 	for i, row := range rows {
 		if err := ctx.Err(); err != nil {
 			return summary, err
@@ -285,23 +318,33 @@ func RunOpenSourcePromotionEmailTask(ctx context.Context, ids []int, manual bool
 		}
 		if !claimed {
 			summary.Skipped++
-			continue
+			state.Skipped++
+		} else {
+			subject, content := buildOpenSourcePromotionEmail(row, settings, address)
+			sendErr := common.SendEmail(subject, row.Email, content)
+			finishedAt := common.GetTimestamp()
+			if sendErr != nil {
+				summary.Failed++
+				state.Failed++
+				if markErr := model.MarkPromotionEmailFailed(row.Id, sendErr.Error(), finishedAt); markErr != nil {
+					logger.LogWarn(ctx, common.LogText("open source promotion: failed to mark email %d as failed: %v", row.Id, markErr))
+				}
+				logger.LogWarn(ctx, common.LogText("open source promotion: email to %s failed: %v", row.Email, sendErr))
+			} else {
+				summary.Sent++
+				sentInThisRun++
+				state.Sent++
+				if markErr := model.MarkPromotionEmailSent(row.Id, finishedAt); markErr != nil {
+					logger.LogWarn(ctx, common.LogText("open source promotion: failed to mark email %d as sent: %v", row.Id, markErr))
+				}
+			}
 		}
 
-		subject, content := buildOpenSourcePromotionEmail(row, settings, address)
-		sendErr := common.SendEmail(subject, row.Email, content)
-		finishedAt := common.GetTimestamp()
-		if sendErr != nil {
-			summary.Failed++
-			if markErr := model.MarkPromotionEmailFailed(row.Id, sendErr.Error(), finishedAt); markErr != nil {
-				logger.LogWarn(ctx, common.LogText("open source promotion: failed to mark email %d as failed: %v", row.Id, markErr))
-			}
-			logger.LogWarn(ctx, common.LogText("open source promotion: email to %s failed: %v", row.Email, sendErr))
-		} else {
-			summary.Sent++
-			sentInThisRun++
-			if markErr := model.MarkPromotionEmailSent(row.Id, finishedAt); markErr != nil {
-				logger.LogWarn(ctx, common.LogText("open source promotion: failed to mark email %d as sent: %v", row.Id, markErr))
+		state.Processed = i + 1
+		state.Progress = promotionProgress(state.Processed, state.Total)
+		if saveState != nil {
+			if err := saveState(state); err != nil {
+				return summary, err
 			}
 		}
 

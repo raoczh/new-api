@@ -59,6 +59,27 @@ func TestGroupProbeRotation(t *testing.T) {
 	}
 }
 
+// The automatic group probe skips generative media models by name. A configured
+// model type must win over those name heuristics in both directions, otherwise
+// a native image model with an unfamiliar name would be probed as chat and a
+// text model whose name mentions "image" would never be probed.
+func TestProbeEndpointFollowsConfiguredModelTypes(t *testing.T) {
+	withConfiguredModelTypes(t, map[string]string{
+		"zz-image-named-text": common.ModelTypeText,
+		"zz-plain-image":      common.ModelTypeImage,
+		"*-motion":            common.ModelTypeVideo,
+	})
+	openAI := []constant.EndpointType{constant.EndpointTypeOpenAI}
+
+	assert.Equal(t, string(constant.EndpointTypeOpenAI), probeEndpoint("zz-image-named-text", openAI),
+		"an explicit text type keeps a model probeable despite its name")
+	assert.Equal(t, "", probeEndpoint("zz-plain-image", openAI),
+		"an explicit image type skips the probe despite a neutral name")
+	assert.Equal(t, "", probeEndpoint("zz-veo-motion", openAI),
+		"a wildcard video entry skips the probe")
+	assert.Equal(t, string(constant.EndpointTypeOpenAI), probeEndpoint("zz-unconfigured-chat", openAI))
+}
+
 func TestModelTestsRecordOnlySuccessfulManualChecksAndAllAutomaticOutcomes(t *testing.T) {
 	for _, dialect := range []struct{ name, env string }{{"sqlite", ""}, {"mysql", "TEST_MYSQL_DSN"}, {"postgres", "TEST_POSTGRES_DSN"}} {
 		t.Run(dialect.name, func(t *testing.T) {

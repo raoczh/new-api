@@ -1,6 +1,7 @@
 package model_setting
 
 import (
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -42,6 +43,11 @@ type GlobalSettings struct {
 	// family whitelist but whose names already end in an effort word.
 	EffortTailModelIDs               []string                         `json:"effort_tail_model_ids"`
 	ChatCompletionsToResponsesPolicy ChatCompletionsToResponsesPolicy `json:"chat_completions_to_responses_policy"`
+	// ModelTypes maps a model name (or a wildcard pattern) to its capability:
+	// text, image or video. Capability decisions read this before falling back
+	// to name heuristics. The json tag must stay bare: configToMap uses it
+	// verbatim as the persisted option key.
+	ModelTypes map[string]string `json:"model_types"`
 }
 
 // 默认配置
@@ -62,6 +68,14 @@ var defaultOpenaiSettings = GlobalSettings{
 		Enabled:     false,
 		AllChannels: true,
 	},
+	// Only native image models whose names the built-in heuristics miss are
+	// listed. Naming a plain text model here (for example
+	// gemini-2.0-flash-exp, which can also emit images from chat) would hide
+	// it from the chat model pickers.
+	ModelTypes: map[string]string{
+		"*nano-banana*": common.ModelTypeImage,
+		"*-image":       common.ModelTypeImage,
+	},
 }
 
 // 全局实例
@@ -70,6 +84,9 @@ var globalSettings = defaultOpenaiSettings
 func init() {
 	// 注册到全局配置管理器
 	config.GlobalConfig.Register("global", &globalSettings)
+	// common cannot import this package (model -> setting/model_setting ->
+	// common), so it reads model types through this injected resolver.
+	common.ModelTypeResolver = GetModelType
 }
 
 func GetGlobalSettings() *GlobalSettings {
@@ -183,4 +200,171 @@ func ShouldPreserveEffortTail(modelName string) bool {
 		}
 	}
 	return false
+}
+
+// modelTypePatternMaxEntries bounds the configured table so one save cannot
+// make every capability lookup scan an unbounded list.
+const modelTypePatternMaxEntries = 2000
+
+type modelTypeEntry struct {
+	pattern *regexp.Regexp
+	// literals counts the non-wildcard characters; longer patterns win so a
+	// specific rule beats a broad one ("gemini-3-pro-image" over "*-image").
+	literals  int
+	modelType string
+}
+
+type compiledModelTypes struct {
+	source  string
+	exact   map[string]string
+	regexes []modelTypeEntry
+}
+
+var (
+	modelTypesMu    sync.RWMutex
+	modelTypesCache compiledModelTypes
+)
+
+func modelTypesSourceKey(entries map[string]string) string {
+	keys := make([]string, 0, len(entries))
+	for key := range entries {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	var builder strings.Builder
+	for _, key := range keys {
+		builder.WriteString(key)
+		builder.WriteByte('\x00')
+		builder.WriteString(entries[key])
+		builder.WriteByte('\x01')
+	}
+	return builder.String()
+}
+
+// compileModelTypePattern turns a configured wildcard into an anchored
+// regexp. "*" matches any run of characters and matching is by containment
+// (implicit leading and trailing "*"), so "*-image" hits
+// "gemini-3-pro-image-preview" and "gemini-*" hits "gemini-3-pro-image". An
+// entry without "*" never reaches this function; it is matched exactly.
+func compileModelTypePattern(pattern string) (*regexp.Regexp, int, error) {
+	var builder strings.Builder
+	builder.WriteString("(?i).*")
+	literals := 0
+	for index, segment := range strings.Split(pattern, "*") {
+		if index > 0 {
+			builder.WriteString(".*")
+		}
+		literals += len(segment)
+		builder.WriteString(regexp.QuoteMeta(segment))
+	}
+	builder.WriteString(".*")
+	if literals == 0 {
+		return nil, 0, fmt.Errorf("pattern %q has no literal characters", pattern)
+	}
+	compiled, err := regexp.Compile(builder.String())
+	return compiled, literals, err
+}
+
+func compiledModelTypeTable() (map[string]string, []modelTypeEntry) {
+	entries := globalSettings.ModelTypes
+	key := modelTypesSourceKey(entries)
+
+	modelTypesMu.RLock()
+	if modelTypesCache.source == key {
+		exact, regexes := modelTypesCache.exact, modelTypesCache.regexes
+		modelTypesMu.RUnlock()
+		return exact, regexes
+	}
+	modelTypesMu.RUnlock()
+
+	modelTypesMu.Lock()
+	defer modelTypesMu.Unlock()
+	if modelTypesCache.source == key {
+		return modelTypesCache.exact, modelTypesCache.regexes
+	}
+
+	exact := make(map[string]string, len(entries))
+	regexes := make([]modelTypeEntry, 0, len(entries))
+	for rawPattern, rawType := range entries {
+		pattern := strings.TrimSpace(rawPattern)
+		modelType := strings.TrimSpace(rawType)
+		if pattern == "" || !common.IsModelType(modelType) {
+			continue
+		}
+		if !strings.Contains(pattern, "*") {
+			exact[strings.ToLower(pattern)] = modelType
+			continue
+		}
+		compiled, literals, err := compileModelTypePattern(pattern)
+		if err != nil {
+			common.SysError(common.LogText("invalid model_types pattern %q: %v", pattern, err))
+			continue
+		}
+		regexes = append(regexes, modelTypeEntry{pattern: compiled, literals: literals, modelType: modelType})
+	}
+	slices.SortStableFunc(regexes, func(a, b modelTypeEntry) int {
+		return b.literals - a.literals
+	})
+	modelTypesCache = compiledModelTypes{source: key, exact: exact, regexes: regexes}
+	return exact, regexes
+}
+
+// GetModelType returns the configured capability for modelName: text, image or
+// video. It returns "" when no configured entry matches, which lets callers
+// fall back to their own name heuristics. Exact entries win over wildcards, and
+// longer wildcards win over shorter ones.
+func GetModelType(modelName string) string {
+	target := strings.ToLower(strings.TrimSpace(modelName))
+	if target == "" {
+		return ""
+	}
+	exact, regexes := compiledModelTypeTable()
+	if modelType, ok := exact[target]; ok {
+		return modelType
+	}
+	for _, entry := range regexes {
+		if entry.pattern.MatchString(target) {
+			return entry.modelType
+		}
+	}
+	return ""
+}
+
+// IsImageModel reports whether modelName is configured as an image model.
+func IsImageModel(modelName string) bool {
+	return GetModelType(modelName) == common.ModelTypeImage
+}
+
+// IsVideoModel reports whether modelName is configured as a video model.
+func IsVideoModel(modelName string) bool {
+	return GetModelType(modelName) == common.ModelTypeVideo
+}
+
+// ValidateModelTypes checks the JSON object persisted under global.model_types.
+func ValidateModelTypes(value string) error {
+	var modelTypes map[string]string
+	if err := common.UnmarshalJsonStr(value, &modelTypes); err != nil {
+		return fmt.Errorf("model types must be a JSON object mapping model names to types: %w", err)
+	}
+	if modelTypes == nil {
+		return fmt.Errorf("model types must be a JSON object mapping model names to types")
+	}
+	if len(modelTypes) > modelTypePatternMaxEntries {
+		return fmt.Errorf("model types cannot exceed %d entries", modelTypePatternMaxEntries)
+	}
+	for pattern, modelType := range modelTypes {
+		if strings.TrimSpace(pattern) == "" {
+			return fmt.Errorf("model types cannot contain an empty model name")
+		}
+		if !common.IsModelType(strings.TrimSpace(modelType)) {
+			return fmt.Errorf("invalid model type %q for %q: expected %s, %s or %s",
+				modelType, pattern, common.ModelTypeText, common.ModelTypeImage, common.ModelTypeVideo)
+		}
+		if strings.Contains(pattern, "*") {
+			if _, _, err := compileModelTypePattern(pattern); err != nil {
+				return fmt.Errorf("invalid model type pattern %q: %w", pattern, err)
+			}
+		}
+	}
+	return nil
 }

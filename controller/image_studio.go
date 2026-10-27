@@ -650,7 +650,8 @@ func imageStudioFixedPrice(expression string, groupRatio float64) (float64, stri
 //
 // An explicit admin list always wins: the endpoint metadata is frequently
 // missing for image models behind proxies, which is exactly why the list
-// exists. Otherwise the advertised endpoint type is trusted, with a name
+// exists. A configured model type comes next and is authoritative in both
+// directions. Otherwise the advertised endpoint type is trusted, with a name
 // heuristic as the last resort.
 func imageStudioIsImageModel(item model.Pricing, explicit []string) bool {
 	base := item.ModelName
@@ -668,6 +669,12 @@ func imageStudioIsImageModel(item model.Pricing, explicit []string) bool {
 			}
 		}
 		return false
+	}
+	if modelType := common.ConfiguredModelType(item.ModelName); modelType != "" {
+		return modelType == common.ModelTypeImage
+	}
+	if modelType := common.ConfiguredModelType(base); modelType != "" {
+		return modelType == common.ModelTypeImage
 	}
 	if slices.Contains(item.SupportedEndpointTypes, constant.EndpointTypeImageGeneration) {
 		return true

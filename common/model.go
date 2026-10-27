@@ -2,6 +2,50 @@ package common
 
 import "strings"
 
+// Model capability values accepted by the model type configuration.
+const (
+	ModelTypeText  = "text"
+	ModelTypeImage = "image"
+	ModelTypeVideo = "video"
+)
+
+// ModelTypeResolver returns the configured capability for a model name, or ""
+// when none is configured. setting/model_setting injects it in init() because
+// this package cannot import model_setting (model -> setting/model_setting ->
+// common).
+var ModelTypeResolver func(modelName string) string
+
+// IsModelType reports whether value is a supported model capability.
+func IsModelType(value string) bool {
+	switch value {
+	case ModelTypeText, ModelTypeImage, ModelTypeVideo:
+		return true
+	}
+	return false
+}
+
+// ConfiguredModelType returns only the configured capability. It returns ""
+// when nothing is configured, which lets callers keep their own name
+// heuristics. An explicit configuration is authoritative, including "text".
+func ConfiguredModelType(modelName string) string {
+	if ModelTypeResolver == nil {
+		return ""
+	}
+	return ModelTypeResolver(modelName)
+}
+
+// ResolveModelType prefers the configured capability and falls back to the
+// legacy name heuristic when nothing is configured.
+func ResolveModelType(modelName string) string {
+	if modelType := ConfiguredModelType(modelName); modelType != "" {
+		return modelType
+	}
+	if IsImageGenerationModel(modelName) {
+		return ModelTypeImage
+	}
+	return ""
+}
+
 var (
 	// OpenAIResponseOnlyModels is a list of models that are only available for OpenAI responses.
 	OpenAIResponseOnlyModels = []string{

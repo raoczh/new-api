@@ -177,14 +177,13 @@ func (a *Adaptor) getRequestUrl(info *relaycommon.RelayInfo, modelName, suffix s
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	suffix := ""
 	if a.RequestMode == RequestModeGemini {
-		if info.IsStream {
-			suffix = "streamGenerateContent?alt=sse"
-		} else {
-			suffix = "generateContent"
-		}
-
-		if strings.HasPrefix(info.UpstreamModelName, "imagen") {
+		switch {
+		case gemini.IsImagenModel(info.UpstreamModelName):
 			suffix = "predict"
+		case info.IsStream && info.RelayFormat != types.RelayFormatOpenAIImage:
+			suffix = "streamGenerateContent?alt=sse"
+		default:
+			suffix = "generateContent"
 		}
 		return a.getRequestUrl(info, info.UpstreamModelName, suffix)
 	} else if a.RequestMode == RequestModeClaude {
@@ -354,8 +353,11 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 			if info.RelayMode == constant.RelayModeGemini {
 				return gemini.GeminiTextGenerationHandler(c, info, resp)
 			} else {
-				if strings.HasPrefix(info.UpstreamModelName, "imagen") {
+				if gemini.IsImagenModel(info.UpstreamModelName) {
 					return gemini.GeminiImageHandler(c, info, resp)
+				}
+				if info.RelayFormat == types.RelayFormatOpenAIImage && gemini.IsGeminiNativeImageModel(info) {
+					return gemini.GeminiNativeImageHandler(c, info, resp)
 				}
 				return gemini.GeminiChatHandler(c, info, resp)
 			}

@@ -67,7 +67,7 @@ func ResolveLegacyBillingDetails(name string, effective, configured PricingValue
 		return details
 	}
 	if _, fixed := effective["ModelPrice"]; fixed {
-		details.ImageCount = common.IsImageGenerationModel(name)
+		details.ImageCount = common.ResolveModelType(name) == common.ModelTypeImage
 		details.RequestRules = legacyDallePricingRules(name)
 		return details
 	}

@@ -112,7 +112,10 @@ func (openSourcePromotionEmailHandler) Run(ctx context.Context, task *model.Syst
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
 		return
 	}
-	summary, err := service.RunOpenSourcePromotionEmailTask(ctx, payload.IDs, payload.Manual)
+	saveState := func(next service.PromotionEmailState) error {
+		return model.UpdateSystemTaskState(task.TaskID, runnerID, next)
+	}
+	summary, err := service.RunOpenSourcePromotionEmailTask(ctx, payload.IDs, payload.Manual, saveState)
 	if err != nil {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, summary, err)
 		return

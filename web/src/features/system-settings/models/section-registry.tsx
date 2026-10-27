@@ -23,6 +23,7 @@ import { ClaudeSettingsCard } from './claude-settings-card'
 import { GeminiSettingsCard } from './gemini-settings-card'
 import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
+import { ModelTypeSettingsCard } from './model-type-settings-card'
 
 function formatJsonForEditor(value: string, fallback: string) {
   const raw = (value ?? '').toString().trim()
@@ -61,6 +62,15 @@ const MODELS_SECTIONS = [
           },
         }}
       />
+    ),
+  },
+
+  {
+    id: 'model-types',
+    titleKey: 'Model Types',
+    contentWidth: 'fluid',
+    build: (settings: ModelSettings) => (
+      <ModelTypeSettingsCard defaultValue={settings['global.model_types']} />
     ),
   },
 

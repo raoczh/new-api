@@ -368,6 +368,7 @@ func SetApiRouter(router *gin.Engine) {
 			promotionRoute.GET("/", controller.GetOpenSourcePromotionRecipients)
 			promotionRoute.GET("/stats", controller.GetOpenSourcePromotionStats)
 			promotionRoute.GET("/email-preview", controller.GetOpenSourcePromotionEmailPreview)
+			promotionRoute.GET("/task-status", controller.GetOpenSourcePromotionTaskStatus)
 			promotionRoute.GET("/:id", controller.GetOpenSourcePromotionRecipient)
 			promotionRoute.POST("/blacklist", controller.BlacklistOpenSourcePromotionRecipients)
 			promotionRoute.POST("/unblacklist", controller.UnblacklistOpenSourcePromotionRecipients)

@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
@@ -292,6 +293,48 @@ func TestListImageStudioModelsResolvesTieredFixedPrices(t *testing.T) {
 	legacy := findImageStudioModelOption(t, groups, "default", "zz-image-legacy")
 	assert.InDelta(t, 0.5, legacy.Price, 1e-9)
 	assert.Equal(t, "image", legacy.PriceUnit)
+}
+
+// withConfiguredModelTypes installs the model type table used by the
+// capability checks, restoring the previous mapping afterwards.
+func withConfiguredModelTypes(t *testing.T, modelTypes map[string]string) {
+	t.Helper()
+
+	settings := model_setting.GetGlobalSettings()
+	original := settings.ModelTypes
+	t.Cleanup(func() {
+		settings.ModelTypes = original
+		model.InvalidatePricingCache()
+	})
+	settings.ModelTypes = modelTypes
+	model.InvalidatePricingCache()
+}
+
+func TestListImageStudioModelsFollowsConfiguredModelTypes(t *testing.T) {
+	// "zz-studio-image-blocked" would match the name keyword heuristic, but the
+	// explicit text entry must win; "zz-studio-plain" has no image keyword and
+	// only qualifies because of its configured type.
+	withConfiguredModelTypes(t, map[string]string{
+		"zz-studio-image-blocked": common.ModelTypeText,
+		"zz-studio-plain":         common.ModelTypeImage,
+	})
+	setupImageStudioControllerTest(t, "zz-studio-image-blocked", "zz-studio-plain")
+	withImageStudioPricingConfig(t,
+		map[string]float64{
+			"zz-studio-image-blocked": 0.25,
+			"zz-studio-plain":         0.25,
+		},
+		map[string]float64{"default": 1, "vip": 1},
+	)
+
+	groups := requestImageStudioModels(t)
+
+	findImageStudioModelOption(t, groups, "default", "zz-studio-plain")
+	for _, group := range groups {
+		for _, option := range group.Models {
+			assert.NotEqual(t, "zz-studio-image-blocked", option.Model)
+		}
+	}
 }
 
 func TestListImageStudioModelsIgnoresLegacyPriceForTieredModelWithoutFixedLeaf(t *testing.T) {

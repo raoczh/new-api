@@ -24,6 +24,7 @@ import { PromotionDialogs } from './components/promotion-dialogs'
 import { PromotionPrimaryButtons } from './components/promotion-primary-buttons'
 import { PromotionProvider } from './components/promotion-provider'
 import { PromotionTable } from './components/promotion-table'
+import { PromotionTaskMonitor } from './components/promotion-task-monitor'
 
 export function OpenSourcePromotion() {
   const { t } = useTranslation()
@@ -37,7 +38,12 @@ export function OpenSourcePromotion() {
           <PromotionPrimaryButtons />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <PromotionTable />
+          <div className='flex h-full min-h-0 flex-col gap-3'>
+            <PromotionTaskMonitor />
+            <div className='min-h-0 flex-1'>
+              <PromotionTable />
+            </div>
+          </div>
         </SectionPageLayout.Content>
       </SectionPageLayout>
 
