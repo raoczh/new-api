@@ -298,6 +298,11 @@ func Register(c *gin.Context) {
 		common.ApiErrorT(c, "User registration failed or user ID retrieval failed")
 		return
 	}
+	// 新用户注册赠额（开源作者推广）：仅当本次注册已验证邮箱时才会命中名单，
+	// 失败只记日志，不影响注册结果。
+	if common.EmailVerificationEnabled && insertedUser.Email != "" {
+		service.GrantOpenSourcePromotionReward(insertedUser.Id, insertedUser.Email, true)
+	}
 	// 生成默认令牌
 	if constant.GenerateDefaultToken {
 		key, err := common.GenerateKey()

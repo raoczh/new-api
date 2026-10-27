@@ -71,6 +71,14 @@ email.security_event.login_linked: "已綁定登入帳號 {{.Provider}}"
 email.security_event.login_unlinked: "已解綁登入帳號"
 email.security_event.wechat_linked: "已綁定微信帳號"
 
+# 開源作者觸達
+email.promotion.subject: "{{.SystemName}} 感謝您對開源生態的貢獻"
+email.promotion.greeting: "您好，您在開源專案 {{.Repository}} 中的貢獻被我們留意到了，感謝您為開源社群分享的一切。"
+email.promotion.contribution: "我們注意到的貢獻：{{.Contribution}}"
+email.promotion.reward: "為表感謝，{{.SystemName}} 為您準備了 {{.Amount}} 元模型體驗額度。使用本郵箱在 <a href='{{.Link}}'>{{.Link}}</a> 註冊並完成郵箱驗證，額度會自動發放到您的帳戶。"
+email.promotion.note: "站點補充說明：{{.Note}}"
+email.promotion.footer: "如果不想再收到此類郵件，直接回覆本郵件，我們會將您從列表中移除。"
+
 # Low-quota notices
 notify.quota_low_title: "您的額度即將用盡"
 notify.subscription_quota_low_title: "您的訂閱額度即將用盡"

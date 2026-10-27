@@ -382,6 +382,7 @@ func migrateDB() error {
 		&TicketMessage{},
 		&TicketAttachment{},
 		&UserAccessToken{},
+		&PromotionRecipient{},
 	)
 	if err != nil {
 		return err

@@ -23,6 +23,9 @@ const (
 	SystemTaskTypeAsyncTaskPoll  = "async_task_poll"
 	SystemTaskTypeGroupProbe     = "group_probe"
 	SystemTaskTypeIQProbe        = "iq_probe"
+
+	SystemTaskTypeOpenSourcePromotionFetch = "open_source_promotion_fetch"
+	SystemTaskTypeOpenSourcePromotionEmail = "open_source_promotion_email"
 )
 
 var ErrSystemTaskLockLost = errors.New("system task lock lost")

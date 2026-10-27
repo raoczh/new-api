@@ -339,7 +339,12 @@ func handleOAuthLogin(c *gin.Context, provider oauth.Provider, oauthUser *oauth.
 		return
 	}
 
-	// 9. Setup login
+	// 9. Open-source promotion bonus: match the provider's verified addresses
+	// against the harvested author list. Failures are logged inside and never
+	// block the login.
+	service.GrantOpenSourcePromotionRewardForOAuth(c.Request.Context(), provider, token, user.Id)
+
+	// 10. Setup login
 	setupLogin(user, migration, c)
 }
 

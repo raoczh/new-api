@@ -71,6 +71,14 @@ email.security_event.login_linked: "已绑定登录账号 {{.Provider}}"
 email.security_event.login_unlinked: "已解绑登录账号"
 email.security_event.wechat_linked: "已绑定微信账号"
 
+# 开源作者触达
+email.promotion.subject: "{{.SystemName}} 感谢您对开源生态的贡献"
+email.promotion.greeting: "您好，您在开源项目 {{.Repository}} 中的贡献被我们留意到了，感谢您为开源社区分享的一切。"
+email.promotion.contribution: "我们注意到的贡献：{{.Contribution}}"
+email.promotion.reward: "为表感谢，{{.SystemName}} 为您准备了 {{.Amount}} 元模型体验额度。使用本邮箱在 <a href='{{.Link}}'>{{.Link}}</a> 注册并完成邮箱验证，额度会自动发放到您的账户。"
+email.promotion.note: "站点补充说明：{{.Note}}"
+email.promotion.footer: "如果不想再收到此类邮件，直接回复本邮件，我们会将您从列表中移除。"
+
 # Low-quota notices
 notify.quota_low_title: "您的额度即将用尽"
 notify.subscription_quota_low_title: "您的订阅额度即将用尽"

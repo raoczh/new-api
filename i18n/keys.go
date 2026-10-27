@@ -80,6 +80,13 @@ const (
 	MsgEmailSecurityNoticeChanged = "email.security_notice.changed"
 	MsgEmailSecurityNoticeAdvice  = "email.security_notice.advice"
 
+	MsgEmailPromotionSubject      = "email.promotion.subject"
+	MsgEmailPromotionGreeting     = "email.promotion.greeting"
+	MsgEmailPromotionContribution = "email.promotion.contribution"
+	MsgEmailPromotionReward       = "email.promotion.reward"
+	MsgEmailPromotionNote         = "email.promotion.note"
+	MsgEmailPromotionFooter       = "email.promotion.footer"
+
 	MsgSecurityEventPasswordUpdated      = "email.security_event.password_updated"
 	MsgSecurityEventEmailChangeRequested = "email.security_event.email_change_requested"
 	MsgSecurityEventEmailChanged         = "email.security_event.email_changed"

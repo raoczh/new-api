@@ -61,6 +61,7 @@ func TestMain(m *testing.M) {
 		&model.SystemTask{},
 		&model.SystemTaskLock{},
 		&model.QuotaData{},
+		&model.PromotionRecipient{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}

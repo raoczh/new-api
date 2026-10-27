@@ -88,6 +88,13 @@ export function useUpdateOption() {
           }
         }
 
+        // The built-in email preview shows the configured amount and note.
+        if (variables.key.startsWith('open_source_promotion.')) {
+          queryClient.invalidateQueries({
+            queryKey: ['open-source-promotion-email-preview'],
+          })
+        }
+
         toast.success(i18next.t('Setting updated successfully'))
       } else {
         handleServerError(data, i18next.t('Failed to update setting'))

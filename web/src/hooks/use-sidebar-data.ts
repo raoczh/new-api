@@ -25,6 +25,7 @@ import {
   LayoutDashboard,
   ListTodo,
   LifeBuoy,
+  Megaphone,
   MessageCircle,
   MessagesSquare,
   Radio,
@@ -155,6 +156,11 @@ export function useSidebarData(): SidebarData {
             title: t('Ticket Management'),
             url: '/ticket-management',
             icon: MessagesSquare,
+          },
+          {
+            title: t('Open Source Promotion'),
+            url: '/open-source-promotion',
+            icon: Megaphone,
           },
           {
             title: t('System Settings'),

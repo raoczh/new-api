@@ -25,6 +25,7 @@ import { PerformanceSection } from '../maintenance/performance-section'
 import { UpdateCheckerSection } from '../maintenance/update-checker-section'
 import type { OperationsSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { OpenSourcePromotionSettingsSection } from './open-source-promotion-settings-section'
 
 const OPERATIONS_SECTIONS = [
   {
@@ -134,6 +135,52 @@ const OPERATIONS_SECTIONS = [
             settings['performance_setting.monitor_memory_threshold'] ?? 90,
           'performance_setting.monitor_disk_threshold':
             settings['performance_setting.monitor_disk_threshold'] ?? 95,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'open-source-promotion',
+    titleKey: 'Open source promotion',
+    build: (settings: OperationsSettings) => (
+      <OpenSourcePromotionSettingsSection
+        defaultValues={{
+          enabled: settings['open_source_promotion.enabled'] ?? false,
+          githubToken: '',
+          githubTokenConfigured:
+            settings.GitHubTokenConfigured ?? false,
+          githubRequestsPerMinute:
+            settings['open_source_promotion.github_requests_per_minute'] ?? 0,
+          keywords: settings['open_source_promotion.keywords'] ?? [],
+          topicChinese:
+            settings['open_source_promotion.topic_chinese'] ?? true,
+          minStars: settings['open_source_promotion.min_stars'] ?? 5,
+          maxStars: settings['open_source_promotion.max_stars'] ?? 500,
+          activeDays: settings['open_source_promotion.active_days'] ?? 180,
+          maxReposPerRun:
+            settings['open_source_promotion.max_repos_per_run'] ?? 20,
+          maxAuthorsPerRepo:
+            settings['open_source_promotion.max_authors_per_repo'] ?? 3,
+          includePrAuthors:
+            settings['open_source_promotion.include_pr_authors'] ?? true,
+          requireChineseProject:
+            settings['open_source_promotion.require_chinese_project'] ?? true,
+          requireChineseAuthor:
+            settings['open_source_promotion.require_chinese_author'] ?? false,
+          emailWhitelist:
+            settings['open_source_promotion.email_whitelist'] ?? [],
+          autoSendEnabled:
+            settings['open_source_promotion.auto_send_enabled'] ?? false,
+          fetchTime: settings['open_source_promotion.fetch_time'] ?? '03:00',
+          sendTime: settings['open_source_promotion.send_time'] ?? '10:00',
+          dailySendLimit:
+            settings['open_source_promotion.daily_send_limit'] ?? 50,
+          sendIntervalSeconds:
+            settings['open_source_promotion.send_interval_seconds'] ?? 30,
+          rewardAmount: settings['open_source_promotion.reward_amount'] ?? 10,
+          rewardNote: settings['open_source_promotion.reward_note'] ?? '',
+          emailSubject: settings['open_source_promotion.email_subject'] ?? '',
+          emailBody: settings['open_source_promotion.email_body'] ?? '',
         }}
       />
     ),

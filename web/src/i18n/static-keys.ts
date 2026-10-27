@@ -308,6 +308,20 @@ export const STATIC_I18N_KEYS = [
   'Quota must be a positive number',
   'Successfully created {{count}} redemption codes',
 
+  // Open source promotion (constants-driven labels and error messages)
+  'Sending',
+  'Repository owner',
+  'Commit author',
+  'Pull request author',
+  'Failed to load open-source promotion recipients',
+  'Failed to load open-source promotion statistics',
+  'Failed to blacklist the selected recipients',
+  'Failed to unblacklist the selected recipients',
+  'Failed to enqueue the invitation emails',
+  'Failed to start the author harvest',
+  'Failed to regrant the promotion bonus',
+  'Failed to delete the recipient',
+
   // Home page (constants-driven labels)
   'Cost Tracking',
   'Model Access',

@@ -361,6 +361,22 @@ func SetApiRouter(router *gin.Engine) {
 			redemptionRoute.DELETE("/invalid", controller.DeleteInvalidRedemption)
 			redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
 		}
+
+		promotionRoute := apiRouter.Group("/open-source-promotion")
+		promotionRoute.Use(middleware.AdminAuth())
+		{
+			promotionRoute.GET("/", controller.GetOpenSourcePromotionRecipients)
+			promotionRoute.GET("/stats", controller.GetOpenSourcePromotionStats)
+			promotionRoute.GET("/email-preview", controller.GetOpenSourcePromotionEmailPreview)
+			promotionRoute.GET("/:id", controller.GetOpenSourcePromotionRecipient)
+			promotionRoute.POST("/blacklist", controller.BlacklistOpenSourcePromotionRecipients)
+			promotionRoute.POST("/unblacklist", controller.UnblacklistOpenSourcePromotionRecipients)
+			promotionRoute.POST("/send", controller.SendOpenSourcePromotionEmails)
+			promotionRoute.POST("/send-all", controller.SendAllOpenSourcePromotionEmails)
+			promotionRoute.POST("/fetch", controller.FetchOpenSourcePromotionAuthors)
+			promotionRoute.POST("/regrant", controller.RegrantOpenSourcePromotionReward)
+			promotionRoute.DELETE("/:id", controller.DeleteOpenSourcePromotionRecipient)
+		}
 		handlePermissionRoute(apiRouter.Group("", middleware.DisableCache(), middleware.AdminAuth()), http.MethodGet, "/audit", authz.AuditRead, controller.GetAuditLogs)
 		apiRouter.GET("/audit/self", middleware.DisableCache(), middleware.UserAuth(), controller.GetAuditLogs)
 		logRoute := apiRouter.Group("/log")

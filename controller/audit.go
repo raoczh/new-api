@@ -75,6 +75,14 @@ var auditContentTemplates = map[string]string{
 	"subscription.plan_reset":       "Reset active subscriptions for plan ${plan_id}",
 	"subscription.user_plan_reset":  "Reset active plan ${plan_id} subscriptions for user ${target_user_id}",
 	"subscription.user_quota_reset": "Administrator reset the quota of subscription plan ${plan_title} (ID: ${plan_id})",
+
+	"promotion.blacklist":   "Blacklisted ${affected} of ${count} open-source promotion recipients",
+	"promotion.unblacklist": "Unblacklisted ${affected} of ${count} open-source promotion recipients",
+	"promotion.send":        "Queued invitation emails for ${affected} of ${count} open-source promotion recipients",
+	"promotion.send_all":    "Queued invitation emails for all ${count} sendable open-source promotion recipients",
+	"promotion.regrant":     "Regranted the open-source promotion bonus to ${granted} of ${count} recipients",
+	"promotion.delete":      "Deleted open-source promotion recipient (ID: ${id})",
+	"promotion.fetch":       "Triggered an open-source author harvest",
 }
 
 func recordPasskeyDomainAudit(c *gin.Context, change *model.PasskeyDomainChange, confirmed bool, err error) {

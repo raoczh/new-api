@@ -70,6 +70,14 @@ email.security_event.login_linked: "Login account linked: {{.Provider}}"
 email.security_event.login_unlinked: "Login account unlinked"
 email.security_event.wechat_linked: "WeChat account linked"
 
+# Open-source author outreach
+email.promotion.subject: "{{.SystemName}} thanks you for your open-source work"
+email.promotion.greeting: "Hello, you are receiving this because you contribute to the open-source project {{.Repository}}. Thank you for everything you have shared with the open-source community."
+email.promotion.contribution: "Your work we noticed: {{.Contribution}}"
+email.promotion.reward: "As a token of appreciation, {{.SystemName}} has reserved {{.Amount}} CNY of model trial credit for you. Register at <a href='{{.Link}}'>{{.Link}}</a> with this email address, verify it, and the credit is added to your account automatically."
+email.promotion.note: "Extra note from the site: {{.Note}}"
+email.promotion.footer: "If you would rather not receive this kind of message again, just reply to this email and we will remove you from the list."
+
 # Low-quota notices
 notify.quota_low_title: "Your quota is running low"
 notify.subscription_quota_low_title: "Your subscription quota is running low"

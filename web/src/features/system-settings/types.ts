@@ -411,6 +411,29 @@ export type OperationsSettings = {
   'perf_metrics_setting.flush_interval': number
   'perf_metrics_setting.bucket_time': 'hour' | 'minute' | '5min'
   'perf_metrics_setting.retention_days': number
+  GitHubTokenConfigured: boolean
+  'open_source_promotion.enabled': boolean
+  'open_source_promotion.keywords': string[]
+  'open_source_promotion.topic_chinese': boolean
+  'open_source_promotion.min_stars': number
+  'open_source_promotion.max_stars': number
+  'open_source_promotion.active_days': number
+  'open_source_promotion.max_repos_per_run': number
+  'open_source_promotion.max_authors_per_repo': number
+  'open_source_promotion.include_pr_authors': boolean
+  'open_source_promotion.require_chinese_project': boolean
+  'open_source_promotion.require_chinese_author': boolean
+  'open_source_promotion.email_whitelist': string[]
+  'open_source_promotion.github_requests_per_minute': number
+  'open_source_promotion.auto_send_enabled': boolean
+  'open_source_promotion.fetch_time': string
+  'open_source_promotion.send_time': string
+  'open_source_promotion.daily_send_limit': number
+  'open_source_promotion.send_interval_seconds': number
+  'open_source_promotion.reward_amount': number
+  'open_source_promotion.reward_note': string
+  'open_source_promotion.email_subject': string
+  'open_source_promotion.email_body': string
 }
 
 export type SecuritySettings = {
