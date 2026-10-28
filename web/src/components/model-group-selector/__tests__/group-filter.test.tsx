@@ -40,9 +40,11 @@ interface GroupOption {
 function Harness({
   models,
   groups,
+  openGroupFilter,
 }: {
   models: ModelOption[]
   groups: GroupOption[]
+  openGroupFilter?: string
 }) {
   const [group, setGroup] = useState(groups[0].value)
   const [model, setModel] = useState(models[0].value)
@@ -53,6 +55,7 @@ function Harness({
       models={models}
       onGroupChange={setGroup}
       onModelChange={setModel}
+      openGroupFilter={openGroupFilter}
       selectedGroup={group}
       selectedModel={model}
     />
@@ -129,5 +132,35 @@ describe('model group selector group filtering', () => {
     const list = within(screen.getByRole('listbox'))
     expect(list.getByText('gpt-4o')).toBeInTheDocument()
     expect(list.getByText('claude-sonnet')).toBeInTheDocument()
+  })
+
+  test('opens on the group the caller pins instead of every group', async () => {
+    // The image studio only generates with the selected group's models, so
+    // opening on every group would bury the models it can actually use.
+    const models: ModelOption[] = [
+      {
+        label: 'gpt-image-1',
+        value: 'default\u0000gpt-image-1',
+        category: 'default',
+      },
+      { label: 'nano-banana', value: 'vip\u0000nano-banana', category: 'vip' },
+    ]
+    render(
+      <Harness groups={groups} models={models} openGroupFilter='default' />
+    )
+
+    const user = await openPanel()
+    const list = within(screen.getByRole('listbox'))
+
+    expect(list.getByText('gpt-image-1')).toBeInTheDocument()
+    expect(list.queryByText('nano-banana')).not.toBeInTheDocument()
+
+    // Closing and reopening keeps the pinned view, because the caller's default
+    // is still the selected group.
+    await user.click(screen.getByRole('combobox', { name: 'Select model' }))
+    await user.click(screen.getByRole('combobox', { name: 'Select model' }))
+    const reopened = within(screen.getByRole('listbox'))
+    expect(reopened.getByText('gpt-image-1')).toBeInTheDocument()
+    expect(reopened.queryByText('nano-banana')).not.toBeInTheDocument()
   })
 })

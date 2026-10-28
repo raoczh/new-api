@@ -567,6 +567,12 @@ export interface ModelGroupSelectorProps {
   // Common props
   className?: string
   disabled?: boolean
+  /**
+   * Group the panel starts narrowed to when it opens. Omit it to keep the
+   * default "every group" view; callers that always work inside one group pass
+   * the group that is selected so the list opens on the relevant models.
+   */
+  openGroupFilter?: string
 }
 
 /**
@@ -582,6 +588,7 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
   onGroupChange,
   className,
   disabled = false,
+  openGroupFilter,
 }) => {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -652,13 +659,17 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
     [onGroupChange]
   )
 
-  const handleOpenChange = useCallback((nextOpen: boolean) => {
-    setOpen(nextOpen)
-    if (nextOpen) {
-      // Every fresh opening starts from the unfiltered list again.
-      setGroupFilter(null)
-    }
-  }, [])
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen)
+      if (nextOpen) {
+        // Every fresh opening starts from this caller's default view: the
+        // unfiltered list, or the group the caller pinned via the prop.
+        setGroupFilter(openGroupFilter || null)
+      }
+    },
+    [openGroupFilter]
+  )
 
   useEffect(() => {
     if (!open) {

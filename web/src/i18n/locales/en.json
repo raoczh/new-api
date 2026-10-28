@@ -8086,7 +8086,7 @@
     "Worker Proxy": "Worker Proxy",
     "Worker URL": "Worker URL",
     "Workspaces": "Workspaces",
-    "Write a prompt above and generate your first image. Every result is kept here for {{days}} days.": "Write a prompt above and generate your first image. Every result is kept here for {{days}} days.",
+    "Write a prompt to generate your first image. Every result is kept here for {{days}} days.": "Write a prompt to generate your first image. Every result is kept here for {{days}} days.",
     "Write value to the target field": "Write value to the target field",
     "x": "x",
     "xAI": "xAI",

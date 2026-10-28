@@ -53,6 +53,14 @@ import type { ImageStudioTask, ImageStudioTaskListQuery } from '../types'
 import { ImageStudioTaskCard } from './task-card'
 import { ImageStudioTaskDetail } from './task-detail'
 
+/**
+ * Card grid that follows the width of the column it sits in, not the viewport:
+ * in the two-column workbench the gallery is roughly half the page, so
+ * viewport breakpoints would keep it at two columns on a wide screen.
+ */
+const HISTORY_GRID_CLASSES =
+  'grid grid-cols-2 gap-3 @min-[34rem]/history:grid-cols-3 @min-[52rem]/history:grid-cols-4 @min-[70rem]/history:grid-cols-5'
+
 export interface ImageStudioHistoryProps {
   locale?: string
   /** Server retention window, shown in the empty state. */
@@ -398,9 +406,9 @@ export function ImageStudioHistory(props: ImageStudioHistoryProps) {
       )}
 
       {(list.isPending || (list.isError && localStatus === 'reading')) && (
-        <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'>
+        <div className={HISTORY_GRID_CLASSES}>
           {Array.from({ length: 5 }, (_, index) => (
-            <Skeleton key={index} className='aspect-[3/4] rounded-xl' />
+            <Skeleton key={index} className='aspect-square rounded-xl' />
           ))}
         </div>
       )}
@@ -420,7 +428,7 @@ export function ImageStudioHistory(props: ImageStudioHistoryProps) {
                       'This device has no saved record for this page yet. They will appear after the server can be reached again.'
                     )
                   : t(
-                      'Write a prompt above and generate your first image. Every result is kept here for {{days}} days.',
+                      'Write a prompt to generate your first image. Every result is kept here for {{days}} days.',
                       { days: props.retentionDays }
                     )}
             </p>
@@ -428,7 +436,7 @@ export function ImageStudioHistory(props: ImageStudioHistoryProps) {
         )}
 
       {items.length > 0 && (
-        <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'>
+        <div className={HISTORY_GRID_CLASSES}>
           {items.map((task) => (
             <ImageStudioTaskCard
               key={task.id}

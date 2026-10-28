@@ -275,15 +275,12 @@ export function ImageStudioComposer(props: ImageStudioComposerProps) {
             selectedGroup={props.selectedGroup}
             groups={groupOptions}
             onGroupChange={props.onGroupChange}
+            // The editor only generates with the selected group's models, so
+            // opening the panel on every group would bury them under the rest.
+            openGroupFilter={props.selectedGroup}
             disabled={props.submitting}
             className='max-w-full'
           />
-
-          <span className='text-muted-foreground hidden text-[11px] xl:inline'>
-            {t('Billed per output token · records kept {{days}} days', {
-              days: config.retention_days,
-            })}
-          </span>
 
           <div className='ml-auto flex items-center gap-2'>
             {props.polishModel && (
@@ -332,7 +329,9 @@ export function ImageStudioComposer(props: ImageStudioComposerProps) {
           </div>
         </div>
 
-        <p className='text-muted-foreground text-[10px] xl:hidden'>
+        {/* The editor column is narrow now, so the billing note sits under the
+            actions instead of competing with them for one line. */}
+        <p className='text-muted-foreground text-[10px]'>
           {t('Billed per output token · records kept {{days}} days', {
             days: config.retention_days,
           })}

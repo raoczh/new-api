@@ -164,41 +164,50 @@ export function ImageStudioPage() {
 
   return (
     <Main>
-      <div
-        ref={topRef}
-        className='mx-auto flex w-full max-w-5xl flex-col gap-6 overflow-y-auto p-3 sm:p-4'
-      >
-        <ImageStudioComposer
-          config={config}
-          groups={modelsQuery.groups}
-          selectedModel={selection.model}
-          selectedGroup={selection.group}
-          submitting={submit.isPending}
-          polishModel={polishModel}
-          draft={draft}
-          onModelChange={(model, group) => setSelection({ model, group })}
-          onGroupChange={(group) =>
-            // A model is offered per group, so a group switch must land on a
-            // model that group actually serves instead of keeping a stale pair.
-            setSelection((previous) => {
-              const models =
-                modelsQuery.groups.find((item) => item.group === group)
-                  ?.models ?? []
-              const kept = models.some((item) => item.model === previous.model)
-              return {
-                group,
-                model: kept ? previous.model : (models[0]?.model ?? ''),
+      {/* Below xl the editor and the gallery stack into one scrolling column;
+          above it they become two independent columns so a long history never
+          pushes the prompt out of reach. The gallery is its own container so
+          its card grid follows the column width, not the viewport. */}
+      <div className='mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-4 overflow-y-auto p-3 sm:p-4 xl:grid xl:grid-cols-[minmax(23rem,27rem)_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)] xl:gap-5 xl:overflow-hidden xl:px-5'>
+        <div className='flex min-h-0 flex-col xl:overflow-y-auto xl:pr-1 xl:pb-1'>
+          <div ref={topRef} className='flex flex-col'>
+            <ImageStudioComposer
+              config={config}
+              groups={modelsQuery.groups}
+              selectedModel={selection.model}
+              selectedGroup={selection.group}
+              submitting={submit.isPending}
+              polishModel={polishModel}
+              draft={draft}
+              onModelChange={(model, group) => setSelection({ model, group })}
+              onGroupChange={(group) =>
+                // A model is offered per group, so a group switch must land on a
+                // model that group actually serves instead of keeping a stale pair.
+                setSelection((previous) => {
+                  const models =
+                    modelsQuery.groups.find((item) => item.group === group)
+                      ?.models ?? []
+                  const kept = models.some(
+                    (item) => item.model === previous.model
+                  )
+                  return {
+                    group,
+                    model: kept ? previous.model : (models[0]?.model ?? ''),
+                  }
+                })
               }
-            })
-          }
-          onSubmit={handleSubmit}
-        />
+              onSubmit={handleSubmit}
+            />
+          </div>
+        </div>
 
-        <ImageStudioHistory
-          locale={toIntlLocale(i18n.resolvedLanguage || i18n.language)}
-          retentionDays={config.retention_days}
-          onReuse={handleReuse}
-        />
+        <div className='@container/history flex min-h-0 flex-col xl:overflow-y-auto xl:pb-1 xl:pl-1'>
+          <ImageStudioHistory
+            locale={toIntlLocale(i18n.resolvedLanguage || i18n.language)}
+            retentionDays={config.retention_days}
+            onReuse={handleReuse}
+          />
+        </div>
       </div>
     </Main>
   )
