@@ -144,6 +144,39 @@ describe('PromotionTaskMonitor', () => {
     )
   })
 
+  it('explains a harvest skip count by reason', async () => {
+    await renderMonitor(
+      snapshot({
+        fetch: {
+          id: 5,
+          task_id: 'systask_explained',
+          type: 'open_source_promotion_fetch',
+          status: 'succeeded',
+          result: {
+            repositories: 20,
+            authors_found: 14,
+            inserted: 12,
+            skipped_filtered: 49,
+            skipped_duplicate: 2,
+            skipped_invalid_email: 30,
+            skipped_non_chinese_project: 2,
+            skipped_non_chinese_author: 3,
+            skipped_over_limit: 13,
+            repository_errors: 1,
+          },
+          created_at: 1_789_387_200,
+          updated_at: 1_789_387_260,
+        },
+      })
+    )
+
+    const reasons = screen.getByText(/^Invalid or machine address/)
+    expect(reasons).toHaveTextContent(
+      'Invalid or machine address 30 · Non-Chinese project 2 · Non-Chinese author 3 · Over author limit 13 · Duplicate 2 · Repository errors 1'
+    )
+    expect(screen.getByText(/^Skipped/)).toHaveTextContent('Skipped 51')
+  })
+
   it('shows an idle badge and the pending-start hint for queued tasks', async () => {
     await renderMonitor(
       snapshot({

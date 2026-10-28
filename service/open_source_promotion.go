@@ -51,13 +51,29 @@ type PromotionEmailState struct {
 	Skipped   int `json:"skipped"`
 }
 
-// PromotionFetchSummary is the task result persisted for administrators.
+// PromotionFetchSummary is the task result persisted for administrators. The
+// skip counters are split by reason so the page can explain a run: an address
+// with a CI or GitHub address is not the same outcome as a repository that was
+// not Chinese, or an author dropped by the per-repository cap.
 type PromotionFetchSummary struct {
-	Repositories     int  `json:"repositories"`
-	AuthorsFound     int  `json:"authors_found"`
-	Inserted         int  `json:"inserted"`
-	SkippedDuplicate int  `json:"skipped_duplicate"`
-	SkippedFiltered  int  `json:"skipped_filtered"`
+	Repositories     int `json:"repositories"`
+	AuthorsFound     int `json:"authors_found"`
+	Inserted         int `json:"inserted"`
+	SkippedDuplicate int `json:"skipped_duplicate"`
+	SkippedFiltered  int `json:"skipped_filtered"`
+	// SkippedInvalidEmail counts distinct authors whose address was missing or
+	// machine-generated, counted once per author rather than once per commit.
+	SkippedInvalidEmail int `json:"skipped_invalid_email"`
+	// SkippedNonChineseProject counts repositories dropped by the chinese-project
+	// filter before any author was read.
+	SkippedNonChineseProject int `json:"skipped_non_chinese_project"`
+	// SkippedNonChineseAuthor counts authors dropped by the chinese-author filter.
+	SkippedNonChineseAuthor int `json:"skipped_non_chinese_author"`
+	// SkippedOverLimit counts authors dropped because a repository already filled
+	// its max_authors_per_repo slots.
+	SkippedOverLimit int `json:"skipped_over_limit"`
+	// RepositoryErrors counts repositories whose harvest call failed.
+	RepositoryErrors int  `json:"repository_errors"`
 	RateLimited      bool `json:"rate_limited"`
 	CursorReset      bool `json:"cursor_reset"`
 }
@@ -157,6 +173,7 @@ func RunOpenSourcePromotionFetch(
 				// A single inaccessible repository (empty, renamed, archived
 				// between search and fetch) must not abort the whole run.
 				logger.LogWarn(ctx, common.LogText("open source promotion: repository %s skipped: %v", repo.FullName, harvestErr))
+				summary.RepositoryErrors++
 				summary.SkippedFiltered++
 				processedRepos++
 				state.Processed = processedRepos
@@ -165,9 +182,16 @@ func RunOpenSourcePromotionFetch(
 			}
 
 			summary.Repositories++
-			summary.AuthorsFound += len(harvest.Authors)
-			summary.SkippedFiltered += harvest.Skipped
-			state.AuthorsSeen += len(harvest.Authors)
+			// AuthorsFound counts every distinct author with a usable address,
+			// before the per-repository cap; the page can then reconcile the
+			// numbers (found = inserted + duplicates + over-limit authors).
+			summary.AuthorsFound += harvest.AuthorsFound
+			summary.SkippedInvalidEmail += harvest.Skips.InvalidEmail
+			summary.SkippedNonChineseProject += harvest.Skips.NonChineseProject
+			summary.SkippedNonChineseAuthor += harvest.Skips.NonChineseAuthor
+			summary.SkippedOverLimit += harvest.Skips.OverLimit
+			summary.SkippedFiltered += harvest.Skips.Total()
+			state.AuthorsSeen += harvest.AuthorsFound
 			processedRepos++
 			state.Processed = processedRepos
 			state.Progress = promotionProgress(processedRepos, maxRepos)

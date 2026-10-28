@@ -2,10 +2,16 @@ package model
 
 import (
 	"slices"
+	"time"
 )
 
 // IQProbeHistoryLimit is the number of results kept per group and model.
 const IQProbeHistoryLimit = 20
+
+// IQProbeBaselineWindowSeconds bounds how far back a healthy result still
+// counts as a comparison point, so outputs from an earlier model generation
+// do not keep distorting the baseline.
+const IQProbeBaselineWindowSeconds = 7 * 24 * 60 * 60
 
 const (
 	IQProbeVerdictNormal  = "normal"
@@ -65,11 +71,18 @@ func RecordIQProbeResult(result *IQProbeResult) error {
 }
 
 // GetIQProbeBaseline returns recent successful results used to judge a new
-// result against the same group and model.
+// result against the same group and model. Failed and invalid results are
+// excluded because they carry no usable measurements. Suspect results stay in
+// on purpose: the judge compares against an upper quantile, which a minority of
+// shrunken rows cannot pull down, and dropping them would leave no reference at
+// all after a sustained degradation. Results older than
+// IQProbeBaselineWindowSeconds are ignored because the group model may have
+// changed since.
 func GetIQProbeBaseline(groupName string, modelName string) ([]IQProbeResult, error) {
 	results := []IQProbeResult{}
 	err := DB.Select("html_bytes", "completion_tokens", "reasoning_tokens").
-		Where("group_name = ? AND model_name = ? AND success = ? AND verdict <> ?", groupName, modelName, true, IQProbeVerdictInvalid).
+		Where("group_name = ? AND model_name = ? AND success = ? AND verdict <> ? AND created_at >= ?",
+			groupName, modelName, true, IQProbeVerdictInvalid, time.Now().Unix()-IQProbeBaselineWindowSeconds).
 		Order("created_at desc, id desc").Limit(IQProbeHistoryLimit).
 		Find(&results).Error
 	return results, err

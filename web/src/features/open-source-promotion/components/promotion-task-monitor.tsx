@@ -82,7 +82,10 @@ function PromotionTaskCard(props: PromotionTaskCardProps) {
   const stats =
     props.kind === 'fetch'
       ? [
-          { label: t('Authors found'), value: asNumber(state.authors_seen) },
+          {
+            label: t('Authors found'),
+            value: asNumber(result.authors_found ?? state.authors_seen),
+          },
           { label: t('Repositories'), value: asNumber(result.repositories) },
           { label: t('Inserted'), value: asNumber(result.inserted) },
           {
@@ -122,6 +125,30 @@ function PromotionTaskCard(props: PromotionTaskCardProps) {
         ))
       : null
 
+  // The reasons behind the skip number. Without them a large total reads as a
+  // failed run instead of the expected outcome of the configured filters.
+  const skipReasons: string[] = []
+  if (props.kind === 'fetch') {
+    const reasons: [number | undefined, string][] = [
+      [result.skipped_invalid_email, t('Invalid or machine address')],
+      [result.skipped_non_chinese_project, t('Non-Chinese project')],
+      [result.skipped_non_chinese_author, t('Non-Chinese author')],
+      [result.skipped_over_limit, t('Over author limit')],
+      [result.skipped_duplicate, t('Duplicate')],
+      [result.repository_errors, t('Repository errors')],
+    ]
+    for (const [value, label] of reasons) {
+      if ((value ?? 0) > 0) {
+        skipReasons.push(`${label} ${value}`)
+      }
+    }
+  }
+
+  const skipReasonsNode =
+    skipReasons.length > 0 ? (
+      <span className='text-muted-foreground'>{skipReasons.join(' · ')}</span>
+    ) : null
+
   let body: ReactNode
   if (!task || task.status === 'pending') {
     body = (
@@ -154,26 +181,31 @@ function PromotionTaskCard(props: PromotionTaskCardProps) {
     )
   } else {
     body = (
-      <div className='flex flex-wrap items-center gap-x-3 gap-y-1 text-xs'>
-        {statsNode ?? (
-          <span className='text-muted-foreground'>
-            {t('No task has run yet')}
-          </span>
-        )}
-        {props.kind === 'fetch' && result.rate_limited ? (
-          <StatusBadge label={t('Rate limited')} variant='warning' />
-        ) : null}
-        {props.kind === 'email' &&
-        result.skipped_reason === 'daily_limit_reached' ? (
-          <span className='text-muted-foreground'>
-            {t('Daily send limit reached')}
-          </span>
-        ) : null}
-        {props.kind === 'email' &&
-        result.skipped_reason === 'auto_send_disabled' ? (
-          <span className='text-muted-foreground'>
-            {t('Automatic sending is disabled')}
-          </span>
+      <div className='space-y-1'>
+        <div className='flex flex-wrap items-center gap-x-3 gap-y-1 text-xs'>
+          {statsNode ?? (
+            <span className='text-muted-foreground'>
+              {t('No task has run yet')}
+            </span>
+          )}
+          {props.kind === 'fetch' && result.rate_limited ? (
+            <StatusBadge label={t('Rate limited')} variant='warning' />
+          ) : null}
+          {props.kind === 'email' &&
+          result.skipped_reason === 'daily_limit_reached' ? (
+            <span className='text-muted-foreground'>
+              {t('Daily send limit reached')}
+            </span>
+          ) : null}
+          {props.kind === 'email' &&
+          result.skipped_reason === 'auto_send_disabled' ? (
+            <span className='text-muted-foreground'>
+              {t('Automatic sending is disabled')}
+            </span>
+          ) : null}
+        </div>
+        {skipReasonsNode ? (
+          <div className='text-xs'>{skipReasonsNode}</div>
         ) : null}
       </div>
     )

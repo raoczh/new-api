@@ -110,6 +110,11 @@ export type PromotionTaskResult = {
   inserted?: number
   skipped_duplicate?: number
   skipped_filtered?: number
+  skipped_invalid_email?: number
+  skipped_non_chinese_project?: number
+  skipped_non_chinese_author?: number
+  skipped_over_limit?: number
+  repository_errors?: number
   rate_limited?: boolean
   cursor_reset?: boolean
   sent?: number

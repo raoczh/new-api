@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -327,17 +328,49 @@ type githubAuthorCandidate struct {
 	LatestCommit string
 }
 
+// githubHarvestSkips explains why authors found in a repository were not kept.
+// Addresses are counted once per distinct author, not once per commit: a single
+// address can appear in dozens of commits, and counting each commit made the
+// skip number impossible to interpret.
+type githubHarvestSkips struct {
+	InvalidEmail      int
+	NonChineseProject int
+	NonChineseAuthor  int
+	OverLimit         int
+}
+
+func (skips githubHarvestSkips) Total() int {
+	return skips.InvalidEmail + skips.NonChineseProject + skips.NonChineseAuthor + skips.OverLimit
+}
+
 // githubHarvestResult is the outcome of harvesting one repository.
 type githubHarvestResult struct {
-	Repository  githubRepository
-	Authors     []githubAuthorCandidate
-	Skipped     int
-	RateLimited bool
+	Repository githubRepository
+	Authors    []githubAuthorCandidate
+	// AuthorsFound counts every distinct author with a usable address, including
+	// the ones a filter drops afterwards. Keeping it separate from len(Authors)
+	// lets the summary add up: found = kept + non-chinese authors + over limit.
+	AuthorsFound int
+	Skips        githubHarvestSkips
+	RateLimited  bool
 }
 
 var (
-	githubNoreplyDomains = []string{"users.noreply.github.com", "noreply.github.com", "example.com"}
-	githubChinaKeywords  = []string{
+	// githubReservedEmailDomains are never personal addresses. GitHub itself
+	// uses github.com for web-flow and service accounts (for example
+	// noreply@github.com), and the example.* domains are documentation
+	// placeholders that cannot receive mail.
+	githubReservedEmailDomains = []string{"github.com", "example.com", "example.org", "example.net"}
+	// githubReservedEmailTLDs are special-use names from RFC 2606/6761 and
+	// private networks; a machine address like build@host.local is not a person.
+	githubReservedEmailTLDs = []string{
+		"local", "localhost", "invalid", "test", "example",
+		"internal", "lan", "home", "corp", "arpa",
+	}
+	githubMachineEmailLocalParts = []string{
+		"noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon",
+	}
+	githubChinaKeywords = []string{
 		"china", "中国", "beijing", "北京", "shanghai", "上海", "shenzhen", "深圳",
 		"hangzhou", "杭州", "guangzhou", "广州", "chengdu", "成都", "wuhan", "武汉",
 		"nanjing", "南京", "xi'an", "xian", "西安", "suzhou", "苏州", "xiamen", "厦门",
@@ -349,18 +382,18 @@ var (
 )
 
 // githubEmailAllowed validates syntax, drops machine-generated addresses, and
-// applies the operator whitelist (exact address or domain).
+// applies the operator whitelist (exact address or domain). The reserved-domain
+// check runs first: an operator whitelist entry such as `@github.com` must not
+// reintroduce service accounts into the outreach list.
 func githubEmailAllowed(rawEmail string, whitelist []string) (string, bool) {
 	email, err := parseGitHubEmail(rawEmail)
 	if err != nil {
 		return "", false
 	}
-	lower := strings.ToLower(email)
-	for _, domain := range githubNoreplyDomains {
-		if strings.HasSuffix(lower, "@"+domain) {
-			return "", false
-		}
+	if githubEmailReserved(email) {
+		return "", false
 	}
+	lower := strings.ToLower(email)
 	if len(whitelist) == 0 {
 		return email, true
 	}
@@ -378,6 +411,35 @@ func githubEmailAllowed(rawEmail string, whitelist []string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// githubEmailReserved reports whether an address belongs to GitHub itself, a
+// documentation/private-use namespace, or a machine account. Addresses harvested
+// from commits legitimately include these (web-flow commits, CI bots, local
+// build hosts), but they can never reach a human.
+func githubEmailReserved(email string) bool {
+	lower := strings.ToLower(email)
+	at := strings.LastIndex(lower, "@")
+	if at < 0 {
+		return true
+	}
+	local, domain := lower[:at], lower[at+1:]
+	for _, reserved := range githubReservedEmailDomains {
+		if domain == reserved || strings.HasSuffix(domain, "."+reserved) {
+			return true
+		}
+	}
+	lastDot := strings.LastIndex(domain, ".")
+	if lastDot < 0 {
+		return true
+	}
+	if slices.Contains(githubReservedEmailTLDs, domain[lastDot+1:]) {
+		return true
+	}
+	if plus := strings.Index(local, "+"); plus >= 0 {
+		local = local[:plus]
+	}
+	return slices.Contains(githubMachineEmailLocalParts, local)
 }
 
 // parseGitHubEmail keeps the address part of a `Name <mail>` value.
@@ -510,7 +572,7 @@ type githubAuthorState struct {
 func (client *githubClient) harvestRepository(ctx context.Context, settings *operation_setting.OpenSourcePromotionSettings, repo *githubRepository) (*githubHarvestResult, error) {
 	result := &githubHarvestResult{Repository: *repo}
 	if settings.RequireChineseProject && !settings.TopicChinese && !githubLooksChineseProject(repo) {
-		result.Skipped++
+		result.Skips.NonChineseProject = 1
 		return result, nil
 	}
 
@@ -521,10 +583,14 @@ func (client *githubClient) harvestRepository(ctx context.Context, settings *ope
 
 	states := make(map[string]*githubAuthorState, len(commits))
 	order := make([]string, 0, len(commits))
+	// rejected tracks the authors whose address was unusable. Deduplicating by
+	// login (falling back to the raw address) counts one CI bot once instead of
+	// once per commit, which is what made the old skip number unreadable.
+	rejected := make(map[string]struct{})
 	for _, commit := range commits {
 		email, ok := githubEmailAllowed(commit.Commit.Author.Email, settings.EmailWhitelist)
 		if !ok {
-			result.Skipped++
+			rejected[githubRejectedAuthorKey(commit)] = struct{}{}
 			continue
 		}
 		state, exists := states[email]
@@ -588,7 +654,9 @@ func (client *githubClient) harvestRepository(ctx context.Context, settings *ope
 			}
 			email, ok := githubEmailAllowed(commitsForLogin[0].Commit.Author.Email, settings.EmailWhitelist)
 			if !ok {
-				result.Skipped++
+				// The same person may already have been counted from a commit;
+				// the key lookup keeps the total a count of authors, not of sightings.
+				rejected[githubRejectedAuthorKey(commitsForLogin[0])] = struct{}{}
 				continue
 			}
 			if state, exists := states[email]; exists {
@@ -612,6 +680,13 @@ func (client *githubClient) harvestRepository(ctx context.Context, settings *ope
 	}
 
 	candidates := make([]githubAuthorCandidate, 0, len(order))
+	// Addresses filtered out above are counted once per distinct author; the
+	// map is only read here, after every commit and pull request was examined.
+	result.Skips.InvalidEmail = len(rejected)
+	// AuthorsFound counts everyone with a usable address, before the optional
+	// chinese-author filter and the per-repository cap, so the summary adds up:
+	// found = inserted + duplicates + non-chinese authors + over-limit authors.
+	result.AuthorsFound = len(order)
 	for _, email := range order {
 		state := states[email]
 		if settings.RequireChineseAuthor && state.candidate.Login != "" {
@@ -621,7 +696,7 @@ func (client *githubClient) harvestRepository(ctx context.Context, settings *ope
 				state.candidate.AuthorName = firstNonEmpty(profile.Name, state.candidate.AuthorName)
 				state.candidate.ProfileUrl = firstNonEmpty(profile.HtmlUrl, state.candidate.ProfileUrl)
 				if !githubLooksChineseAuthor(profile.Location) {
-					result.Skipped++
+					result.Skips.NonChineseAuthor++
 					continue
 				}
 			case errors.Is(profileErr, errGitHubRateLimited):
@@ -635,11 +710,22 @@ func (client *githubClient) harvestRepository(ctx context.Context, settings *ope
 
 	sortCandidatesByActivity(candidates)
 	if len(candidates) > settings.MaxAuthorsPerRepo {
-		result.Skipped += len(candidates) - settings.MaxAuthorsPerRepo
+		result.Skips.OverLimit = len(candidates) - settings.MaxAuthorsPerRepo
 		candidates = candidates[:settings.MaxAuthorsPerRepo]
 	}
 	result.Authors = candidates
 	return result, nil
+}
+
+// githubRejectedAuthorKey identifies the person behind a commit whose address
+// was filtered out, so repeated commits by one bot count as a single skip.
+func githubRejectedAuthorKey(commit githubCommit) string {
+	if commit.Author != nil {
+		if login := strings.ToLower(strings.TrimSpace(commit.Author.Login)); login != "" {
+			return "login:" + login
+		}
+	}
+	return "email:" + strings.ToLower(strings.TrimSpace(commit.Commit.Author.Email))
 }
 
 // sortCandidatesByActivity orders by commit count, then pull request count. The

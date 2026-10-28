@@ -427,6 +427,11 @@ export function OpenSourcePromotionSettingsSection({
                         <FormControl>
                           <Input type='number' min={1} max={20} {...field} />
                         </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Authors kept per repository; raise it to harvest more addresses per run'
+                          )}
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

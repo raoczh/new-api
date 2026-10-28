@@ -6,9 +6,11 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	stdhtml "html"
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -27,10 +29,24 @@ const (
 	iqProbeTimeout            = 10 * time.Minute
 	// iqProbeMaxHTMLBytes keeps one stored generation within a sane row size.
 	iqProbeMaxHTMLBytes = 512 << 10
-	// iqProbeMinBaseline is the number of earlier results needed before
-	// output size comparisons are trusted.
-	iqProbeMinBaseline = 3
+	// iqProbeMinBaseline is the number of earlier healthy results needed before
+	// size comparisons are trusted.
+	iqProbeMinBaseline = 4
+	// A measurement below 25% of the reference is evidence on its own. Below
+	// 50% it only counts together with another signal, because a randomly drawn
+	// subject, scene and style legitimately differ in size.
+	iqProbeSevereDropPercent = 25
+	iqProbeMildDropPercent   = 50
 )
+
+// iqProbeAnimationMarkers cover SMIL, CSS (including vendor-prefixed
+// keyframes), the Web Animations API and the common JS loops, so an unusual
+// but real animation is not reported missing.
+var iqProbeAnimationMarkers = []string{
+	"<animate", "<set ", "<set>", "-keyframes", "animation:", "animation-name", "animation-duration",
+	"transition:", "transition-duration", "requestanimationframe", "setinterval", "settimeout",
+	"webgl", "gsap", "tween", ".animate(",
+}
 
 // iqProbePrompt is the prompt actually sent for one probe.
 type iqProbePrompt struct {
@@ -170,83 +186,215 @@ func extractIQProbeHTML(text string) string {
 		}
 		return strings.TrimSpace(body)
 	}
-	closing := "</html>"
 	start := strings.Index(lower, "<!doctype")
 	if start < 0 {
 		start = strings.Index(lower, "<html")
 	}
 	if start < 0 {
-		start, closing = strings.Index(lower, "<svg"), "</svg>"
+		start = strings.Index(lower, "<svg")
 	}
 	if start < 0 {
 		return text
 	}
 	end := len(text)
-	if idx := strings.LastIndex(lower, closing); idx > start {
-		end = idx + len(closing)
+	// Closing tags may be omitted, so fall back to the outermost one present;
+	// otherwise trailing explanations would be counted as page size.
+	for _, closing := range []string{"</html>", "</body>", "</svg>"} {
+		if idx := strings.LastIndex(lower, closing); idx >= start {
+			end = idx + len(closing)
+			break
+		}
 	}
 	return strings.TrimSpace(text[start:end])
 }
 
-func iqProbeMedian(values []int) int {
+// iqProbeReference returns the upper quartile of past measurements. Judging
+// against a high quantile instead of the median means a run of already shrunken
+// results cannot drag the reference down and hide the degradation, while a
+// single unusually large result still does not raise the bar.
+func iqProbeReference(values []int) int {
 	if len(values) == 0 {
 		return 0
 	}
 	sorted := slices.Clone(values)
 	slices.Sort(sorted)
-	return sorted[len(sorted)/2]
+	return sorted[(len(sorted)-1)*3/4]
+}
+
+// iqProbeDropLevel rates how far a measurement fell below the baseline:
+// 0 no drop, 1 mild, 2 severe. Unusable values report no drop, so a channel
+// that omits usage or a reasoning breakdown is not blamed for missing data.
+func iqProbeDropLevel(current int, baseline int) int {
+	if current <= 0 || baseline <= 0 {
+		return 0
+	}
+	switch {
+	case current*100 < baseline*iqProbeSevereDropPercent:
+		return 2
+	case current*100 < baseline*iqProbeMildDropPercent:
+		return 1
+	}
+	return 0
+}
+
+// iqProbePageContainsCode reports whether the page shows code. Models split
+// the code across text nodes, escape it, add separators or change its case, so
+// entities are decoded, tags dropped and only letters and digits compared.
+func iqProbePageContainsCode(html string, code string) bool {
+	want := iqProbeAlnum(code)
+	if want == "" {
+		return true
+	}
+	decoded := stdhtml.UnescapeString(html)
+	var text strings.Builder
+	inTag := false
+	for _, r := range decoded {
+		switch {
+		case r == '<':
+			inTag = true
+		case r == '>':
+			inTag = false
+		case !inTag && (unicode.IsLetter(r) || unicode.IsDigit(r)):
+			text.WriteRune(unicode.ToLower(r))
+		}
+	}
+	// Checking the decoded markup too keeps a code that only appears in an
+	// attribute or a <title> recognized.
+	return strings.Contains(text.String(), want) || strings.Contains(iqProbeAlnum(decoded), want)
+}
+
+func iqProbeAlnum(value string) string {
+	var result strings.Builder
+	for _, r := range value {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			result.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return result.String()
+}
+
+// iqProbeTruncated reports an answer that stopped mid-response. A missing
+// </html> is not a defect because browsers render the page anyway, but an
+// unfinished SVG, an opened <script>/<style> without its closing tag, or a
+// dangling tag means the upstream cut the answer off.
+func iqProbeTruncated(html string) bool {
+	lower := strings.ToLower(html)
+	if !strings.Contains(lower, "</svg>") {
+		return true
+	}
+	// JS and CSS compare with < and > constantly, so their contents are removed
+	// before looking for a dangling tag.
+	rest, ok := iqProbeStripRawText(lower, "script")
+	if !ok {
+		return true
+	}
+	if rest, ok = iqProbeStripRawText(rest, "style"); !ok {
+		return true
+	}
+	last := strings.LastIndexByte(rest, '<')
+	if last < 0 || strings.LastIndexByte(rest, '>') > last {
+		return false
+	}
+	// Text such as "2 < 3" does not open a tag, so it is not truncation.
+	if last+1 >= len(rest) {
+		return true
+	}
+	switch next := rest[last+1]; {
+	case next == '/', next == '!', next == '?':
+		return true
+	case next >= 'a' && next <= 'z':
+		return true
+	}
+	return false
+}
+
+// iqProbeStripRawText drops every <tag>…</tag> block. It reports false when an
+// opened block has no closing tag.
+func iqProbeStripRawText(html string, tag string) (string, bool) {
+	var out strings.Builder
+	rest := html
+	closing := "</" + tag + ">"
+	for {
+		start := strings.Index(rest, "<"+tag)
+		if start < 0 {
+			out.WriteString(rest)
+			return out.String(), true
+		}
+		end := strings.Index(rest[start:], closing)
+		if end < 0 {
+			return "", false
+		}
+		out.WriteString(rest[:start])
+		rest = rest[start+end+len(closing):]
+	}
 }
 
 // judgeIQProbe flags generations that are broken or far smaller than the
-// recent history of the same group and model. It is a heuristic signal, not
-// a quality score.
+// recent history of the same group and model. It is a heuristic signal, not a
+// quality score.
+//
+// The page size is the primary signal because it is what a reader actually
+// sees. Token counts only corroborate it: channels report completion and
+// reasoning tokens with different accounting, so a token drop alone is not
+// evidence of degradation. A mild size drop needs that corroboration, while a
+// severe drop or a missing animation stands on its own.
 func judgeIQProbe(html string, code string, usage *dto.Usage, baseline []model.IQProbeResult) (string, []string) {
 	lower := strings.ToLower(html)
-	var invalid, suspect []string
+	var invalid []string
 	if !strings.Contains(lower, "<svg") {
 		invalid = append(invalid, "no_svg")
-	} else if !strings.Contains(lower, "</svg>") || (strings.Contains(lower, "<html") && !strings.Contains(lower, "</html>")) {
+	} else if iqProbeTruncated(html) {
 		invalid = append(invalid, "truncated")
 	}
 	// A missing code means the page was not generated for this request.
-	if code != "" && !strings.Contains(html, code) {
+	if code != "" && !iqProbePageContainsCode(html, code) {
 		invalid = append(invalid, "code_missing")
 	}
 	if len(invalid) > 0 {
 		return model.IQProbeVerdictInvalid, invalid
 	}
-	animated := false
-	for _, marker := range []string{"<animate", "@keyframes", "requestanimationframe", "animation:", "animation-name", "setinterval", ".animate("} {
-		if strings.Contains(lower, marker) {
-			animated = true
-			break
-		}
-	}
-	if !animated {
-		suspect = append(suspect, "no_animation")
-	}
+	htmlDrop := 0
+	tokenDrops := 0
+	var dropped []string
 	if len(baseline) >= iqProbeMinBaseline {
-		htmlSizes, completions, reasonings := make([]int, 0, len(baseline)), make([]int, 0, len(baseline)), make([]int, 0, len(baseline))
+		htmlSizes := make([]int, 0, len(baseline))
+		completions := make([]int, 0, len(baseline))
+		reasonings := make([]int, 0, len(baseline))
 		for _, item := range baseline {
 			htmlSizes = append(htmlSizes, item.HTMLBytes)
 			completions = append(completions, item.CompletionTokens)
 			reasonings = append(reasonings, item.ReasoningTokens)
 		}
-		// Random subjects and styles vary in detail, so only a sharp drop counts.
-		if median := iqProbeMedian(htmlSizes); median > 0 && len(html)*4 < median {
-			suspect = append(suspect, "html_drop")
-		}
+		completionTokens, reasoningTokens := 0, 0
 		if usage != nil {
-			if median := iqProbeMedian(completions); median > 0 && usage.CompletionTokens*10 < median*4 {
-				suspect = append(suspect, "output_drop")
-			}
-			if median := iqProbeMedian(reasonings); median > 0 && usage.CompletionTokenDetails.ReasoningTokens*4 < median {
-				suspect = append(suspect, "reasoning_drop")
+			completionTokens = usage.CompletionTokens
+			reasoningTokens = usage.CompletionTokenDetails.ReasoningTokens
+		}
+		htmlDrop = iqProbeDropLevel(len(html), iqProbeReference(htmlSizes))
+		outputDrop := iqProbeDropLevel(completionTokens, iqProbeReference(completions))
+		reasoningDrop := iqProbeDropLevel(reasoningTokens, iqProbeReference(reasonings))
+		for _, item := range []struct {
+			reason string
+			level  int
+		}{{"html_drop", htmlDrop}, {"output_drop", outputDrop}, {"reasoning_drop", reasoningDrop}} {
+			if item.level > 0 {
+				dropped = append(dropped, item.reason)
 			}
 		}
+		// Reasoning tokens are already part of the completion count, so the two
+		// are one measurement, not two.
+		tokenDrops = max(outputDrop, reasoningDrop)
 	}
-	if len(suspect) > 0 {
-		return model.IQProbeVerdictSuspect, suspect
+	animated := slices.ContainsFunc(iqProbeAnimationMarkers, func(marker string) bool {
+		return strings.Contains(lower, marker)
+	})
+	switch {
+	case !animated:
+		return model.IQProbeVerdictSuspect, append(dropped, "no_animation")
+	case htmlDrop == 2:
+		return model.IQProbeVerdictSuspect, dropped
+	case htmlDrop == 1 && tokenDrops > 0:
+		return model.IQProbeVerdictSuspect, dropped
 	}
 	return model.IQProbeVerdictNormal, nil
 }
@@ -446,17 +594,20 @@ func runIQProbeForGroup(ctx context.Context, userID int, group string, spec oper
 			continue
 		}
 		html := extractIQProbeHTML(extractIQProbeText(result.responseBody, endpoint))
-		if len(html) > iqProbeMaxHTMLBytes {
-			html = html[:iqProbeMaxHTMLBytes]
-		}
 		baseline, err := model.GetIQProbeBaseline(group, spec.Name)
 		if err != nil {
 			common.SysError("failed to load IQ probe baseline: " + err.Error())
 		}
+		// Judge the whole answer before trimming it for storage: cutting first
+		// would leave a dangling tag and report a complete generation as
+		// truncated.
 		verdict, reasons := judgeIQProbe(html, prompt.Code, result.usage, baseline)
 		record.Success, record.ErrorMessage = true, ""
 		record.Verdict, record.VerdictReasons = verdict, strings.Join(reasons, ",")
-		record.HTML, record.HTMLBytes = model.LongText(html), len(html)
+		// HTMLBytes keeps the full size so later probes compare like with like,
+		// while the stored document is capped to keep the row small.
+		record.HTMLBytes = len(html)
+		record.HTML = model.LongText(html[:min(len(html), iqProbeMaxHTMLBytes)])
 		if result.usage != nil {
 			record.PromptTokens = result.usage.PromptTokens
 			record.CompletionTokens = result.usage.CompletionTokens
