@@ -27,52 +27,64 @@ function optionValue(group: string, model: string): string {
   return `${group}\u0000${model}`
 }
 
-export function parseModelOptionValue(
-  value: string
-): { group: string; model: string } {
+export function parseModelOptionValue(value: string): {
+  group: string
+  model: string
+} {
   const index = value.indexOf('\u0000')
   if (index < 0) return { group: '', model: value }
   return { group: value.slice(0, index), model: value.slice(index + 1) }
 }
 
 /**
- * The ratio line under a model name: group multiplier plus, for fixed-price
- * models, the exact amount one image or one request will cost in the current
- * group.
+ * The line under a model name: the fixed charge of a per-call model, or the
+ * input and output token prices of a token-billed one. The group multiplier is
+ * already applied by the server and is not shown on its own.
  *
  * `price_unit` comes from the billing expression and is authoritative. Older
  * servers only send `quota_type`, so a per-call model without a unit keeps the
  * historical per-image label.
  *
- * Token-billed models intentionally show no amount: the charge depends on the
- * number of output tokens, and inventing a fixed estimate would be misleading.
+ * Token prices are USD per 1M tokens. Each one is omitted when the billing
+ * expression never prices that category, and a model with no displayable price
+ * returns an empty string so the row stays single-line.
  */
 export function summarizeModelMeta(
   model: ImageStudioModelOption,
   t: (key: string, options?: Record<string, unknown>) => string
 ): string {
-  const ratioText = t('Ratio: {{value}}', {
-    value: formatRatio(model.group_ratio),
-  })
   if (model.price > 0) {
     const price = formatBillingCurrencyFromUSD(model.price, {
       digitsLarge: 4,
       digitsSmall: 6,
     })
     if (model.price_unit === 'request') {
-      return `${ratioText} · ${price} / ${t('request')}`
+      return `${price} / ${t('request')}`
     }
     if (model.price_unit === 'image' || model.quota_type === 1) {
-      return `${ratioText} · ${t('{{price}} / image', { price })}`
+      return t('{{price}} / image', { price })
     }
   }
-  return ratioText
-}
 
-export function formatRatio(ratio: number): string {
-  if (!Number.isFinite(ratio)) return '-'
-  // Trim float noise from multiplied ratios (1.3000000000000003).
-  return String(Number(ratio.toFixed(4)))
+  const tokenPrices = [
+    ['Input {{price}} / 1M tokens', model.input_price],
+    ['Output {{price}} / 1M tokens', model.output_price],
+  ] as const
+  const lines: string[] = []
+  for (const [key, amount] of tokenPrices) {
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+      continue
+    }
+    lines.push(
+      t(key, {
+        price: formatBillingCurrencyFromUSD(amount, {
+          digitsLarge: 4,
+          digitsSmall: 6,
+        }),
+      })
+    )
+  }
+  return lines.join(' · ')
 }
 
 /** Flatten groups into the selector's option list, preserving group order. */

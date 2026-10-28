@@ -34,8 +34,6 @@ function model(
   return {
     model: 'gpt-image-1',
     quota_type: 1,
-    group_ratio: 1,
-    model_ratio: 1,
     price: 0,
     ...overrides,
   }
@@ -46,7 +44,7 @@ test('a tiered fixed per-image price is shown per image', () => {
     model({ price: 0.04, price_unit: 'image' }),
     translate
   )
-  expect(meta).toBe('Ratio: 1 · $0.04 / image')
+  expect(meta).toBe('$0.04 / image')
 })
 
 test('a tiered fixed per-request price is not mislabeled as per image', () => {
@@ -55,7 +53,7 @@ test('a tiered fixed per-request price is not mislabeled as per image', () => {
     model({ price: 0.02, price_unit: 'request', quota_type: 1 }),
     translate
   )
-  expect(meta).toBe('Ratio: 1 · $0.02 / request')
+  expect(meta).toBe('$0.02 / request')
 })
 
 test('legacy per-call pricing without price_unit still renders per image', () => {
@@ -63,10 +61,23 @@ test('legacy per-call pricing without price_unit still renders per image', () =>
     model({ price: 0.25, quota_type: 1 }),
     translate
   )
-  expect(meta).toBe('Ratio: 1 · $0.25 / image')
+  expect(meta).toBe('$0.25 / image')
 })
 
-test('token-priced models show only the ratio', () => {
-  const meta = summarizeModelMeta(model({ price: 0, quota_type: 0 }), translate)
-  expect(meta).toBe('Ratio: 1')
+test('token-priced models show the input and output prices instead of a ratio', () => {
+  const meta = summarizeModelMeta(
+    model({ quota_type: 0, input_price: 2, output_price: 8 }),
+    translate
+  )
+  expect(meta).toBe('Input $2 / 1M tokens · Output $8 / 1M tokens')
+})
+
+test('a token-priced model missing one side shows only the price it has', () => {
+  expect(
+    summarizeModelMeta(model({ quota_type: 0, output_price: 8 }), translate)
+  ).toBe('Output $8 / 1M tokens')
+})
+
+test('a model with no displayable price keeps the row single-line', () => {
+  expect(summarizeModelMeta(model({ quota_type: 0 }), translate)).toBe('')
 })

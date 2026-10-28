@@ -27,11 +27,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toIntlLocale } from '@/i18n/languages'
 import { useAuthStore } from '@/stores/auth-store'
 
+import type { SubmitImageStudioTaskPayload } from './api'
 import { ImageStudioComposer } from './components/studio-composer'
 import { ImageStudioHistory } from './components/task-history'
-import type { SubmitImageStudioTaskPayload } from './api'
 import { useImageStudioDraft } from './hooks/use-image-studio-draft'
-import { useImageStudioConfig, useImageStudioModels } from './hooks/use-image-studio-options'
+import {
+  useImageStudioConfig,
+  useImageStudioModels,
+} from './hooks/use-image-studio-options'
 import { useImageStudioSubmit } from './hooks/use-image-studio-tasks'
 import type { ImageStudioTask } from './types'
 
@@ -174,7 +177,20 @@ export function ImageStudioPage() {
           polishModel={polishModel}
           draft={draft}
           onModelChange={(model, group) => setSelection({ model, group })}
-          onGroupChange={(group) => setSelection((previous) => ({ ...previous, group }))}
+          onGroupChange={(group) =>
+            // A model is offered per group, so a group switch must land on a
+            // model that group actually serves instead of keeping a stale pair.
+            setSelection((previous) => {
+              const models =
+                modelsQuery.groups.find((item) => item.group === group)
+                  ?.models ?? []
+              const kept = models.some((item) => item.model === previous.model)
+              return {
+                group,
+                model: kept ? previous.model : (models[0]?.model ?? ''),
+              }
+            })
+          }
           onSubmit={handleSubmit}
         />
 

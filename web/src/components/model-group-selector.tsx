@@ -71,11 +71,16 @@ import {
 export interface ModelOption {
   label: string
   value: string
+  /**
+   * Group the option belongs to. When every option carries one, clicking a
+   * group in the left column narrows the model list to that group.
+   */
   category?: string
   description?: string
   /**
-   * Right-aligned billing hint (ratio, per-call price). Left undefined by
-   * callers that do not show pricing, which keeps the row single-line.
+   * Billing hint under the model name (per-call or token price). Left
+   * undefined by callers that do not show pricing, which keeps the row
+   * single-line.
    */
   meta?: string
 }
@@ -581,6 +586,9 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  // Set by clicking a group while the panel is open, so the model list can be
+  // narrowed down without changing the panel's default "all groups" view.
+  const [groupFilter, setGroupFilter] = useState<string | null>(null)
   const isMobile = useIsMobile()
   const groupScrollContainerRef = useRef<HTMLDivElement | null>(null)
   const selectedGroupOptionRef = useRef<HTMLButtonElement | null>(null)
@@ -594,13 +602,26 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
     () => groups.find((group) => group.value === selectedGroup),
     [groups, selectedGroup]
   )
+  // Callers whose models carry no category (the chat playground) keep listing
+  // every model after a group click; only grouped lists can be filtered.
+  const activeGroupFilter = useMemo(() => {
+    if (!groupFilter) {
+      return null
+    }
+    return models.some((model) => model.category === groupFilter)
+      ? groupFilter
+      : null
+  }, [groupFilter, models])
   const filteredModels = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
-    if (!query) {
-      return models
-    }
 
     return models.filter((model) => {
+      if (activeGroupFilter && model.category !== activeGroupFilter) {
+        return false
+      }
+      if (!query) {
+        return true
+      }
       const searchableText = [
         model.label,
         model.value,
@@ -612,7 +633,7 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
 
       return searchableText.includes(query)
     })
-  }, [models, searchQuery])
+  }, [models, searchQuery, activeGroupFilter])
 
   const handleModelChange = useCallback(
     (value: string) => {
@@ -625,10 +646,19 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
 
   const handleGroupChange = useCallback(
     (value: string) => {
+      setGroupFilter(value)
       onGroupChange(value)
     },
     [onGroupChange]
   )
+
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen)
+    if (nextOpen) {
+      // Every fresh opening starts from the unfiltered list again.
+      setGroupFilter(null)
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) {
@@ -823,7 +853,7 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
   )
 
   return isMobile ? (
-    <Drawer open={open} onOpenChange={setOpen}>
+    <Drawer open={open} onOpenChange={handleOpenChange}>
       <DrawerTrigger asChild>{renderTrigger()}</DrawerTrigger>
       <DrawerContent className='flex max-h-[80vh] min-h-[60vh] flex-col'>
         <DrawerHeader className='pb-3 text-left'>
@@ -835,7 +865,7 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
       </DrawerContent>
     </Drawer>
   ) : (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger render={renderTrigger()} />
       <PopoverContent
         align='end'

@@ -31,19 +31,24 @@ export interface ImageStudioConfig {
   smtp_configured: boolean
 }
 
-/** One model under a group, with the ratio and fixed price it will bill. */
+/** One model under a group, with the prices it will bill for that group. */
 export interface ImageStudioModelOption {
   model: string
   description?: string
   quota_type: number
-  group_ratio: number
-  model_ratio: number
   price: number
   /**
    * How `price` is charged: `image` for a per-image amount, `request` for a
    * per-request one. Absent for token-priced models.
    */
   price_unit?: 'image' | 'request'
+  /**
+   * Token prices in USD per 1M tokens, group ratio already applied. Sent only
+   * for token-priced models, and each one may be omitted when the billing
+   * expression never prices that token category.
+   */
+  input_price?: number
+  output_price?: number
 }
 
 /** A billing group plus the image models it exposes. */

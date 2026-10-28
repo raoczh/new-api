@@ -47,6 +47,33 @@ func withImageStudioPricingConfig(t *testing.T, modelPrices, groupRatios map[str
 	model.InvalidatePricingCache()
 }
 
+// withImageStudioTokenRatios installs legacy ratio pricing (model ratio and
+// completion ratio) for the named models and restores both tables afterwards.
+//
+// The setters replace the whole table, so the original JSON is replayed rather
+// than individual keys being written back.
+func withImageStudioTokenRatios(t *testing.T, modelRatios, completionRatios map[string]float64) {
+	t.Helper()
+
+	originalModelRatios := ratio_setting.ModelRatio2JSONString()
+	originalCompletionRatios := ratio_setting.CompletionRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(originalModelRatios))
+		require.NoError(t, ratio_setting.UpdateCompletionRatioByJSONString(originalCompletionRatios))
+		model.InvalidatePricingCache()
+	})
+
+	ratioBytes, err := common.Marshal(modelRatios)
+	require.NoError(t, err)
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(string(ratioBytes)))
+
+	completionBytes, err := common.Marshal(completionRatios)
+	require.NoError(t, err)
+	require.NoError(t, ratio_setting.UpdateCompletionRatioByJSONString(string(completionBytes)))
+
+	model.InvalidatePricingCache()
+}
+
 func setupImageStudioControllerTest(t *testing.T, models ...string) {
 	t.Helper()
 
@@ -277,6 +304,9 @@ func TestListImageStudioModelsResolvesTieredFixedPrices(t *testing.T) {
 	assert.InDelta(t, 0.08, perImage.Price, 1e-9)
 	assert.Equal(t, "image", perImage.PriceUnit)
 	assert.Equal(t, 1, perImage.QuotaType)
+	// A fixed charge is the whole price; token prices would double-count it.
+	assert.Nil(t, perImage.InputPrice)
+	assert.Nil(t, perImage.OutputPrice)
 
 	perRequest := findImageStudioModelOption(t, groups, "default", "zz-image-fixed-per-request")
 	assert.InDelta(t, 0.04, perRequest.Price, 1e-9)
@@ -289,10 +319,72 @@ func TestListImageStudioModelsResolvesTieredFixedPrices(t *testing.T) {
 	tokenPriced := findImageStudioModelOption(t, groups, "default", "zz-image-fixed-token")
 	assert.Zero(t, tokenPriced.Price)
 	assert.Empty(t, tokenPriced.PriceUnit)
-
+	// `p * 1 + c * 2` is USD per 1M tokens, so the selector gets both sides,
+	// each already scaled by the "default" group ratio of 2.
+	require.NotNil(t, tokenPriced.InputPrice)
+	require.NotNil(t, tokenPriced.OutputPrice)
+	assert.InDelta(t, 2, *tokenPriced.InputPrice, 1e-9)
+	assert.InDelta(t, 4, *tokenPriced.OutputPrice, 1e-9)
 	legacy := findImageStudioModelOption(t, groups, "default", "zz-image-legacy")
 	assert.InDelta(t, 0.5, legacy.Price, 1e-9)
 	assert.Equal(t, "image", legacy.PriceUnit)
+}
+
+func TestListImageStudioModelsReportsLegacyRatioPricingAsTokenPrices(t *testing.T) {
+	// Legacy billing charges tokens * model_ratio * group_ratio quota units, and
+	// QuotaPerUnit of them make one USD. The selector needs that converted into
+	// USD per 1M tokens, with the completion ratio applied to the output side.
+	previousQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 500000
+	t.Cleanup(func() { common.QuotaPerUnit = previousQuotaPerUnit })
+
+	setupImageStudioControllerTest(t, "zz-image-ratio")
+	withImageStudioPricingConfig(t,
+		// An empty price table keeps these models on token pricing.
+		map[string]float64{},
+		map[string]float64{"default": 2},
+	)
+	withImageStudioTokenRatios(t,
+		map[string]float64{"zz-image-ratio": 1},
+		map[string]float64{"zz-image-ratio": 3},
+	)
+
+	groups := requestImageStudioModels(t)
+	option := findImageStudioModelOption(t, groups, "default", "zz-image-ratio")
+
+	assert.Zero(t, option.Price)
+	assert.Empty(t, option.PriceUnit)
+	require.NotNil(t, option.InputPrice)
+	require.NotNil(t, option.OutputPrice)
+	// 1 * 1_000_000 * 2 / 500_000 = 4 USD per 1M input tokens.
+	assert.InDelta(t, 4, *option.InputPrice, 1e-9)
+	assert.InDelta(t, 12, *option.OutputPrice, 1e-9)
+}
+
+func TestListImageStudioModelsFallsBackToImageTokenPrices(t *testing.T) {
+	// Gemini image models are commonly priced on image tokens rather than text,
+	// so an expression that only references img / img_o must still produce a
+	// pair of displayable prices.
+	withTieredBillingConfig(t, map[string]string{
+		"zz-image-img-tokens": "tiered_expr",
+	}, map[string]string{
+		"zz-image-img-tokens": `tier("base", img * 1.5 + img_o * 6)`,
+	})
+	setupImageStudioControllerTest(t, "zz-image-img-tokens")
+	withImageStudioPricingConfig(t,
+		map[string]float64{"zz-image-img-tokens": 0.25},
+		map[string]float64{"default": 2},
+	)
+
+	groups := requestImageStudioModels(t)
+	option := findImageStudioModelOption(t, groups, "default", "zz-image-img-tokens")
+
+	assert.Zero(t, option.Price)
+	assert.Empty(t, option.PriceUnit)
+	require.NotNil(t, option.InputPrice)
+	require.NotNil(t, option.OutputPrice)
+	assert.InDelta(t, 3, *option.InputPrice, 1e-9)
+	assert.InDelta(t, 12, *option.OutputPrice, 1e-9)
 }
 
 // withConfiguredModelTypes installs the model type table used by the

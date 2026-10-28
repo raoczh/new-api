@@ -503,23 +503,24 @@ func GetImageStudioConfig(c *gin.Context) {
 
 // imageStudioModelOption is one selectable image model under a group.
 //
-// Ratio and Price are resolved for the calling account so the selector can show
-// the same numbers the billing path will use: Ratio is the group multiplier,
-// Price is the fixed charge already multiplied by it.
+// Prices are resolved for the calling account so the selector shows the same
+// numbers the billing path will use: Price is the fixed charge and the token
+// prices are already multiplied by the group ratio.
 //
 // PriceUnit says how to label Price: "image" for a per-image charge and
-// "request" for a per-request one. It is empty for token-priced models, which
-// have no fixed amount to show. Tiered expressions are the source of truth
-// whenever BillingMode is tiered_expr; their legacy QuotaType/ModelPrice values
-// may still be configured but are no longer used for billing.
+// "request" for a per-request one. A fixed-price model sends no token prices;
+// a token-priced model sends only InputPrice and OutputPrice (USD per 1M
+// tokens). Tiered expressions are the source of truth whenever BillingMode is
+// tiered_expr; their legacy QuotaType/ModelPrice values may still be configured
+// but are no longer used for billing.
 type imageStudioModelOption struct {
-	Model       string  `json:"model"`
-	Description string  `json:"description,omitempty"`
-	QuotaType   int     `json:"quota_type"`
-	GroupRatio  float64 `json:"group_ratio"`
-	ModelRatio  float64 `json:"model_ratio"`
-	Price       float64 `json:"price"`
-	PriceUnit   string  `json:"price_unit,omitempty"`
+	Model       string   `json:"model"`
+	Description string   `json:"description,omitempty"`
+	QuotaType   int      `json:"quota_type"`
+	Price       float64  `json:"price"`
+	PriceUnit   string   `json:"price_unit,omitempty"`
+	InputPrice  *float64 `json:"input_price,omitempty"`
+	OutputPrice *float64 `json:"output_price,omitempty"`
 }
 
 type imageStudioGroupOption struct {
@@ -565,17 +566,25 @@ func ListImageStudioModels(c *gin.Context) {
 				Model:       item.ModelName,
 				Description: item.Description,
 				QuotaType:   item.QuotaType,
-				GroupRatio:  groupRatio,
-				ModelRatio:  item.ModelRatio,
 			}
 			if item.BillingMode == billing_setting.BillingModeTieredExpr && strings.TrimSpace(item.BillingExpr) != "" {
 				// A tiered model may still carry a legacy per-call price; the
 				// expression decides what is actually charged, so only a fixed
 				// leaf can produce a number the selector may display.
 				option.Price, option.PriceUnit = imageStudioFixedPrice(item.BillingExpr, groupRatio)
+				if option.PriceUnit == "" {
+					option.InputPrice, option.OutputPrice = imageStudioTokenPrices(item.BillingExpr, groupRatio)
+				}
 			} else if item.QuotaType == 1 {
 				option.Price = item.ModelPrice * groupRatio
 				option.PriceUnit = "image"
+			} else if common.QuotaPerUnit > 0 {
+				// Legacy ratio pricing charges tokens * model_ratio * group_ratio
+				// quota units, and QuotaPerUnit units make one USD.
+				inputPrice := item.ModelRatio * 1_000_000 * groupRatio / common.QuotaPerUnit
+				outputPrice := inputPrice * item.CompletionRatio
+				option.InputPrice = &inputPrice
+				option.OutputPrice = &outputPrice
 			}
 			models = append(models, option)
 		}
@@ -644,6 +653,48 @@ func imageStudioFixedPrice(expression string, groupRatio float64) (float64, stri
 		}
 	}
 	return *trace.FixedPrice * groupRatio, unit
+}
+
+// imageStudioTokenPrices recovers the token prices a tiered expression charges,
+// in USD per 1M tokens and already multiplied by the group ratio.
+//
+// Expression coefficients are USD per 1M tokens, so running the expression with
+// one prompt token and no completion tokens yields the input price, and the
+// reverse yields the output price. Other token categories stay at zero; a
+// variable the expression never prices returns nil rather than a misleading 0.
+// Conditional branches resolve to their default because no request headers or
+// body are supplied.
+//
+// Image models are frequently priced on image tokens instead of text: the input
+// side falls back to img and the output side to img_o when the expression leaves
+// p or c unpriced, which is how Gemini image models are usually configured.
+func imageStudioTokenPrices(expression string, groupRatio float64) (*float64, *float64) {
+	usedVars := billingexpr.UsedVars(expression)
+	if len(usedVars) == 0 {
+		return nil, nil
+	}
+	priceFor := func(params billingexpr.TokenParams) *float64 {
+		cost, _, err := billingexpr.RunExprWithRequest(expression, params, billingexpr.RequestInput{})
+		if err != nil || cost <= 0 {
+			return nil
+		}
+		price := cost * groupRatio
+		return &price
+	}
+	var inputPrice, outputPrice *float64
+	switch {
+	case usedVars["p"]:
+		inputPrice = priceFor(billingexpr.TokenParams{P: 1})
+	case usedVars["img"]:
+		inputPrice = priceFor(billingexpr.TokenParams{Img: 1})
+	}
+	switch {
+	case usedVars["c"]:
+		outputPrice = priceFor(billingexpr.TokenParams{C: 1})
+	case usedVars["img_o"]:
+		outputPrice = priceFor(billingexpr.TokenParams{ImgO: 1})
+	}
+	return inputPrice, outputPrice
 }
 
 // imageStudioIsImageModel decides whether a priced model belongs on this page.
