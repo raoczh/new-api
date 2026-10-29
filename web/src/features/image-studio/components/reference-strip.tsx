@@ -42,7 +42,9 @@ export interface ImageStudioReferenceStripProps {
   onEditMask?: (uid: string) => void
 }
 
-export function ImageStudioReferenceStrip(props: ImageStudioReferenceStripProps) {
+export function ImageStudioReferenceStrip(
+  props: ImageStudioReferenceStripProps
+) {
   const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const full = props.references.length >= props.maxReferences
@@ -52,7 +54,7 @@ export function ImageStudioReferenceStrip(props: ImageStudioReferenceStripProps)
       {props.references.map((reference, index) => (
         <div
           key={reference.uid}
-          className='group/ref bg-muted/60 relative size-20 shrink-0 overflow-hidden rounded-lg border'
+          className='group/ref bg-muted/60 border-border/60 relative size-20 shrink-0 overflow-hidden rounded-xl border shadow-(--tc-shadow-sm)'
         >
           <img
             src={reference.url}
@@ -89,7 +91,11 @@ export function ImageStudioReferenceStrip(props: ImageStudioReferenceStripProps)
                 variant='ghost'
                 className='text-white hover:bg-white/20 hover:text-white'
                 aria-label={t('Paint a mask on this image')}
-                disabled={props.disabled || reference.uploading || Boolean(reference.error)}
+                disabled={
+                  props.disabled ||
+                  reference.uploading ||
+                  Boolean(reference.error)
+                }
                 onClick={() => props.onEditMask?.(reference.uid)}
               >
                 <PencilIcon className='size-3' aria-hidden='true' />
@@ -127,8 +133,8 @@ export function ImageStudioReferenceStrip(props: ImageStudioReferenceStripProps)
           disabled={props.disabled}
           onClick={() => inputRef.current?.click()}
           className={cn(
-            'border-border/70 text-muted-foreground hover:border-primary/50 hover:text-foreground',
-            'flex size-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed',
+            'border-border text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary',
+            'flex size-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed transition-colors',
             'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
             'disabled:cursor-not-allowed disabled:opacity-50'
           )}
@@ -148,7 +154,7 @@ export function ImageStudioReferenceStrip(props: ImageStudioReferenceStripProps)
         multiple
         className='hidden'
         onChange={(event) => {
-          const files = Array.from(event.target.files ?? [])
+          const files = [...(event.target.files ?? [])]
           if (files.length > 0) props.onAddFiles(files)
           // Reset so picking the same file twice still fires a change event.
           event.target.value = ''

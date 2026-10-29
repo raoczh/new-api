@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
 
 import type { ImageStudioTask } from '../../types'
@@ -60,6 +60,40 @@ function renderCard(
     />
   )
 }
+
+test('a multi-image record shows its image count on the cover', () => {
+  const task = makeTask({
+    images: ['https://img.example.com/a.png', 'https://img.example.com/b.png'],
+  })
+  renderCard(task, () => undefined)
+
+  const cover = screen.getByRole('button', {
+    name: 'Open details for A lighthouse at dusk',
+  })
+  expect(within(cover).getByText('2 images')).toBeInTheDocument()
+})
+
+test('the favorite toggle stays reachable by keyboard on a record not yet favorited', () => {
+  const onToggleFavorite = vi.fn()
+  const task = makeTask()
+  render(
+    <ImageStudioTaskCard
+      task={task}
+      selected={false}
+      selectionMode={false}
+      onSelectChange={() => undefined}
+      onOpen={() => undefined}
+      onToggleFavorite={onToggleFavorite}
+    />
+  )
+
+  const toggle = screen.getByRole('button', { name: 'Add to favorites' })
+  expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  toggle.focus()
+  expect(toggle).toHaveFocus()
+  fireEvent.click(toggle)
+  expect(onToggleFavorite).toHaveBeenCalledWith(task)
+})
 
 test('a failed record still opens its detail panel from the history grid', () => {
   const task = makeTask({

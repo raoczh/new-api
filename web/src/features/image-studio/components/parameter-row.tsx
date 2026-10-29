@@ -44,6 +44,12 @@ interface Choice {
   value: string
 }
 
+const FORMAT_CHOICES: Choice[] = [
+  { label: 'PNG', value: 'png' },
+  { label: 'JPEG', value: 'jpeg' },
+  { label: 'WebP', value: 'webp' },
+]
+
 export interface ImageStudioParameterRowProps {
   draft: ImageStudioParamDraft
   maxImages: number
@@ -63,20 +69,11 @@ export function ImageStudioParameterRow(props: ImageStudioParameterRowProps) {
       })),
     [t]
   )
-  const formatChoices = useMemo<Choice[]>(
-    () => [
-      { label: 'PNG', value: 'png' },
-      { label: 'JPEG', value: 'jpeg' },
-      { label: 'WebP', value: 'webp' },
-    ],
-    [t]
-  )
-
   const qualityLabel =
-    qualityChoices.find((choice) => choice.value === props.draft.quality)?.label ??
-    props.draft.quality
+    qualityChoices.find((choice) => choice.value === props.draft.quality)
+      ?.label ?? props.draft.quality
   const formatLabel =
-    formatChoices.find((choice) => choice.value === props.draft.outputFormat)
+    FORMAT_CHOICES.find((choice) => choice.value === props.draft.outputFormat)
       ?.label ?? props.draft.outputFormat.toUpperCase()
 
   return (
@@ -97,23 +94,26 @@ export function ImageStudioParameterRow(props: ImageStudioParameterRowProps) {
         label={t('Count')}
         value={String(props.draft.n)}
         disabled={props.disabled}
-        options={Array.from({ length: Math.max(1, props.maxImages) }, (_, index) => ({
-          label: t('{{count}} images', { count: index + 1 }),
-          value: String(index + 1),
-        }))}
+        options={Array.from(
+          { length: Math.max(1, props.maxImages) },
+          (_, index) => ({
+            label: t('{{count}} images', { count: index + 1 }),
+            value: String(index + 1),
+          })
+        )}
         onSelect={(value) => props.onChange({ n: Number(value) })}
       />
       <ParameterChip
         label={t('Format')}
         value={formatLabel}
         disabled={props.disabled}
-        options={formatChoices}
+        options={FORMAT_CHOICES}
         onSelect={(value) => props.onChange({ outputFormat: value })}
       />
 
       <label
         className={cn(
-          'border-border/70 flex h-7 cursor-pointer items-center gap-2 rounded-full border px-2.5 text-[11px]',
+          'border-border/60 bg-background hover:border-primary/40 flex h-8 cursor-pointer items-center gap-2 rounded-full border px-3 text-xs transition-colors',
           props.disabled && 'cursor-not-allowed opacity-50'
         )}
       >
@@ -150,14 +150,17 @@ function ParameterChip(props: ParameterChipProps) {
             disabled={props.disabled}
             aria-label={`${props.label}: ${props.value}`}
             className={cn(
-              'border-border/70 hover:bg-accent flex h-7 items-center gap-1 rounded-full border px-2.5 text-[11px]',
+              'border-border/60 bg-background hover:border-primary/40 hover:bg-primary/5 aria-expanded:border-primary/50 aria-expanded:bg-primary/5 flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors',
               'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
               'disabled:cursor-not-allowed disabled:opacity-50'
             )}
           >
             <span className='text-muted-foreground'>{props.label}</span>
             <span className='font-medium'>{props.value}</span>
-            <ChevronDownIcon className='text-muted-foreground size-3' aria-hidden='true' />
+            <ChevronDownIcon
+              className='text-muted-foreground size-3'
+              aria-hidden='true'
+            />
           </button>
         }
       />

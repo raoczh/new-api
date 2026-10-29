@@ -71,18 +71,16 @@ func RecordIQProbeResult(result *IQProbeResult) error {
 }
 
 // GetIQProbeBaseline returns recent successful results used to judge a new
-// result against the same group and model. Failed and invalid results are
-// excluded because they carry no usable measurements. Suspect results stay in
-// on purpose: the judge compares against an upper quantile, which a minority of
-// shrunken rows cannot pull down, and dropping them would leave no reference at
-// all after a sustained degradation. Results older than
-// IQProbeBaselineWindowSeconds are ignored because the group model may have
-// changed since.
+// result against the same group and model. Only normal results count: failed
+// and invalid ones carry no usable measurements, and suspect ones would let a
+// sustained degradation pull the reference down until it looks normal again.
+// Results older than IQProbeBaselineWindowSeconds are ignored because the
+// group model may have changed since.
 func GetIQProbeBaseline(groupName string, modelName string) ([]IQProbeResult, error) {
 	results := []IQProbeResult{}
 	err := DB.Select("html_bytes", "completion_tokens", "reasoning_tokens").
-		Where("group_name = ? AND model_name = ? AND success = ? AND verdict <> ? AND created_at >= ?",
-			groupName, modelName, true, IQProbeVerdictInvalid, time.Now().Unix()-IQProbeBaselineWindowSeconds).
+		Where("group_name = ? AND model_name = ? AND success = ? AND verdict = ? AND created_at >= ?",
+			groupName, modelName, true, IQProbeVerdictNormal, time.Now().Unix()-IQProbeBaselineWindowSeconds).
 		Order("created_at desc, id desc").Limit(IQProbeHistoryLimit).
 		Find(&results).Error
 	return results, err

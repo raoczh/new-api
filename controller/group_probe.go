@@ -138,6 +138,45 @@ func channelProbeEndpoint(channel *model.Channel, name string) string {
 	return probeEndpoint(name, channelEndpoints)
 }
 
+// runGroupModelProbe tries the channels that explicitly offer this model. The
+// request router also supports normalized-name fallbacks, but a synthetic check
+// must not attribute a result to a model the selected channel does not list.
+func runGroupModelProbe(ctx context.Context, userID int, group, name string) (int, bool) {
+	var triedChannelIDs []int
+	tested := 0
+	for ctx.Err() == nil {
+		var filters []dto.ChannelFilter
+		if len(triedChannelIDs) > 0 {
+			filters = []dto.ChannelFilter{{
+				Kind:              dto.FilterExcludeChannels,
+				ExcludeChannelIds: triedChannelIDs,
+			}}
+		}
+		channel, err := model.GetRandomSatisfiedChannel(group, name, 0, filters)
+		if err != nil || channel == nil {
+			break
+		}
+		triedChannelIDs = append(triedChannelIDs, channel.Id)
+		if channel.Status != common.ChannelStatusEnabled ||
+			channel.Type == constant.ChannelTypeTaskPlugin ||
+			!slices.Contains(channel.GetModels(), name) {
+			continue
+		}
+		endpoint := channelProbeEndpoint(channel, name)
+		if endpoint == "" {
+			continue
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+		result := runChannelTest(probeCtx, channel, userID, name, endpoint, shouldUseStreamForAutomaticChannelTest(channel), channelTestOptions{group: group, probe: true})
+		cancel()
+		tested++
+		if result.localErr == nil && result.newAPIError == nil {
+			return tested, true
+		}
+	}
+	return tested, false
+}
+
 func (groupProbeHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
 	if !(groupProbeHandler{}).Enabled() {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, nil, nil)
@@ -190,40 +229,20 @@ func (groupProbeHandler) Run(ctx context.Context, task *model.SystemTask, runner
 		models := groupModels[group]
 		slices.Sort(models)
 		models = slices.Compact(models)
-		name := rotation.Next(models)
-		// Persist before making a paid request so interruptions retain rotation.
-		if err = model.UpdateSystemTaskState(task.TaskID, runnerID, state); err != nil {
-			finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, state, err)
-			return
-		}
-		var triedChannelIDs []int
 		groupTested, groupSucceeded := false, false
-		for ctx.Err() == nil {
-			var filters []dto.ChannelFilter
-			if len(triedChannelIDs) > 0 {
-				filters = []dto.ChannelFilter{{
-					Kind:              dto.FilterExcludeChannels,
-					ExcludeChannelIds: triedChannelIDs,
-				}}
+		for len(models) > 0 && ctx.Err() == nil && (groupProbeHandler{}).Enabled() {
+			name := rotation.Next(models)
+			models = slices.DeleteFunc(models, func(candidate string) bool { return candidate == name })
+			// Persist each selection before making a paid request, including
+			// fallback models, so interruptions retain rotation.
+			if err = model.UpdateSystemTaskState(task.TaskID, runnerID, state); err != nil {
+				finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, state, err)
+				return
 			}
-			channel, selectErr := model.GetRandomSatisfiedChannel(group, name, 0, filters)
-			if selectErr != nil || channel == nil {
-				break
-			}
-			triedChannelIDs = append(triedChannelIDs, channel.Id)
-			if channel.Type == constant.ChannelTypeTaskPlugin {
-				continue
-			}
-			endpoint := channelProbeEndpoint(channel, name)
-			if endpoint == "" {
-				continue
-			}
-			probeCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
-			result := runChannelTest(probeCtx, channel, userID, name, endpoint, shouldUseStreamForAutomaticChannelTest(channel), channelTestOptions{group: group, probe: true})
-			cancel()
-			state.Tested++
-			groupTested = true
-			if result.localErr == nil && result.newAPIError == nil {
+			tested, succeeded := runGroupModelProbe(ctx, userID, group, name)
+			state.Tested += tested
+			groupTested = groupTested || tested > 0
+			if succeeded {
 				groupSucceeded = true
 				break
 			}
@@ -231,8 +250,8 @@ func (groupProbeHandler) Run(ctx context.Context, task *model.SystemTask, runner
 		if groupSucceeded {
 			state.Succeeded++
 		} else if groupTested {
-			// A group is failed only after every probeable channel for its
-			// selected model has failed.
+			// A group is failed only after all its probeable models and their
+			// eligible channels have failed.
 			state.Failed++
 		} else {
 			state.Skipped++

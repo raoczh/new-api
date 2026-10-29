@@ -20,6 +20,7 @@ import {
   CheckSquareIcon,
   HeartIcon,
   ImageOffIcon,
+  ImagePlusIcon,
   Loader2Icon,
   SearchIcon,
   Trash2Icon,
@@ -29,7 +30,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +40,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -47,8 +48,15 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { IMAGE_STUDIO_PAGE_SIZE } from '../constants'
-import { useImageStudioTasks, useImageStudioTaskActions } from '../hooks/use-image-studio-tasks'
-import { readLocalRecords, removeLocalRecords, saveLocalRecords } from '../lib/local-store'
+import {
+  useImageStudioTasks,
+  useImageStudioTaskActions,
+} from '../hooks/use-image-studio-tasks'
+import {
+  readLocalRecords,
+  removeLocalRecords,
+  saveLocalRecords,
+} from '../lib/local-store'
 import type { ImageStudioTask, ImageStudioTaskListQuery } from '../types'
 import { ImageStudioTaskCard } from './task-card'
 import { ImageStudioTaskDetail } from './task-detail'
@@ -59,7 +67,7 @@ import { ImageStudioTaskDetail } from './task-detail'
  * viewport breakpoints would keep it at two columns on a wide screen.
  */
 const HISTORY_GRID_CLASSES =
-  'grid grid-cols-2 gap-3 @min-[34rem]/history:grid-cols-3 @min-[52rem]/history:grid-cols-4 @min-[70rem]/history:grid-cols-5'
+  'grid grid-cols-2 gap-4 @min-[34rem]/history:grid-cols-3 @min-[52rem]/history:grid-cols-4 @min-[70rem]/history:grid-cols-5'
 
 export interface ImageStudioHistoryProps {
   locale?: string
@@ -143,24 +151,38 @@ export function ImageStudioHistory(props: ImageStudioHistoryProps) {
     }
   }, [list.isError, ownerId, queryKey, props.retentionDays])
 
-  const sourceItems = localItems ?? list.data?.items ?? []
+  const serverItems = list.data?.items
   const items = useMemo(() => {
-    if (!localItems) return sourceItems
+    if (!localItems) return serverItems ?? []
     return localItems.filter((task) => {
       if (query.model && task.model !== query.model) return false
       if (query.favorite && !task.favorite) return false
       if (!query.keyword) return true
       return task.prompt.toLowerCase().includes(query.keyword.toLowerCase())
     })
-  }, [localItems, sourceItems, query.model, query.favorite, query.keyword])
+  }, [localItems, serverItems, query.model, query.favorite, query.keyword])
   const models = useMemo(() => {
     if (!localItems) return list.data?.models ?? []
     return [...new Set(localItems.map((task) => task.model).filter(Boolean))]
   }, [localItems, list.data])
   const total = localItems ? items.length : (list.data?.total ?? 0)
-  const pageCount = localItems ? 1 : Math.max(1, Math.ceil(total / IMAGE_STUDIO_PAGE_SIZE))
+  const pageCount = localItems
+    ? 1
+    : Math.max(1, Math.ceil(total / IMAGE_STUDIO_PAGE_SIZE))
   const selectedTasks = items.filter((task) => selected.has(task.id))
   const offline = localItems !== null
+
+  let emptyHint = t(
+    'Write a prompt to generate your first image. Every result is kept here for {{days}} days.',
+    { days: props.retentionDays }
+  )
+  if (appliedKeyword || model || favoriteOnly) {
+    emptyHint = t('No record matches these filters. Try clearing them.')
+  } else if (offline) {
+    emptyHint = t(
+      'This device has no saved record for this page yet. They will appear after the server can be reached again.'
+    )
+  }
 
   const resetPage = () => {
     setPage(1)
@@ -204,11 +226,11 @@ export function ImageStudioHistory(props: ImageStudioHistoryProps) {
   }
 
   return (
-    <section className='flex flex-col gap-3'>
-      <div className='flex flex-wrap items-center gap-2'>
-        <h2 className='text-sm font-medium'>
+    <section className='flex flex-col gap-4'>
+      <div className='bg-background/80 sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-2 px-1 py-1 backdrop-blur'>
+        <h2 className='flex items-baseline gap-2 text-base font-semibold tracking-tight'>
           {t('Generation history')}
-          <span className='text-muted-foreground ml-1.5 text-xs font-normal'>
+          <span className='bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums'>
             {t('{{count}} total', { count: total })}
           </span>
         </h2>
@@ -235,7 +257,7 @@ export function ImageStudioHistory(props: ImageStudioHistoryProps) {
               }}
               placeholder={t('Search descriptions')}
               aria-label={t('Search descriptions')}
-              className='h-8 w-44 pl-7 text-xs'
+              className='h-8 w-44 rounded-full pl-7 text-xs'
             />
             {keyword && (
               <button
@@ -296,7 +318,9 @@ export function ImageStudioHistory(props: ImageStudioHistoryProps) {
             disabled={offline}
             title={
               offline
-                ? t('Batch actions need the server. They come back once it can be reached.')
+                ? t(
+                    'Batch actions need the server. They come back once it can be reached.'
+                  )
                 : undefined
             }
             onClick={() => {
@@ -390,7 +414,9 @@ export function ImageStudioHistory(props: ImageStudioHistoryProps) {
       {list.isError && !offline && localStatus === 'done' && (
         <div className='text-muted-foreground flex flex-col items-center gap-2 rounded-lg border border-dashed py-12 text-center text-sm'>
           <ImageOffIcon className='size-6' aria-hidden='true' />
-          <p>{t('The records could not be loaded. Please refresh the page.')}</p>
+          <p>
+            {t('The records could not be loaded. Please refresh the page.')}
+          </p>
           <p className='max-w-sm text-xs'>
             {t('No copy of these records was saved on this device.')}
           </p>
@@ -408,7 +434,7 @@ export function ImageStudioHistory(props: ImageStudioHistoryProps) {
       {(list.isPending || (list.isError && localStatus === 'reading')) && (
         <div className={HISTORY_GRID_CLASSES}>
           {Array.from({ length: 5 }, (_, index) => (
-            <Skeleton key={index} className='aspect-square rounded-xl' />
+            <Skeleton key={index} className='aspect-[4/5] rounded-2xl' />
           ))}
         </div>
       )}
@@ -417,21 +443,17 @@ export function ImageStudioHistory(props: ImageStudioHistoryProps) {
         (offline || !list.isError) &&
         localStatus !== 'reading' &&
         items.length === 0 && (
-          <div className='text-muted-foreground flex flex-col items-center gap-1.5 rounded-lg border border-dashed px-4 py-16 text-center'>
-            <ImageOffIcon className='size-7' aria-hidden='true' />
-            <p className='text-sm font-medium'>{t('No records yet')}</p>
-            <p className='max-w-sm text-xs'>
-              {appliedKeyword || model || favoriteOnly
-                ? t('No record matches these filters. Try clearing them.')
-                : offline
-                  ? t(
-                      'This device has no saved record for this page yet. They will appear after the server can be reached again.'
-                    )
-                  : t(
-                      'Write a prompt to generate your first image. Every result is kept here for {{days}} days.',
-                      { days: props.retentionDays }
-                    )}
+          <div className='text-muted-foreground from-primary/5 via-chart-2/5 flex flex-col items-center gap-2 rounded-3xl border border-dashed bg-linear-to-br to-transparent px-4 py-20 text-center'>
+            <span className='bg-background flex size-14 items-center justify-center rounded-2xl border shadow-(--tc-shadow-md)'>
+              <ImagePlusIcon
+                className='text-primary size-6'
+                aria-hidden='true'
+              />
+            </span>
+            <p className='text-foreground mt-1 text-sm font-semibold'>
+              {t('No records yet')}
             </p>
+            <p className='max-w-sm text-xs'>{emptyHint}</p>
           </div>
         )}
 

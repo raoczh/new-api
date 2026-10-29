@@ -427,6 +427,134 @@ func TestGroupProbeFallsBackAcrossChannelsAndCountsGroupFailures(t *testing.T) {
 	assert.Equal(t, 1, secondState.Failed)
 }
 
+func TestGroupProbeFallsBackToModelsExplicitlySupportedByChannels(t *testing.T) {
+	for _, memoryCache := range []bool{false, true} {
+		t.Run(fmt.Sprintf("memory_cache=%t", memoryCache), func(t *testing.T) {
+			db := modelManagementDB(t, "sqlite", "")
+			require.NoError(t, db.AutoMigrate(&model.StatusProbe{}, &model.Log{}, &model.SystemTask{}, &model.SystemTaskLock{}))
+			oldRatios := ratio_setting.GroupRatio2JSONString()
+			oldProbeEnabled := groupProbeHandler{}.Enabled()
+			require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1}`))
+			require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"gpt-4o":1,"retired-chat":1}`))
+			require.NoError(t, model.UpdateRequestPolicyOptions(map[string]string{"monitor_setting.auto_probe_enabled": "true"}))
+			t.Cleanup(func() {
+				require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(oldRatios))
+				require.NoError(t, model.UpdateRequestPolicyOptions(map[string]string{
+					"monitor_setting.auto_probe_enabled": fmt.Sprintf("%t", oldProbeEnabled),
+				}))
+				common.MemoryCacheEnabled = false
+				model.InitChannelCache()
+			})
+			user := model.User{Username: "model-fallback-root", Password: "unused", Group: "default", Role: common.RoleRootUser, Status: common.UserStatusEnabled}
+			require.NoError(t, db.Create(&user).Error)
+
+			var firstRequests, secondRequests atomic.Int32
+			var available atomic.Bool
+			var receivedModel atomic.Value
+			available.Store(true)
+			firstUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				firstRequests.Add(1)
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = w.Write([]byte(`{"error":{"message":"model unavailable"}}`))
+			}))
+			secondUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				secondRequests.Add(1)
+				var request struct {
+					Model string `json:"model"`
+				}
+				if err := common.DecodeJson(r.Body, &request); err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				receivedModel.Store(request.Model)
+				if !available.Load() {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					_, _ = w.Write([]byte(`{"error":{"message":"model unavailable"}}`))
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id":"probe","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
+			}))
+			t.Cleanup(firstUpstream.Close)
+			t.Cleanup(secondUpstream.Close)
+
+			const firstModel = "gpt-4o@temperature:0.2"
+			firstChannel := &model.Channel{Type: constant.ChannelTypeOpenAI, Key: "first-key", BaseURL: common.GetPointer(firstUpstream.URL), Name: "first-model", Models: firstModel, Group: "default", Status: common.ChannelStatusEnabled}
+			secondChannel := &model.Channel{Type: constant.ChannelTypeOpenAI, Key: "second-key", BaseURL: common.GetPointer(secondUpstream.URL), Name: "second-model", Models: "gpt-4o", Group: "default", Status: common.ChannelStatusEnabled, ModelMapping: common.GetPointer(`{"gpt-4o":"provider-chat-model"}`)}
+			require.NoError(t, firstChannel.Insert())
+			require.NoError(t, secondChannel.Insert())
+			// A stale ability must not send a removed model to its former channel.
+			require.NoError(t, db.Create(&model.Ability{Group: "default", Model: "retired-chat", ChannelId: secondChannel.Id, Enabled: true}).Error)
+			common.MemoryCacheEnabled = memoryCache
+			model.InitChannelCache()
+			service.InitHttpClient()
+
+			// Make the stale model and failing variant precede the healthy model.
+			previous, err := model.CreateSystemTask(model.SystemTaskTypeGroupProbe, nil, groupProbeState{
+				Rotations: map[string]*groupProbeRotation{"default": {Remaining: []string{"retired-chat", firstModel, "gpt-4o"}}},
+			})
+			require.NoError(t, err)
+			_, claimed, err := model.ClaimSystemTask(previous.ID, previous.Type, "model-probe-runner", time.Now().Add(time.Minute).Unix())
+			require.NoError(t, err)
+			require.True(t, claimed)
+			require.NoError(t, model.FinishSystemTask(previous.TaskID, "model-probe-runner", model.SystemTaskStatusSucceeded, nil, ""))
+			runProbe := func() (*model.SystemTask, groupProbeState) {
+				task, err := model.CreateSystemTask(model.SystemTaskTypeGroupProbe, nil, nil)
+				require.NoError(t, err)
+				claimed, ok, err := model.ClaimSystemTask(task.ID, task.Type, "model-probe-runner", time.Now().Add(time.Minute).Unix())
+				require.NoError(t, err)
+				require.True(t, ok)
+				groupProbeHandler{}.Run(context.Background(), claimed, "model-probe-runner")
+				stored, err := model.GetSystemTaskByTaskID(task.TaskID)
+				require.NoError(t, err)
+				require.NotNil(t, stored)
+				var state groupProbeState
+				require.NoError(t, stored.DecodeState(&state))
+				return stored, state
+			}
+
+			stored, state := runProbe()
+			assert.Equal(t, model.SystemTaskStatusSucceeded, stored.Status)
+			assert.Equal(t, 2, state.Tested)
+			assert.Equal(t, 1, state.Succeeded)
+			assert.Zero(t, state.Failed)
+			assert.Zero(t, state.Skipped)
+			assert.Equal(t, "gpt-4o", state.Rotations["default"].LastModel)
+			assert.Equal(t, int32(1), firstRequests.Load())
+			assert.Equal(t, int32(1), secondRequests.Load())
+			assert.Equal(t, "provider-chat-model", receivedModel.Load(), "explicit model mappings must still apply")
+			var probes []model.StatusProbe
+			require.NoError(t, db.Order("id ASC").Find(&probes).Error)
+			require.Len(t, probes, 2)
+			assert.Equal(t, firstModel, probes[0].ModelName)
+			assert.False(t, probes[0].Success)
+			assert.Equal(t, "gpt-4o", probes[1].ModelName)
+			assert.True(t, probes[1].Success)
+
+			available.Store(false)
+			stored, state = runProbe()
+			assert.Equal(t, model.SystemTaskStatusFailed, stored.Status)
+			assert.Equal(t, 2, state.Tested)
+			assert.Equal(t, 1, state.Failed, "exhausting different models counts as one failed group")
+			assert.Zero(t, state.Succeeded)
+			assert.Equal(t, int32(2), firstRequests.Load())
+			assert.Equal(t, int32(2), secondRequests.Load())
+
+			// Simulate stale abilities after disabling a channel and removing models.
+			require.NoError(t, db.Model(firstChannel).Update("status", common.ChannelStatusAutoDisabled).Error)
+			require.NoError(t, db.Model(secondChannel).Update("models", "").Error)
+			model.InitChannelCache()
+			stored, state = runProbe()
+			assert.Equal(t, model.SystemTaskStatusSucceeded, stored.Status)
+			assert.Equal(t, 1, state.Skipped, "groups with no eligible channels are skipped")
+			assert.Zero(t, state.Tested)
+			assert.Zero(t, state.Failed)
+			assert.Equal(t, int32(2), firstRequests.Load())
+			assert.Equal(t, int32(2), secondRequests.Load())
+		})
+	}
+}
+
 func TestGroupStatusRestrictsVisitorsToPublicGroupsAndAppliesMemberRatios(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
 	require.NoError(t, db.AutoMigrate(&model.PerfMetric{}, &model.StatusProbe{}))

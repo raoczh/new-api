@@ -163,12 +163,20 @@ export function ImageStudioPage() {
   }
 
   return (
-    <Main>
+    <Main className='relative isolate'>
+      {/* Ambient glow behind the workbench; purely decorative. */}
+      <div
+        className='pointer-events-none absolute inset-0 -z-10 overflow-hidden'
+        aria-hidden='true'
+      >
+        <div className='bg-primary/10 absolute -top-32 -left-24 size-[28rem] rounded-full blur-3xl' />
+        <div className='bg-chart-2/10 absolute top-1/3 -right-32 size-[32rem] rounded-full blur-3xl' />
+      </div>
       {/* Below xl the editor and the gallery stack into one scrolling column;
           above it they become two independent columns so a long history never
           pushes the prompt out of reach. The gallery is its own container so
           its card grid follows the column width, not the viewport. */}
-      <div className='mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-4 overflow-y-auto p-3 sm:p-4 xl:grid xl:grid-cols-[minmax(23rem,27rem)_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)] xl:gap-5 xl:overflow-hidden xl:px-5'>
+      <div className='mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-6 overflow-y-auto p-3 sm:p-5 xl:grid xl:grid-cols-[minmax(23rem,27rem)_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)] xl:gap-8 xl:overflow-hidden xl:px-6'>
         <div className='flex min-h-0 flex-col xl:overflow-y-auto xl:pr-1 xl:pb-1'>
           <div ref={topRef} className='flex flex-col'>
             <ImageStudioComposer

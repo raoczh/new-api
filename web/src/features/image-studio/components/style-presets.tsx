@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { CheckIcon, SparklesIcon } from 'lucide-react'
+import { CheckIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
@@ -27,7 +27,12 @@ export interface ImageStudioStylePresetsProps {
   /** Current prompt, used to show which styles are already applied. */
   prompt: string
   disabled?: boolean
-  onToggle: (preset: { id: string; label: string; text: string; applied: boolean }) => void
+  onToggle: (preset: {
+    id: string
+    label: string
+    text: string
+    applied: boolean
+  }) => void
 }
 
 /**
@@ -43,10 +48,6 @@ export function ImageStudioStylePresets(props: ImageStudioStylePresetsProps) {
 
   return (
     <div className='flex flex-wrap items-center gap-1.5'>
-      <span className='text-muted-foreground flex items-center gap-1 text-[11px]'>
-        <SparklesIcon className='size-3' aria-hidden='true' />
-        {t('Style')}
-      </span>
       {IMAGE_STUDIO_STYLE_PRESETS.map((preset) => {
         const text = t(preset.promptKey)
         const applied = props.prompt.includes(text)
@@ -66,11 +67,12 @@ export function ImageStudioStylePresets(props: ImageStudioStylePresetsProps) {
             }
             title={applied ? t('Remove this style') : text}
             className={cn(
-              'border-border/70 hover:border-primary/60 hover:bg-primary/5 hover:text-foreground',
-              'text-muted-foreground flex h-6 items-center gap-1 rounded-full border px-2 text-[11px] transition-colors',
+              'bg-muted/50 hover:bg-primary/5 hover:border-primary/40 hover:text-foreground',
+              'text-muted-foreground flex h-7 items-center gap-1 rounded-full border border-transparent px-3 text-xs transition-all',
               'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
               'disabled:cursor-not-allowed disabled:opacity-50',
-              applied && 'border-primary/60 bg-primary/10 text-primary'
+              applied &&
+                'border-primary/50 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary font-medium'
             )}
           >
             {applied && <CheckIcon className='size-3' aria-hidden='true' />}

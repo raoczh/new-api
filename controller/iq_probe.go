@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	stdhtml "html"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -31,21 +32,29 @@ const (
 	iqProbeMaxHTMLBytes = 512 << 10
 	// iqProbeMinBaseline is the number of earlier healthy results needed before
 	// size comparisons are trusted.
-	iqProbeMinBaseline = 4
-	// A measurement below 25% of the reference is evidence on its own. Below
-	// 50% it only counts together with another signal, because a randomly drawn
-	// subject, scene and style legitimately differ in size.
-	iqProbeSevereDropPercent = 25
-	iqProbeMildDropPercent   = 50
+	iqProbeMinBaseline = 5
 )
 
-// iqProbeAnimationMarkers cover SMIL, CSS (including vendor-prefixed
-// keyframes), the Web Animations API and the common JS loops, so an unusual
-// but real animation is not reported missing.
+// Drop cut-offs on the log scale. A measurement counts as a mild drop when it
+// falls more than 2 robust standard deviations below the median, and as a
+// severe drop beyond 3. The bounds keep a very stable history from flagging an
+// ordinary dip (mild needs at least 40% below the median, severe 60%) and a
+// very noisy one from hiding a collapse (mild always below 40% of the median,
+// severe always below 20%).
+var (
+	iqProbeMildDropFloor     = math.Log(1 / 0.6)
+	iqProbeMildDropCeiling   = math.Log(2.5)
+	iqProbeSevereDropFloor   = math.Log(2.5)
+	iqProbeSevereDropCeiling = math.Log(5)
+)
+
+// iqProbeAnimationMarkers cover SMIL, CSS keyframes, the Web Animations API
+// and the common JS loops, so an unusual but real animation is not reported
+// missing. CSS transitions are left out because they only run on hover or
+// state changes, not continuously as the prompt requires.
 var iqProbeAnimationMarkers = []string{
-	"<animate", "<set ", "<set>", "-keyframes", "animation:", "animation-name", "animation-duration",
-	"transition:", "transition-duration", "requestanimationframe", "setinterval", "settimeout",
-	"webgl", "gsap", "tween", ".animate(",
+	"<animate", "<set ", "<set>", "@keyframes", "-keyframes", "animation:", "animation-name",
+	"animation-duration", "requestanimationframe", "setinterval", "settimeout", "gsap", ".animate(",
 }
 
 // iqProbePrompt is the prompt actually sent for one probe.
@@ -208,30 +217,45 @@ func extractIQProbeHTML(text string) string {
 	return strings.TrimSpace(text[start:end])
 }
 
-// iqProbeReference returns the upper quartile of past measurements. Judging
-// against a high quantile instead of the median means a run of already shrunken
-// results cannot drag the reference down and hide the degradation, while a
-// single unusually large result still does not raise the bar.
-func iqProbeReference(values []int) int {
-	if len(values) == 0 {
-		return 0
-	}
+func iqProbeMedian(values []float64) float64 {
 	sorted := slices.Clone(values)
 	slices.Sort(sorted)
-	return sorted[(len(sorted)-1)*3/4]
+	middle := len(sorted) / 2
+	if len(sorted)%2 == 0 {
+		return (sorted[middle-1] + sorted[middle]) / 2
+	}
+	return sorted[middle]
 }
 
-// iqProbeDropLevel rates how far a measurement fell below the baseline:
-// 0 no drop, 1 mild, 2 severe. Unusable values report no drop, so a channel
-// that omits usage or a reasoning breakdown is not blamed for missing data.
-func iqProbeDropLevel(current int, baseline int) int {
-	if current <= 0 || baseline <= 0 {
+// iqProbeDropLevel rates how far a measurement fell below its history: 0 no
+// drop, 1 mild, 2 severe. Sizes vary multiplicatively with the drawn subject,
+// so the history is compared on the log scale, and its spread is the median
+// absolute deviation, which a few outliers or already shrunken results cannot
+// inflate. A model whose output naturally swings therefore needs a deeper fall
+// than a stable one. Unusable values report no drop, so a channel that omits
+// usage or a reasoning breakdown is not blamed for missing data.
+func iqProbeDropLevel(current int, history []int) int {
+	logs := make([]float64, 0, len(history))
+	for _, value := range history {
+		if value > 0 {
+			logs = append(logs, math.Log(float64(value)))
+		}
+	}
+	if current <= 0 || len(logs) < iqProbeMinBaseline {
 		return 0
 	}
+	center := iqProbeMedian(logs)
+	deviations := make([]float64, 0, len(logs))
+	for _, value := range logs {
+		deviations = append(deviations, math.Abs(value-center))
+	}
+	// 1.4826 scales the MAD to a standard deviation for normally distributed data.
+	spread := 1.4826 * iqProbeMedian(deviations)
+	fall := center - math.Log(float64(current))
 	switch {
-	case current*100 < baseline*iqProbeSevereDropPercent:
+	case fall > min(max(3*spread, iqProbeSevereDropFloor), iqProbeSevereDropCeiling):
 		return 2
-	case current*100 < baseline*iqProbeMildDropPercent:
+	case fall > min(max(2*spread, iqProbeMildDropFloor), iqProbeMildDropCeiling):
 		return 1
 	}
 	return 0
@@ -334,10 +358,12 @@ func iqProbeStripRawText(html string, tag string) (string, bool) {
 // quality score.
 //
 // The page size is the primary signal because it is what a reader actually
-// sees. Token counts only corroborate it: channels report completion and
-// reasoning tokens with different accounting, so a token drop alone is not
-// evidence of degradation. A mild size drop needs that corroboration, while a
-// severe drop or a missing animation stands on its own.
+// sees, and a severe size drop stands on its own. Everything else only
+// corroborates: channels report completion and reasoning tokens with different
+// accounting, and the animation markers can miss an unusual technique, so each
+// of them alone is not evidence of degradation. A suspect verdict needs either
+// a severe size drop or two independent signals, at least one of them severe
+// or both coming from the page itself.
 func judgeIQProbe(html string, code string, usage *dto.Usage, baseline []model.IQProbeResult) (string, []string) {
 	lower := strings.ToLower(html)
 	var invalid []string
@@ -353,50 +379,48 @@ func judgeIQProbe(html string, code string, usage *dto.Usage, baseline []model.I
 	if len(invalid) > 0 {
 		return model.IQProbeVerdictInvalid, invalid
 	}
-	htmlDrop := 0
-	tokenDrops := 0
-	var dropped []string
-	if len(baseline) >= iqProbeMinBaseline {
-		htmlSizes := make([]int, 0, len(baseline))
-		completions := make([]int, 0, len(baseline))
-		reasonings := make([]int, 0, len(baseline))
-		for _, item := range baseline {
-			htmlSizes = append(htmlSizes, item.HTMLBytes)
-			completions = append(completions, item.CompletionTokens)
-			reasonings = append(reasonings, item.ReasoningTokens)
-		}
-		completionTokens, reasoningTokens := 0, 0
-		if usage != nil {
-			completionTokens = usage.CompletionTokens
-			reasoningTokens = usage.CompletionTokenDetails.ReasoningTokens
-		}
-		htmlDrop = iqProbeDropLevel(len(html), iqProbeReference(htmlSizes))
-		outputDrop := iqProbeDropLevel(completionTokens, iqProbeReference(completions))
-		reasoningDrop := iqProbeDropLevel(reasoningTokens, iqProbeReference(reasonings))
-		for _, item := range []struct {
-			reason string
-			level  int
-		}{{"html_drop", htmlDrop}, {"output_drop", outputDrop}, {"reasoning_drop", reasoningDrop}} {
-			if item.level > 0 {
-				dropped = append(dropped, item.reason)
-			}
-		}
-		// Reasoning tokens are already part of the completion count, so the two
-		// are one measurement, not two.
-		tokenDrops = max(outputDrop, reasoningDrop)
+	htmlSizes := make([]int, 0, len(baseline))
+	completions := make([]int, 0, len(baseline))
+	reasonings := make([]int, 0, len(baseline))
+	for _, item := range baseline {
+		htmlSizes = append(htmlSizes, item.HTMLBytes)
+		completions = append(completions, item.CompletionTokens)
+		reasonings = append(reasonings, item.ReasoningTokens)
 	}
-	animated := slices.ContainsFunc(iqProbeAnimationMarkers, func(marker string) bool {
+	completionTokens, reasoningTokens := 0, 0
+	if usage != nil {
+		completionTokens = usage.CompletionTokens
+		reasoningTokens = usage.CompletionTokenDetails.ReasoningTokens
+	}
+	htmlDrop := iqProbeDropLevel(len(html), htmlSizes)
+	outputDrop := iqProbeDropLevel(completionTokens, completions)
+	reasoningDrop := iqProbeDropLevel(reasoningTokens, reasonings)
+	// Reasoning tokens are already part of the completion count, so the two
+	// are one measurement, not two.
+	tokenDrop := max(outputDrop, reasoningDrop)
+	animationMissing := !slices.ContainsFunc(iqProbeAnimationMarkers, func(marker string) bool {
 		return strings.Contains(lower, marker)
 	})
-	switch {
-	case !animated:
-		return model.IQProbeVerdictSuspect, append(dropped, "no_animation")
-	case htmlDrop == 2:
-		return model.IQProbeVerdictSuspect, dropped
-	case htmlDrop == 1 && tokenDrops > 0:
-		return model.IQProbeVerdictSuspect, dropped
+
+	suspect := htmlDrop == 2 ||
+		(htmlDrop == 1 && (tokenDrop > 0 || animationMissing)) ||
+		(tokenDrop == 2 && animationMissing)
+	if !suspect {
+		return model.IQProbeVerdictNormal, nil
 	}
-	return model.IQProbeVerdictNormal, nil
+	var reasons []string
+	for _, item := range []struct {
+		reason string
+		found  bool
+	}{
+		{"html_drop", htmlDrop > 0}, {"output_drop", outputDrop > 0},
+		{"reasoning_drop", reasoningDrop > 0}, {"no_animation", animationMissing},
+	} {
+		if item.found {
+			reasons = append(reasons, item.reason)
+		}
+	}
+	return model.IQProbeVerdictSuspect, reasons
 }
 
 type iqProbeHandler struct{}

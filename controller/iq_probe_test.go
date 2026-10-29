@@ -2,7 +2,6 @@ package controller
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -171,6 +170,7 @@ func TestJudgeIQProbeFlagsBrokenAndShrunkOutputs(t *testing.T) {
 		{HTMLBytes: 9000, CompletionTokens: 5000, ReasoningTokens: 2400},
 		{HTMLBytes: 10000, CompletionTokens: 6000, ReasoningTokens: 2600},
 		{HTMLBytes: 11000, CompletionTokens: 7000, ReasoningTokens: 2800},
+		{HTMLBytes: 12000, CompletionTokens: 8000, ReasoningTokens: 3000},
 	}
 	usage := &dto.Usage{CompletionTokens: 1000}
 	usage.CompletionTokenDetails.ReasoningTokens = 100
@@ -178,12 +178,12 @@ func TestJudgeIQProbeFlagsBrokenAndShrunkOutputs(t *testing.T) {
 	assert.Equal(t, model.IQProbeVerdictSuspect, verdict)
 	assert.Equal(t, []string{"html_drop", "output_drop", "reasoning_drop"}, reasons)
 
-	// A single mild drop is normal variation for a randomly drawn subject.
-	// The baseline references are 10000 HTML bytes, 6000 output and 2600
-	// reasoning tokens, so a 4000-byte page is mild and 3000 output tokens are
-	// not a drop at all.
-	mildPage := animated + strings.Repeat("x", 4000-len(animated))
-	usage = &dto.Usage{CompletionTokens: 3000}
+	// A single mild drop alone is normal variation for a randomly drawn subject.
+	// The history is tight, so the bounds apply: below 60% of the 10000-byte
+	// median is mild and below 40% severe. A 5000-byte page is mild, while 4000
+	// output and 2400 reasoning tokens stay within their spread.
+	mildPage := animated + strings.Repeat("x", 5000-len(animated))
+	usage = &dto.Usage{CompletionTokens: 4000}
 	usage.CompletionTokenDetails.ReasoningTokens = 2400
 	verdict, reasons = judgeIQProbe(mildPage, "", usage, baseline)
 	assert.Equal(t, model.IQProbeVerdictNormal, verdict, "one mild drop alone is not degradation")
@@ -196,20 +196,75 @@ func TestJudgeIQProbeFlagsBrokenAndShrunkOutputs(t *testing.T) {
 	assert.Equal(t, model.IQProbeVerdictNormal, verdict, "a token drop alone is not degradation")
 
 	// A mild size drop corroborated by a token drop is suspect.
-	usage = &dto.Usage{CompletionTokens: 3000}
+	usage = &dto.Usage{CompletionTokens: 4000}
 	usage.CompletionTokenDetails.ReasoningTokens = 900
 	verdict, reasons = judgeIQProbe(mildPage, "", usage, baseline)
 	assert.Equal(t, model.IQProbeVerdictSuspect, verdict, "a mild drop needs corroboration")
 	assert.Equal(t, []string{"html_drop", "reasoning_drop"}, reasons)
 
 	// A channel that omits reasoning tokens must not be blamed for it.
-	verdict, reasons = judgeIQProbe(mildPage, "", &dto.Usage{CompletionTokens: 3000}, baseline)
+	verdict, reasons = judgeIQProbe(mildPage, "", &dto.Usage{CompletionTokens: 4000}, baseline)
 	assert.Equal(t, model.IQProbeVerdictNormal, verdict, "missing usage detail is not a drop")
 	assert.Empty(t, reasons)
+
+	// Missing animation alone does not flag suspect, but logged as reason.
+	noAnimation := "<html><svg><rect/></svg></html>" + strings.Repeat("x", 9000-len("<html><svg><rect/></svg></html>"))
+	verdict, reasons = judgeIQProbe(noAnimation, "", &dto.Usage{CompletionTokens: 6000}, baseline)
+	assert.Equal(t, model.IQProbeVerdictNormal, verdict, "missing animation alone is not degradation")
+	assert.Empty(t, reasons)
+
+	// Missing animation corroborates a mild drop.
+	noAnimationMild := "<html><svg><rect/></svg></html>" + strings.Repeat("x", 5000-len("<html><svg><rect/></svg></html>"))
+	verdict, reasons = judgeIQProbe(noAnimationMild, "", &dto.Usage{CompletionTokens: 6000}, baseline)
+	assert.Equal(t, model.IQProbeVerdictSuspect, verdict, "missing animation corroborates a mild drop")
+	assert.Equal(t, []string{"html_drop", "no_animation"}, reasons)
+
+	// Missing animation corroborates a severe token drop.
+	noAnimationTokenDrop := "<html><svg><rect/></svg></html>" + strings.Repeat("x", 9000-len("<html><svg><rect/></svg></html>"))
+	usage = &dto.Usage{CompletionTokens: 1000}
+	usage.CompletionTokenDetails.ReasoningTokens = 100
+	verdict, reasons = judgeIQProbe(noAnimationTokenDrop, "", usage, baseline)
+	assert.Equal(t, model.IQProbeVerdictSuspect, verdict, "missing animation corroborates severe token drop")
+	assert.Equal(t, []string{"output_drop", "reasoning_drop", "no_animation"}, reasons)
+
+	// A CSS transition only runs on interaction, so it is not the requested animation.
+	transitionOnly := "<html><style>rect{transition: fill 1s}</style><svg><rect/></svg></html>"
+	transitionOnly += strings.Repeat("x", 5000-len(transitionOnly))
+	verdict, reasons = judgeIQProbe(transitionOnly, "", &dto.Usage{CompletionTokens: 6000}, baseline)
+	assert.Equal(t, model.IQProbeVerdictSuspect, verdict)
+	assert.Equal(t, []string{"html_drop", "no_animation"}, reasons)
 
 	// History below the minimum is not a baseline yet.
 	verdict, _ = judgeIQProbe(animated, "", &dto.Usage{CompletionTokens: 10}, baseline[:iqProbeMinBaseline-1])
 	assert.Equal(t, model.IQProbeVerdictNormal, verdict)
+}
+
+func TestJudgeIQProbeScalesDropsWithHistorySpread(t *testing.T) {
+	// Sizes from 3000 to 30000 bytes: the subject draw swings this model's
+	// output widely, so a page at half the median is within its normal range.
+	noisy := []model.IQProbeResult{
+		{HTMLBytes: 3000}, {HTMLBytes: 6000}, {HTMLBytes: 10000}, {HTMLBytes: 16000}, {HTMLBytes: 30000},
+	}
+	page := func(size int) string {
+		html := "<html><svg><rect/></svg></html>"
+		return html + strings.Repeat("x", size-len(html))
+	}
+	verdict, _ := judgeIQProbe(page(5000), "", nil, noisy)
+	assert.Equal(t, model.IQProbeVerdictNormal, verdict, "a dip within a noisy history is not degradation")
+
+	// The same dip against a stable history is corroborated by the missing animation.
+	stable := []model.IQProbeResult{
+		{HTMLBytes: 9500}, {HTMLBytes: 9800}, {HTMLBytes: 10000}, {HTMLBytes: 10300}, {HTMLBytes: 10600},
+	}
+	verdict, reasons := judgeIQProbe(page(5000), "", nil, stable)
+	assert.Equal(t, model.IQProbeVerdictSuspect, verdict)
+	assert.Equal(t, []string{"html_drop", "no_animation"}, reasons)
+
+	// Noise never hides a collapse below a fifth of the median.
+	animatedPage := "<html><svg><animate/></svg></html>" + strings.Repeat("x", 1500)
+	verdict, reasons = judgeIQProbe(animatedPage, "", nil, noisy)
+	assert.Equal(t, model.IQProbeVerdictSuspect, verdict)
+	assert.Equal(t, []string{"html_drop"}, reasons)
 }
 
 func TestRecordIQProbeResultKeepsLatestHistoryPerGroupModel(t *testing.T) {
@@ -284,10 +339,8 @@ func TestGetIQProbeBaselineUsesOnlyRecentHealthyResults(t *testing.T) {
 
 	baseline, err := model.GetIQProbeBaseline("vip", "gpt-5")
 	require.NoError(t, err)
-	require.Len(t, baseline, 2, "failed and invalid rows are not comparable")
-	sizes := []int{baseline[0].HTMLBytes, baseline[1].HTMLBytes}
-	slices.Sort(sizes)
-	assert.Equal(t, []int{1000, 9000}, sizes)
+	require.Len(t, baseline, 1, "only normal results are comparable; suspect ones would drag the reference down")
+	assert.Equal(t, 9000, baseline[0].HTMLBytes)
 }
 
 func TestRequestPolicyValidatesProbeIntervals(t *testing.T) {

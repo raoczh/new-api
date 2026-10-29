@@ -83,7 +83,7 @@ export function ImageStudioSizePicker(props: ImageStudioSizePickerProps) {
             disabled={props.disabled}
             aria-label={`${t('Size')}: ${valueLabel}`}
             className={cn(
-              'border-border/70 hover:bg-accent flex h-7 items-center gap-1 rounded-full border px-2.5 text-[11px]',
+              'border-border/60 bg-background hover:border-primary/40 hover:bg-primary/5 aria-expanded:border-primary/50 aria-expanded:bg-primary/5 flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors',
               'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
               'disabled:cursor-not-allowed disabled:opacity-50'
             )}
