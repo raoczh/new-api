@@ -52,7 +52,7 @@ function PanelHeader(props: {
   return (
     <div className='tc-panel-heading'>
       {props.actions != null ? (
-        <div className='flex items-start justify-between gap-2'>
+        <div className='flex flex-wrap items-start justify-between gap-2'>
           {heading}
           {props.actions}
         </div>

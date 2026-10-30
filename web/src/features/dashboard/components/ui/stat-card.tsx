@@ -257,12 +257,12 @@ export function StatCard(props: StatCardProps) {
   } else if (props.error) {
     valueContent = (
       <div className='flex flex-col gap-1'>
-        <div className='text-muted-foreground mt-0.5 font-mono text-base font-bold tracking-tight break-all tabular-nums sm:text-2xl'>
+        <div className='text-muted-foreground mt-0.5 text-base font-semibold tracking-tight break-all tabular-nums sm:text-2xl'>
           --
         </div>
         <p
           className={cn(
-            'text-muted-foreground line-clamp-1 text-[11px] sm:text-xs',
+            'text-muted-foreground line-clamp-1 text-xs',
             props.compactMobile && 'hidden sm:block'
           )}
         >
@@ -273,12 +273,12 @@ export function StatCard(props: StatCardProps) {
   } else {
     valueContent = (
       <div className='flex flex-col gap-1'>
-        <div className='text-foreground font-mono text-base font-semibold tracking-tight break-all tabular-nums sm:text-2xl'>
+        <div className='text-foreground text-base font-semibold tracking-tight break-all tabular-nums sm:text-2xl'>
           {props.value}
         </div>
         <p
           className={cn(
-            'text-muted-foreground line-clamp-1 text-[11px] leading-relaxed sm:text-xs',
+            'text-muted-foreground line-clamp-1 text-xs leading-relaxed',
             props.compactMobile && 'hidden sm:block'
           )}
         >
@@ -305,7 +305,7 @@ export function StatCard(props: StatCardProps) {
       )}
     >
       <div className='flex items-start justify-between gap-1'>
-        <div className='text-muted-foreground flex items-center gap-1 text-[11px] font-medium sm:gap-2 sm:text-xs'>
+        <div className='text-muted-foreground flex items-center gap-1 text-xs font-medium sm:gap-2'>
           <IconBadge
             tone={iconTone}
             size='stat'

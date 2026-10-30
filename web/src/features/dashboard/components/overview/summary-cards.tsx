@@ -20,7 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { StaggerContainer, StaggerItem } from '@/components/page-transition'
+import { Card } from '@/components/ui/card'
 import { getUserQuotaDates } from '@/features/dashboard/api'
 import { useSummaryCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import type {
@@ -202,23 +202,25 @@ export function SummaryCards(props: SummaryCardsProps) {
 
   return (
     <section aria-label={t('Usage at a glance')}>
-      <StaggerContainer className='tc-overview-metric-list'>
-        {items.map((item) => (
-          <StaggerItem key={item.key} className='tc-overview-metric'>
-            <StatCard
-              title={item.title}
-              value={item.value}
-              description={item.desc}
-              icon={item.icon}
-              tone={item.tone}
-              sparkline={item.sparkline}
-              sparklineVariant='line'
-              loading={loading || Boolean(props.usageLoading)}
-              compactMobile
-            />
-          </StaggerItem>
-        ))}
-      </StaggerContainer>
+      <Card className='gap-0 overflow-hidden p-0 shadow-(--tc-shadow-sm)'>
+        <div className='bg-border/60 grid grid-cols-2 gap-px sm:grid-cols-3 xl:grid-cols-6'>
+          {items.map((item) => (
+            <div key={item.key} className='bg-card min-w-0 p-3.5 sm:p-4'>
+              <StatCard
+                title={item.title}
+                value={item.value}
+                description={item.desc}
+                icon={item.icon}
+                tone={item.tone}
+                sparkline={item.sparkline}
+                sparklineVariant='line'
+                loading={loading || Boolean(props.usageLoading)}
+                compactMobile
+              />
+            </div>
+          ))}
+        </div>
+      </Card>
     </section>
   )
 }

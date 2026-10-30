@@ -85,19 +85,17 @@ function getColumnIds() {
 
 function getColgroupClassNames() {
   const table = screen.getByRole('table')
-  return Array.from(table.querySelectorAll('colgroup > col')).map(
+  return [...table.querySelectorAll('colgroup > col')].map(
     (col) => col.className
   )
 }
 
 it('gives the model name the remaining width and keeps the action column compact', async () => {
   const workspace = await renderEditor()
-  expect(workspace).toHaveClass(
-    'md:grid-cols-[minmax(0,1fr)_minmax(340px,400px)]'
-  )
+  expect(workspace).toHaveClass('md:grid-cols-[minmax(0,3fr)_minmax(0,5fr)]')
 
   const table = screen.getByRole('table')
-  expect(table).toHaveClass('table-fixed', 'min-w-[720px]')
+  expect(table).toHaveClass('table-fixed', 'min-w-[540px]')
   expect(getColumnIds()).toEqual([
     'select',
     'name',
@@ -109,8 +107,8 @@ it('gives the model name the remaining width and keeps the action column compact
     'w-10',
     '',
     'w-[132px]',
-    'w-[220px]',
-    'w-[84px]',
+    'w-[200px]',
+    'w-[80px]',
   ])
 })
 
@@ -122,10 +120,5 @@ it('keeps the colgroup aligned with the visible columns when a column is hidden'
   await renderEditor()
 
   expect(getColumnIds()).toEqual(['select', 'name', 'priceSummary', 'actions'])
-  expect(getColgroupClassNames()).toEqual([
-    'w-10',
-    '',
-    'w-[220px]',
-    'w-[84px]',
-  ])
+  expect(getColgroupClassNames()).toEqual(['w-10', '', 'w-[200px]', 'w-[80px]'])
 })

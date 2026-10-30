@@ -120,8 +120,8 @@ const STORAGE_KEY = 'model-ratio-column-visibility'
 const MODEL_RATIO_COLUMN_WIDTH_CLASS: Record<string, string> = {
   select: 'w-10',
   billingMode: 'w-[132px]',
-  priceSummary: 'w-[220px]',
-  actions: 'w-[84px]',
+  priceSummary: 'w-[200px]',
+  actions: 'w-[80px]',
 }
 
 const ModelRatioVisualEditorComponent = forwardRef<
@@ -654,7 +654,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
       <div
         role='region'
         aria-label={t('Model prices')}
-        className='grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(0,1fr)_minmax(340px,400px)]'
+        className='grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,5fr)]'
       >
         <div className='flex min-h-0 min-w-0 flex-col gap-3'>
           <DataTableToolbar
@@ -708,7 +708,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
               table={table}
               containerClassName='min-h-0 flex-1 rounded-md'
               tableContainerClassName='h-full'
-              tableClassName='min-w-[720px] table-fixed'
+              tableClassName='min-w-[540px] table-fixed'
               tableHeaderClassName='[&_tr]:border-b-0'
               splitHeaderScrollClassName='h-full'
               bodyContainerClassName='[scrollbar-gutter:stable]'

@@ -198,15 +198,25 @@ export function TokenUsageChart(props: TokenUsageChartProps) {
           orient: 'bottom',
           type: 'band',
           seriesId: ['tokens', 'hitRate'],
-          label: { formatMethod: formatHourLabel },
+          label: {
+            formatMethod: formatHourLabel,
+            style: { fontSize: 11 },
+          },
         },
         {
           orient: 'left',
           type: 'linear',
           seriesId: ['tokens'],
+          grid: {
+            style: {
+              stroke: 'rgba(148, 163, 184, 0.22)',
+              lineDash: [0, 0],
+            },
+          },
           label: {
             formatMethod: (value: unknown) =>
               formatCompactNumber(Number(value), locale),
+            style: { fontSize: 11 },
           },
         },
         {
@@ -216,7 +226,10 @@ export function TokenUsageChart(props: TokenUsageChartProps) {
           min: 0,
           max: 100,
           grid: { visible: false },
-          label: { formatMethod: (value: unknown) => `${Number(value)}%` },
+          label: {
+            formatMethod: (value: unknown) => `${Number(value)}%`,
+            style: { fontSize: 11 },
+          },
         },
       ],
       crosshair: {
@@ -231,6 +244,7 @@ export function TokenUsageChart(props: TokenUsageChartProps) {
         orient: 'top',
         position: 'start',
         padding: { bottom: 12 },
+        item: { label: { style: { fontSize: 11 } } },
       },
       tooltip: {
         mark: { visible: false },

@@ -42,6 +42,9 @@ export async function getUserQuotaDates(
     default_time?: string
     username?: string
     model_name?: string
+    group?: string
+    channel_id?: string
+    token_id?: string
   },
   isAdmin = false
 ) {
@@ -113,6 +116,9 @@ export async function getFlowQuotaDates(
     default_time?: string
     username?: string
     model_name?: string
+    group?: string
+    channel_id?: string
+    token_id?: string
   },
   isAdmin = false
 ) {

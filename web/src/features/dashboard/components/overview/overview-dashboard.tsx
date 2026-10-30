@@ -20,93 +20,48 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   ArrowRight,
-  BookOpen,
   Check,
   ChevronDown,
   ChevronUp,
-  Circle,
   Copy,
-  CreditCard,
-  FileText,
-  KeyRound,
   ListChecks,
-  RadioTower,
-  ShieldCheck,
   TerminalSquare,
-  Timer,
-  type LucideIcon,
 } from 'lucide-react'
-import { motion, useReducedMotion } from 'motion/react'
-import { useId, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { SectionPageLayout } from '@/components/layout'
-import {
-  CardStaggerContainer,
-  CardStaggerItem,
-} from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
-import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
-import { ContactInformation } from '@/features/home/components/contact-information'
+import { Card } from '@/components/ui/card'
+import { IconBadge } from '@/components/ui/icon-badge'
 import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
 import { usePrimaryApiAddress } from '@/features/keys/hooks/use-api-addresses'
 import type { ApiKey } from '@/features/keys/types'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { getUserModels } from '@/lib/api'
 import { handleServerError } from '@/lib/handle-server-error'
-import { MOTION_TRANSITION } from '@/lib/motion'
 import { ROLE } from '@/lib/roles'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { useModelDistribution } from '../../hooks/use-model-distribution'
-import { useDashboardContentVisibility } from '../../hooks/use-status-data'
 import { useTokenUsage } from '../../hooks/use-token-usage'
-import { AnnouncementsPanel } from './announcements-panel'
-import { FAQPanel } from './faq-panel'
+import { PerformanceOverview } from '../models/performance-overview'
 import { ModelDistributionChart } from './model-distribution-chart'
-import { QuickStartActions } from './quick-start-actions'
 import { SummaryCards } from './summary-cards'
 import { TokenUsageChart } from './token-usage-chart'
 
 const SETUP_GUIDE_VISIBILITY_STORAGE_KEY =
   'dashboard_overview_setup_guide_expanded'
 
-const SETUP_GUIDE_CODE_PATTERN = [
-  'const request = await client.responses.create({',
-  "  model: 'gpt-4.1-mini',",
-  "  input: 'Start routing traffic',",
-  '})',
-  '',
-  'if (request.output_text) {',
-  '  console.log(request.output_text)',
-  '}',
-].join('\n')
-
-type DashboardActionPath =
-  | '/keys'
-  | '/wallet'
-  | '/playground'
-  | '/channels'
-  | '/usage-logs'
-  | '/pricing'
+type DashboardActionPath = '/keys' | '/wallet' | '/playground'
 
 interface StartStep {
   title: string
   description: string
   to: DashboardActionPath
-  icon: LucideIcon
   completed: boolean
-}
-
-interface QuickAction {
-  title: string
-  description: string
-  to: DashboardActionPath
-  icon: LucideIcon
-  adminOnly?: boolean
 }
 
 interface RequestExample {
@@ -116,13 +71,6 @@ interface RequestExample {
   keyId?: number
   displayKey: string
   ready: boolean
-}
-
-interface HeroSignal {
-  label: string
-  value: string
-  icon: LucideIcon
-  tone: IconBadgeTone
 }
 
 function getSavedSetupGuideExpanded(): boolean | null {
@@ -186,107 +134,40 @@ function buildCurlCommand(args: {
   ].join('\n')
 }
 
-function SetupGuideBackdrop(props: { compact?: boolean }) {
+function SetupStep(props: { step: StartStep; index: number }) {
   return (
-    <>
-      <div
-        className={cn(
-          'pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_48%_120%_at_78%_0%,color-mix(in_oklch,var(--overview-accent-1)_14%,transparent)_0%,transparent_62%),linear-gradient(112deg,color-mix(in_oklch,var(--card)_94%,var(--overview-accent-2)_6%)_0%,color-mix(in_oklch,var(--card)_94%,var(--overview-accent-3)_6%)_48%,color-mix(in_oklch,var(--background)_90%,var(--overview-accent-1)_10%)_100%)] dark:opacity-60',
-          props.compact
-            ? '[mask-image:linear-gradient(90deg,black_0%,black_48%,transparent_74%)] opacity-55'
-            : 'opacity-85'
-        )}
-        aria-hidden='true'
-      />
-      <div
-        className={cn(
-          'text-foreground/5 dark:text-foreground/8 pointer-events-none absolute inset-y-0 right-0 hidden overflow-hidden font-mono sm:block',
-          props.compact ? 'w-1/2 opacity-45' : 'w-[58%] opacity-75'
-        )}
-        aria-hidden='true'
-      >
-        <pre
-          className={cn(
-            'absolute right-3 [mask-image:linear-gradient(90deg,transparent_0%,black_30%,black_82%,transparent_100%)] text-right tracking-[0.38em] whitespace-pre',
-            props.compact
-              ? '-top-6 text-[9px] leading-4'
-              : 'top-1 text-[11px] leading-5'
-          )}
-        >
-          {SETUP_GUIDE_CODE_PATTERN}
-        </pre>
-      </div>
-      <div
-        className='from-background/35 to-background/70 dark:from-background/20 dark:to-background/80 pointer-events-none absolute inset-0 bg-linear-to-b via-transparent'
-        aria-hidden='true'
-      />
-    </>
-  )
-}
-
-function StartStepItem(props: {
-  step: StartStep
-  index: number
-  isLast: boolean
-}) {
-  const Icon = props.step.icon
-  const StatusIcon = props.step.completed ? Check : Circle
-
-  return (
-    <li className='relative flex gap-3 pb-2.5 last:pb-0'>
-      {!props.isLast && (
-        <span
-          className='bg-border absolute top-9 bottom-0 left-4 w-px'
-          aria-hidden='true'
-        />
-      )}
+    <Link
+      to={props.step.to}
+      className='group border-border/70 bg-card hover:bg-muted/40 focus-visible:ring-ring flex min-w-0 items-start gap-3 rounded-lg border p-3 text-left shadow-xs transition-colors outline-none focus-visible:ring-2'
+    >
       <span
         className={cn(
-          'bg-background relative z-10 flex size-8 shrink-0 items-center justify-center rounded-lg border shadow-xs',
-          props.step.completed && 'border-success/30 bg-success/10'
+          'bg-background flex size-8 shrink-0 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums',
+          props.step.completed && 'border-success/30 bg-success/10 text-success'
         )}
       >
-        <StatusIcon
-          className={props.step.completed ? 'text-success size-4' : 'size-4'}
-          aria-hidden='true'
-        />
+        {props.step.completed ? (
+          <Check className='size-4' aria-hidden='true' />
+        ) : (
+          props.index + 1
+        )}
       </span>
-
-      <Link
-        to={props.step.to}
-        className='bg-background/70 hover:bg-muted/50 focus-visible:ring-ring flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left shadow-xs transition-colors outline-none focus-visible:ring-2'
-      >
-        <span className='flex min-w-0 items-start gap-2.5'>
-          <span className='bg-muted mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg'>
-            <Icon className='size-3.5' aria-hidden='true' />
-          </span>
-          <span className='flex min-w-0 flex-col gap-0.5'>
-            <span className='flex items-center gap-2 text-sm font-medium'>
-              <span className='text-muted-foreground font-mono text-xs tabular-nums'>
-                {props.index + 1}.
-              </span>
-              <span className='truncate'>{props.step.title}</span>
-            </span>
-            <span className='text-muted-foreground line-clamp-1 text-xs'>
-              {props.step.description}
-            </span>
-          </span>
+      <span className='flex min-w-0 flex-1 flex-col gap-0.5'>
+        <span className='truncate text-sm font-medium'>{props.step.title}</span>
+        <span className='text-muted-foreground line-clamp-2 text-xs leading-relaxed'>
+          {props.step.description}
         </span>
-        <ArrowRight
-          className='text-muted-foreground size-4 shrink-0'
-          aria-hidden='true'
-        />
-      </Link>
-    </li>
+      </span>
+      <ArrowRight
+        className='text-muted-foreground mt-1 size-4 shrink-0 transition-transform group-hover:translate-x-0.5'
+        aria-hidden='true'
+      />
+    </Link>
   )
 }
 
-function RequestPreview(props: {
-  example: RequestExample
-  signals: HeroSignal[]
-}) {
+function RequestPreview(props: { example: RequestExample }) {
   const { t } = useTranslation()
-  const shouldReduceMotion = useReducedMotion()
   const [isCopying, setIsCopying] = useState(false)
   const { copyToClipboard } = useCopyToClipboard({ notify: false })
   const previewCurl = buildCurlCommand({
@@ -295,6 +176,7 @@ function RequestPreview(props: {
     model: props.example.model,
   })
   const previewLines = previewCurl.split('\n')
+
   const handleCopyRequest = async () => {
     if (!props.example.keyId || isCopying) return
 
@@ -326,24 +208,10 @@ function RequestPreview(props: {
   }
 
   return (
-    <motion.div
-      initial={shouldReduceMotion ? false : { opacity: 0, y: 10, scale: 0.98 }}
-      animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
-      transition={MOTION_TRANSITION.slow}
-      className='bg-muted/30 relative overflow-hidden rounded-lg border p-3 shadow-sm backdrop-blur'
-    >
-      {!shouldReduceMotion && (
-        <motion.div
-          className='via-foreground/30 pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent to-transparent'
-          animate={{ x: ['-100%', '100%'] }}
-          transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
-          aria-hidden='true'
-        />
-      )}
-
-      <div className='flex items-center justify-between gap-3 border-b pb-3'>
+    <div className='bg-muted/30 border-border/70 min-w-0 rounded-lg border p-3'>
+      <div className='flex items-center justify-between gap-3 border-b pb-2.5'>
         <div className='flex min-w-0 items-center gap-2'>
-          <IconBadge tone='info'>
+          <IconBadge tone='info' size='sm'>
             <TerminalSquare />
           </IconBadge>
           <div className='min-w-0'>
@@ -361,7 +229,7 @@ function RequestPreview(props: {
           <Button
             variant='outline'
             size='sm'
-            className='h-7 gap-1.5 px-2 text-xs'
+            className='h-7 shrink-0 gap-1.5 px-2 text-xs'
             disabled={isCopying}
             onClick={handleCopyRequest}
             aria-label={t('Copy ready-to-run curl')}
@@ -370,19 +238,24 @@ function RequestPreview(props: {
             {isCopying ? t('Loading') : t('Copy')}
           </Button>
         ) : (
-          <Button size='sm' variant='outline' render={<Link to='/keys' />}>
+          <Button
+            size='sm'
+            variant='outline'
+            className='shrink-0'
+            render={<Link to='/keys' />}
+          >
             {t('Create API Key')}
           </Button>
         )}
       </div>
 
-      <div className='bg-foreground/[0.035] my-3 rounded-xl p-3 font-mono text-xs'>
+      <div className='bg-background/70 mt-2.5 rounded-md border p-2.5 font-mono text-[11px] leading-relaxed'>
         <div className='mb-2 flex items-center gap-1.5'>
-          <span className='bg-destructive size-2 rounded-full' />
-          <span className='bg-warning size-2 rounded-full' />
-          <span className='bg-success size-2 rounded-full' />
+          <span className='bg-destructive size-1.5 rounded-full' />
+          <span className='bg-warning size-1.5 rounded-full' />
+          <span className='bg-success size-1.5 rounded-full' />
         </div>
-        <div className='flex flex-col gap-1 overflow-hidden'>
+        <div className='flex min-w-0 flex-col gap-1 overflow-hidden'>
           {previewLines.map((line) => (
             <code
               key={line}
@@ -394,85 +267,16 @@ function RequestPreview(props: {
           ))}
         </div>
       </div>
-
-      <div className='grid gap-2'>
-        {props.signals.map((signal) => {
-          const Icon = signal.icon
-
-          return (
-            <div
-              key={signal.label}
-              className='bg-muted/40 flex items-center justify-between gap-3 rounded-xl px-3 py-2'
-            >
-              <span className='flex min-w-0 items-center gap-2'>
-                <IconBadge tone={signal.tone} size='xs'>
-                  <Icon />
-                </IconBadge>
-                <span className='truncate text-xs font-medium'>
-                  {signal.label}
-                </span>
-              </span>
-              <span className='text-muted-foreground shrink-0 text-xs'>
-                {signal.value}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-    </motion.div>
-  )
-}
-
-function QuickActionItem(props: { action: QuickAction }) {
-  const Icon = props.action.icon
-
-  return (
-    <Button
-      variant='outline'
-      className='h-auto justify-start rounded-xl px-3 py-3 text-left'
-      render={<Link to={props.action.to} />}
-    >
-      <span className='bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg'>
-        <Icon className='size-4' aria-hidden='true' />
-      </span>
-      <span className='flex min-w-0 flex-1 flex-col gap-0.5'>
-        <span className='truncate text-sm font-medium'>
-          {props.action.title}
-        </span>
-        <span className='text-muted-foreground line-clamp-2 text-xs leading-relaxed'>
-          {props.action.description}
-        </span>
-      </span>
-    </Button>
-  )
-}
-
-function CompactQuickAction(props: { action: QuickAction }) {
-  const Icon = props.action.icon
-
-  return (
-    <Button
-      variant='outline'
-      size='sm'
-      className='bg-background/70 h-8 min-w-24 gap-1.5 px-2.5'
-      render={<Link to={props.action.to} />}
-    >
-      <Icon data-icon='inline-start' />
-      <span>{props.action.title}</span>
-    </Button>
+    </div>
   )
 }
 
 export function OverviewDashboard() {
   const { t } = useTranslation()
-  const setupGuideId = useId()
-  const setupGuideToggleRef = useRef<HTMLButtonElement>(null)
   const user = useAuthStore((state) => state.auth.user)
-  const { announcements: showAnnouncementsPanel, faq: showFAQPanel } =
-    useDashboardContentVisibility()
-  const [manualSetupGuideExpanded, setManualSetupGuideExpanded] = useState<
-    boolean | null
-  >(() => getSavedSetupGuideExpanded())
+  const [guideExpanded, setGuideExpanded] = useState<boolean>(
+    () => getSavedSetupGuideExpanded() ?? true
+  )
 
   const timeRange = useMemo(() => {
     const now = Math.floor(Date.now() / 1000)
@@ -484,11 +288,7 @@ export function OverviewDashboard() {
 
   // Administrators see whole-site throughput in the overview, matching the
   // totals shown by the admin dashboard rather than their own usage only.
-  const tokenUsageQuery = useTokenUsage(
-    timeRange.start,
-    timeRange.end,
-    isAdmin
-  )
+  const tokenUsageQuery = useTokenUsage(timeRange.start, timeRange.end, isAdmin)
   const modelDistQuery = useModelDistribution(
     timeRange.start,
     timeRange.end,
@@ -530,74 +330,22 @@ export function OverviewDashboard() {
         title: t('Create API Key'),
         description: t('Create a key for your app or service'),
         to: '/keys',
-        icon: KeyRound,
         completed: Boolean(preferredKey),
       },
       {
         title: t('Add credits'),
         description: t('Keep enough balance before production traffic'),
         to: '/wallet',
-        icon: CreditCard,
         completed: remainQuota > 0 || usedQuota > 0,
       },
       {
         title: t('Send a request'),
         description: t('Verify routing with Playground or your client'),
         to: '/playground',
-        icon: TerminalSquare,
         completed: requestCount > 0,
       },
     ],
     [preferredKey, remainQuota, requestCount, t, usedQuota]
-  )
-
-  // The account setup steps live in QuickStartActions; this list only holds
-  // the follow-up destinations so the two entries are not duplicated.
-  const quickActions = useMemo<QuickAction[]>(
-    () => [
-      {
-        title: t('Usage Logs'),
-        description: t('Inspect requests, errors, and billing details'),
-        to: '/usage-logs',
-        icon: FileText,
-      },
-      {
-        title: t('Pricing'),
-        description: t('Review model rates before scaling traffic'),
-        to: '/pricing',
-        icon: BookOpen,
-      },
-    ],
-    [t]
-  )
-
-  const visibleQuickActions = useMemo(
-    () => quickActions.filter((action) => !action.adminOnly || isAdmin),
-    [isAdmin, quickActions]
-  )
-
-  const heroSignals = useMemo<HeroSignal[]>(
-    () => [
-      {
-        label: t('Route active'),
-        value: serverAddress ? t('Online') : t('Current domain'),
-        icon: RadioTower,
-        tone: 'info',
-      },
-      {
-        label: t('Auth configured'),
-        value: preferredKey ? t('Secured') : t('Needs API key'),
-        icon: ShieldCheck,
-        tone: 'success',
-      },
-      {
-        label: t('Model selected'),
-        value: modelsQuery.data?.[0] ?? t('Loading'),
-        icon: Timer,
-        tone: 'chart-4',
-      },
-    ],
-    [modelsQuery.data, preferredKey, serverAddress, t]
   )
 
   const requestExample = useMemo<RequestExample>(() => {
@@ -621,224 +369,115 @@ export function OverviewDashboard() {
   const completedStepCount = startSteps.filter((step) => step.completed).length
   const setupComplete = completedStepCount === startSteps.length
   const setupStatusReady = apiKeysQuery.isFetched && Boolean(user)
-  const setupGuideExpanded =
-    manualSetupGuideExpanded ?? (setupStatusReady && !setupComplete)
-  const showContentPanels = showAnnouncementsPanel || showFAQPanel
+  const showSetupGuide = setupStatusReady && !setupComplete && guideExpanded
+  const showSetupSummary = setupStatusReady && !setupComplete && !guideExpanded
 
-  const handleSetupGuideToggle = () => {
-    const nextExpanded = !setupGuideExpanded
-    setManualSetupGuideExpanded(nextExpanded)
+  const handleGuideToggle = () => {
+    const nextExpanded = !guideExpanded
+    setGuideExpanded(nextExpanded)
     saveSetupGuideExpanded(nextExpanded)
-    if (!nextExpanded && setupComplete) {
-      setupGuideToggleRef.current?.focus()
-    }
   }
 
   return (
-    <SectionPageLayout>
-      <SectionPageLayout.Title>{t('Overview')}</SectionPageLayout.Title>
-      <SectionPageLayout.Actions>
-        {setupStatusReady && setupComplete && (
-          <Button
-            ref={setupGuideToggleRef}
-            variant='ghost'
-            size='sm'
-            className='text-muted-foreground hover:text-foreground h-auto min-h-7 max-w-[60vw] whitespace-normal'
-            aria-expanded={setupGuideExpanded}
-            aria-controls={setupGuideId}
-            onClick={handleSetupGuideToggle}
-          >
-            {t('Setup guide')}
-          </Button>
-        )}
-      </SectionPageLayout.Actions>
-      <SectionPageLayout.Content>
-        <div className='flex flex-col gap-5'>
-          <SummaryCards
-            tokenUsage={tokenUsageQuery.data}
-            modelDistribution={modelDistQuery.data}
-            usageLoading={tokenUsageQuery.isLoading || modelDistQuery.isLoading}
-          />
-          <div id={setupGuideId} hidden={!setupGuideExpanded}>
-            {setupGuideExpanded && (
-              <CardStaggerContainer className='grid items-stretch gap-4 2xl:grid-cols-[minmax(0,1fr)_18rem]'>
-                <CardStaggerItem className='bg-card h-full overflow-hidden rounded-lg border shadow-xs'>
-                  <div className='relative h-full overflow-hidden p-4 sm:p-5'>
-                    <SetupGuideBackdrop />
-                    <div className='relative grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
-                      <div className='flex min-w-0 flex-col gap-5'>
-                        <div className='flex flex-wrap items-start justify-between gap-3'>
-                          <div className='flex max-w-2xl flex-col gap-1'>
-                            <div className='text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wider uppercase'>
-                              <ListChecks
-                                className='size-3.5'
-                                aria-hidden='true'
-                              />
-                              {t('Get started')}
-                            </div>
-                            <h3 className='text-xl font-semibold tracking-tight sm:text-2xl'>
-                              {t('Build on your API gateway in minutes')}
-                            </h3>
-                            <p className='text-muted-foreground max-w-xl text-sm leading-relaxed'>
-                              {t(
-                                'A focused home for keys, balance, routing, and service health.'
-                              )}
-                            </p>
-                          </div>
-                          <div className='flex flex-wrap items-center gap-2'>
-                            <Button
-                              variant='outline'
-                              size='sm'
-                              aria-expanded={setupGuideExpanded}
-                              aria-controls={setupGuideId}
-                              onClick={handleSetupGuideToggle}
-                            >
-                              <ChevronUp data-icon='inline-start' />
-                              {t('Hide setup guide')}
-                            </Button>
-                            <Button size='sm' render={<Link to='/keys' />}>
-                              <KeyRound data-icon='inline-start' />
-                              {t('Create API Key')}
-                            </Button>
-                          </div>
-                        </div>
+    <div className='flex flex-col gap-4 sm:gap-5'>
+      <SummaryCards
+        tokenUsage={tokenUsageQuery.data}
+        modelDistribution={modelDistQuery.data}
+        usageLoading={tokenUsageQuery.isLoading || modelDistQuery.isLoading}
+      />
 
-                        <ol className='bg-background/45 rounded-lg border p-2 backdrop-blur'>
-                          {startSteps.map((step, index) => (
-                            <StartStepItem
-                              key={step.title}
-                              step={step}
-                              index={index}
-                              isLast={index === startSteps.length - 1}
-                            />
-                          ))}
-                        </ol>
-                      </div>
+      {isAdmin && <PerformanceOverview />}
 
-                      <RequestPreview
-                        example={requestExample}
-                        signals={heroSignals}
-                      />
-                    </div>
-                  </div>
-                </CardStaggerItem>
-
-                <CardStaggerItem className='bg-card h-full rounded-lg border p-4 shadow-xs sm:p-5'>
-                  <div className='flex h-full flex-col gap-4'>
-                    <div className='flex flex-col gap-1'>
-                      <div className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
-                        {t('Recommended actions')}
-                      </div>
-                      <h3 className='text-lg font-semibold tracking-tight'>
-                        {t('Keep the platform ready')}
-                      </h3>
-                    </div>
-                    <div className='grid gap-2'>
-                      {visibleQuickActions.map((action) => (
-                        <QuickActionItem key={action.title} action={action} />
-                      ))}
-                    </div>
-                  </div>
-                </CardStaggerItem>
-              </CardStaggerContainer>
-            )}
-          </div>
-          {!setupGuideExpanded && !setupComplete && (
-            <CardStaggerContainer>
-              <CardStaggerItem className='bg-card overflow-hidden rounded-lg border shadow-xs'>
-                <div className='relative overflow-hidden px-4 py-3 sm:px-5'>
-                  <SetupGuideBackdrop compact />
-                  <div className='relative flex flex-wrap items-center justify-between gap-3'>
-                    <div className='flex min-w-0 items-center gap-3'>
-                      <span className='bg-background/70 flex size-9 shrink-0 items-center justify-center rounded-xl border shadow-xs'>
-                        <Check
-                          className='text-success size-4'
-                          aria-hidden='true'
-                        />
-                      </span>
-                      <div className='min-w-0'>
-                        <div className='flex items-center gap-2'>
-                          <h3 className='truncate text-sm font-semibold'>
-                            {t('Setup guide')}
-                          </h3>
-                          <span className='text-muted-foreground bg-background/60 rounded-md border px-2 py-0.5 text-xs'>
-                            {t('Setup progress: {{completed}}/{{total}}', {
-                              completed: completedStepCount,
-                              total: startSteps.length,
-                            })}
-                          </span>
-                        </div>
-                        <p className='text-muted-foreground line-clamp-1 text-xs'>
-                          {t('Setup guide is collapsed. Expand it anytime.')}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className='flex flex-wrap items-center gap-2'>
-                      {visibleQuickActions.map((action) => (
-                        <CompactQuickAction
-                          key={action.title}
-                          action={action}
-                        />
-                      ))}
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        className='bg-background/70 h-8 min-w-28'
-                        aria-expanded={setupGuideExpanded}
-                        aria-controls={setupGuideId}
-                        onClick={handleSetupGuideToggle}
-                      >
-                        <ChevronDown data-icon='inline-start' />
-                        {t('Show setup guide')}
-                      </Button>
-                    </div>
-                  </div>
+      {showSetupGuide && (
+        <Card className='gap-0 overflow-hidden p-0 shadow-(--tc-shadow-sm)'>
+          <div className='border-border/70 border-b px-4 py-4 sm:px-5'>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+              <div className='flex min-w-0 flex-col gap-1'>
+                <div className='text-muted-foreground flex items-center gap-2 text-xs font-medium'>
+                  <ListChecks className='size-3.5' aria-hidden='true' />
+                  {t('Get started')}
                 </div>
-              </CardStaggerItem>
-            </CardStaggerContainer>
-          )}
+                <h2 className='text-lg font-semibold tracking-tight'>
+                  {t('Build on your API gateway in minutes')}
+                </h2>
+                <p className='text-muted-foreground max-w-xl text-sm leading-relaxed'>
+                  {t(
+                    'A focused home for keys, balance, routing, and service health.'
+                  )}
+                </p>
+              </div>
+              <div className='flex flex-wrap items-center gap-2'>
+                <span className='text-muted-foreground bg-muted/40 rounded-md border px-2 py-1 text-xs tabular-nums'>
+                  {t('Setup progress: {{completed}}/{{total}}', {
+                    completed: completedStepCount,
+                    total: startSteps.length,
+                  })}
+                </span>
+                <Button variant='ghost' size='sm' onClick={handleGuideToggle}>
+                  <ChevronUp data-icon='inline-start' />
+                  {t('Hide setup guide')}
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div className='grid gap-4 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
+            <div className='grid content-start gap-2 sm:grid-cols-3 xl:grid-cols-1'>
+              {startSteps.map((step, index) => (
+                <SetupStep key={step.title} step={step} index={index} />
+              ))}
+            </div>
+            <RequestPreview example={requestExample} />
+          </div>
+        </Card>
+      )}
 
-          <CardStaggerContainer className='grid gap-4 lg:grid-cols-2'>
-            <CardStaggerItem>
-              <ModelDistributionChart
-                data={modelDistQuery.data}
-                loading={modelDistQuery.isLoading}
-              />
-            </CardStaggerItem>
-            <CardStaggerItem>
-              <TokenUsageChart
-                data={tokenUsageQuery.data}
-                startTimestamp={timeRange.start}
-                endTimestamp={timeRange.end}
-                loading={tokenUsageQuery.isLoading}
-              />
-            </CardStaggerItem>
-          </CardStaggerContainer>
+      {showSetupSummary && (
+        <Card className='flex flex-wrap items-center justify-between gap-3 px-4 py-3 shadow-(--tc-shadow-sm)'>
+          <div className='flex min-w-0 items-center gap-3'>
+            <IconBadge tone='chart-1' size='sm'>
+              <ListChecks />
+            </IconBadge>
+            <div className='min-w-0'>
+              <div className='flex items-center gap-2'>
+                <h2 className='truncate text-sm font-semibold'>
+                  {t('Setup guide')}
+                </h2>
+                <span className='text-muted-foreground bg-muted/40 rounded-md border px-2 py-0.5 text-xs tabular-nums'>
+                  {t('Setup progress: {{completed}}/{{total}}', {
+                    completed: completedStepCount,
+                    total: startSteps.length,
+                  })}
+                </span>
+              </div>
+              <p className='text-muted-foreground line-clamp-1 text-xs'>
+                {t('Setup guide is collapsed. Expand it anytime.')}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant='outline'
+            size='sm'
+            className='shrink-0'
+            onClick={handleGuideToggle}
+          >
+            <ChevronDown data-icon='inline-start' />
+            {t('Show setup guide')}
+          </Button>
+        </Card>
+      )}
 
-          <CardStaggerContainer>
-            <CardStaggerItem>
-              <QuickStartActions />
-            </CardStaggerItem>
-          </CardStaggerContainer>
-
-          {showContentPanels && (
-            <CardStaggerContainer className='tc-overview-panels grid min-w-0 gap-4 lg:grid-cols-2'>
-              {showAnnouncementsPanel && (
-                <CardStaggerItem>
-                  <AnnouncementsPanel />
-                </CardStaggerItem>
-              )}
-              {showFAQPanel && (
-                <CardStaggerItem>
-                  <FAQPanel />
-                </CardStaggerItem>
-              )}
-            </CardStaggerContainer>
-          )}
-          <ContactInformation />
-        </div>
-      </SectionPageLayout.Content>
-    </SectionPageLayout>
+      <div className='grid gap-4 lg:grid-cols-2'>
+        <ModelDistributionChart
+          data={modelDistQuery.data}
+          loading={modelDistQuery.isLoading}
+        />
+        <TokenUsageChart
+          data={tokenUsageQuery.data}
+          startTimestamp={timeRange.start}
+          endTimestamp={timeRange.end}
+          loading={tokenUsageQuery.isLoading}
+        />
+      </div>
+    </div>
   )
 }

@@ -18,13 +18,15 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, expect, it, test, vi } from 'vitest'
 
 import { getFlowQuotaDates, getUserQuotaDates } from '@/features/dashboard/api'
 import { DEFAULT_DASHBOARD_CHART_PREFERENCES } from '@/features/dashboard/constants'
 import {
   buildDefaultDashboardFilters,
   buildQueryParams,
+  detectDashboardQuickRange,
+  getDashboardQuickRange,
 } from '@/features/dashboard/lib/filters'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
@@ -55,7 +57,70 @@ afterAll(() => {
   }
 })
 
-afterEach(() => useAuthStore.getState().auth.reset())
+afterEach(() => {
+  vi.useRealTimers()
+  useAuthStore.getState().auth.reset()
+})
+
+test('resolves and detects today, yesterday and rolling quick ranges', () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 8, 8, 12, 0, 0))
+
+  const today = getDashboardQuickRange('today')
+  expect(today.start).toEqual(new Date(2026, 8, 8, 0, 0, 0))
+  expect(today.end).toEqual(new Date(2026, 8, 8, 12, 0, 0))
+  expect(today.granularity).toBe('hour')
+  expect(
+    detectDashboardQuickRange({
+      start_timestamp: today.start,
+      end_timestamp: today.end,
+    })
+  ).toBe('today')
+
+  const yesterday = getDashboardQuickRange('yesterday')
+  expect(yesterday.start).toEqual(new Date(2026, 8, 7, 0, 0, 0))
+  expect(yesterday.end).toEqual(new Date(2026, 8, 7, 23, 59, 59, 999))
+  expect(yesterday.granularity).toBe('hour')
+  expect(
+    detectDashboardQuickRange({
+      start_timestamp: yesterday.start,
+      end_timestamp: yesterday.end,
+    })
+  ).toBe('yesterday')
+
+  const week = getDashboardQuickRange('7d')
+  expect(week.granularity).toBe('day')
+  expect(
+    detectDashboardQuickRange({
+      start_timestamp: week.start,
+      end_timestamp: week.end,
+    })
+  ).toBe('7d')
+
+  expect(
+    detectDashboardQuickRange({
+      start_timestamp: new Date(2026, 8, 8, 3, 0, 0),
+      end_timestamp: new Date(2026, 8, 8, 5, 0, 0),
+    })
+  ).toBeNull()
+})
+
+test('forwards the admin group, channel and token filters', () => {
+  expect(
+    buildQueryParams(
+      { start_timestamp: 1000, end_timestamp: 2000 },
+      {
+        group: 'vip',
+        channel_id: '7',
+        token_id: '11',
+      }
+    )
+  ).toMatchObject({
+    group: 'vip',
+    channel_id: '7',
+    token_id: '11',
+  })
+})
 
 it.each([1, 10, 100])(
   'lets role %i type a model and forwards it to standard and flow requests',

@@ -22,7 +22,6 @@ import { useState, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
-import { FadeIn } from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -35,10 +34,10 @@ import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
+import { ModelBreakdownTable } from './components/models/model-breakdown-table'
 import { ModelsChartPreferences } from './components/models/models-chart-preferences'
 import { ModelsFilter } from './components/models/models-filter-dialog'
 import { OverviewDashboard } from './components/overview/overview-dashboard'
-import { DEFAULT_TIME_GRANULARITY } from './constants'
 import {
   buildDefaultDashboardFilters,
   getDefaultDays,
@@ -69,37 +68,10 @@ const LOG_STAT_CARD_FALLBACK_KEYS = [
   'average-rpm',
   'average-tpm',
 ] as const
-const PERFORMANCE_METRIC_FALLBACK_KEYS = [
-  'success-rate',
-  'average-latency',
-  'throughput',
-] as const
-const PERFORMANCE_MODEL_FALLBACK_KEYS = [
-  'primary-model',
-  'secondary-model',
-] as const
 
 const LazyLogStatCards = lazy(() =>
   import('./components/models/log-stat-cards').then((m) => ({
     default: m.LogStatCards,
-  }))
-)
-
-const LazyModelCharts = lazy(() =>
-  import('./components/models/model-charts').then((m) => ({
-    default: m.ModelCharts,
-  }))
-)
-
-const LazyConsumptionDistributionChart = lazy(() =>
-  import('./components/models/consumption-distribution-chart').then((m) => ({
-    default: m.ConsumptionDistributionChart,
-  }))
-)
-
-const LazyPerformanceOverview = lazy(() =>
-  import('./components/models/performance-overview').then((m) => ({
-    default: m.PerformanceOverview,
   }))
 )
 
@@ -117,13 +89,13 @@ const LazyFlowCharts = lazy(() =>
 
 function LogStatCardsFallback() {
   return (
-    <div className='overflow-hidden rounded-lg border'>
-      <div className='divide-border/60 grid min-w-0 grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-7'>
+    <div className='bg-card border-border/70 overflow-hidden rounded-xl border shadow-(--tc-shadow-sm)'>
+      <div className='bg-border/60 grid min-w-0 grid-cols-2 gap-px sm:grid-cols-3 lg:grid-cols-7'>
         {LOG_STAT_CARD_FALLBACK_KEYS.map((key, index) => (
           <div
             key={key}
             className={cn(
-              'min-w-0 px-2.5 py-1.5 sm:px-3 sm:py-4 xl:px-4',
+              'bg-card min-w-0 px-3 py-2.5 sm:px-3.5 sm:py-4 xl:px-4',
               index === LOG_STAT_CARD_FALLBACK_KEYS.length - 1 &&
                 'col-span-2 sm:col-span-1'
             )}
@@ -137,45 +109,19 @@ function LogStatCardsFallback() {
           </div>
         ))}
       </div>
-      <div className='border-t px-3 py-2'>
-        <Skeleton className='h-4 w-full max-w-md' />
-      </div>
     </div>
   )
 }
 
-function ModelChartsFallback() {
+function ChartsFallback() {
   return (
-    <div className='overflow-hidden rounded-lg border'>
+    <div className='bg-card border-border/70 overflow-hidden rounded-xl border shadow-(--tc-shadow-sm)'>
       <div className='flex items-center justify-between border-b px-4 py-3 sm:px-5'>
         <Skeleton className='h-5 w-32' />
         <Skeleton className='h-8 w-72' />
       </div>
       <div className='h-96 p-2'>
         <Skeleton className='h-full w-full' />
-      </div>
-    </div>
-  )
-}
-
-function PerformanceOverviewFallback() {
-  return (
-    <div className='overflow-hidden rounded-lg border'>
-      <div className='flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:px-5'>
-        <div className='flex items-center gap-2'>
-          <Skeleton className='h-4 w-24' />
-        </div>
-        {PERFORMANCE_METRIC_FALLBACK_KEYS.map((key) => (
-          <div key={key} className='flex items-center gap-1.5'>
-            <Skeleton className='h-3 w-14' />
-            <Skeleton className='h-4 w-16' />
-          </div>
-        ))}
-        <div className='ml-auto flex items-center gap-2'>
-          {PERFORMANCE_MODEL_FALLBACK_KEYS.map((key) => (
-            <Skeleton key={key} className='h-5 w-28 rounded-full' />
-          ))}
-        </div>
       </div>
     </div>
   )
@@ -248,13 +194,10 @@ export function Dashboard() {
     []
   )
 
-  const meta = SECTION_META[activeSection] ?? SECTION_META.overview
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
   const visibleSections = useMemo(
     () =>
-      DASHBOARD_SECTION_IDS.filter(
-        (section) => section !== 'overview' && (section !== 'users' || isAdmin)
-      ),
+      DASHBOARD_SECTION_IDS.filter((section) => section !== 'users' || isAdmin),
     [isAdmin]
   )
   const handleSectionChange = useCallback(
@@ -266,8 +209,6 @@ export function Dashboard() {
     },
     [navigate]
   )
-  const showSectionTabs =
-    activeSection !== 'overview' && visibleSections.length > 1
   const modelActions =
     activeSection === 'models' ? (
       <>
@@ -316,105 +257,64 @@ export function Dashboard() {
           onFilterChange={handleFilterChange}
           onReset={handleResetFilters}
           titleKey='Flow Filters'
-          descriptionKey='Filter the traffic flow view by time range and user.'
+          descriptionKey='Filter the traffic flow view by time range, model, user, group, channel, and token.'
         />
       </>
     ) : null
   const sectionActions = modelActions ?? flowActions
 
-  if (activeSection === 'overview') {
-    return <OverviewDashboard />
-  }
-
   return (
     <SectionPageLayout>
-      <SectionPageLayout.Title>{t(meta.titleKey)}</SectionPageLayout.Title>
+      <SectionPageLayout.Title>{t('Dashboard')}</SectionPageLayout.Title>
       <SectionPageLayout.Content>
-        <div className='space-y-3 sm:space-y-4'>
-          <div className='flex flex-wrap items-center justify-between gap-1.5 sm:gap-2'>
-            {showSectionTabs ? (
-              <Tabs value={activeSection} onValueChange={handleSectionChange}>
-                <TabsList className='max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto'>
-                  {visibleSections.map((section) => (
-                    <TabsTrigger key={section} value={section}>
-                      {t(SECTION_META[section].titleKey)}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-            ) : (
-              <div />
-            )}
+        <div className='flex flex-col gap-3 sm:gap-4'>
+          <div className='flex flex-wrap items-center justify-between gap-2'>
+            <Tabs value={activeSection} onValueChange={handleSectionChange}>
+              <TabsList className='max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto'>
+                {visibleSections.map((section) => (
+                  <TabsTrigger key={section} value={section}>
+                    {t(SECTION_META[section].titleKey)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
             {sectionActions != null && (
               <div className='flex shrink-0 flex-wrap items-center gap-1.5 sm:gap-2'>
                 {sectionActions}
               </div>
             )}
           </div>
+          {activeSection === 'overview' && <OverviewDashboard />}
           {activeSection === 'models' && (
             <>
-              <FadeIn>
-                <Suspense fallback={<LogStatCardsFallback />}>
-                  <LazyLogStatCards
-                    filters={modelFilters}
-                    onDataUpdate={handleDataUpdate}
-                  />
-                </Suspense>
-              </FadeIn>
-              {isAdmin && (
-                <FadeIn delay={0.05}>
-                  <Suspense fallback={<PerformanceOverviewFallback />}>
-                    <LazyPerformanceOverview />
-                  </Suspense>
-                </FadeIn>
-              )}
-              <FadeIn delay={0.1}>
-                <Suspense fallback={<ModelChartsFallback />}>
-                  <LazyConsumptionDistributionChart
-                    data={modelData}
-                    loading={dataLoading}
-                    defaultChartType={
-                      chartPreferences.consumptionDistributionChart
-                    }
-                    timeGranularity={
-                      modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
-                    }
-                  />
-                </Suspense>
-              </FadeIn>
-              <FadeIn delay={0.15}>
-                <Suspense fallback={<ModelChartsFallback />}>
-                  <LazyModelCharts
-                    data={modelData}
-                    loading={dataLoading}
-                    defaultChartTab={chartPreferences.modelAnalyticsChart}
-                    timeGranularity={
-                      modelFilters.time_granularity || DEFAULT_TIME_GRANULARITY
-                    }
-                  />
-                </Suspense>
-              </FadeIn>
+              <Suspense fallback={<LogStatCardsFallback />}>
+                <LazyLogStatCards
+                  filters={modelFilters}
+                  onDataUpdate={handleDataUpdate}
+                />
+              </Suspense>
+              <ModelBreakdownTable
+                data={modelData}
+                loading={dataLoading}
+                showPerformance={isAdmin}
+              />
             </>
           )}
           {activeSection === 'users' && (
-            <FadeIn>
-              <Suspense fallback={<ModelChartsFallback />}>
-                <LazyUserCharts
-                  filters={userChartsFilters}
-                  onFiltersChange={setUserChartsFilters}
-                />
-              </Suspense>
-            </FadeIn>
+            <Suspense fallback={<ChartsFallback />}>
+              <LazyUserCharts
+                filters={userChartsFilters}
+                onFiltersChange={setUserChartsFilters}
+              />
+            </Suspense>
           )}
           {activeSection === 'flow' && (
-            <FadeIn>
-              <Suspense fallback={<ModelChartsFallback />}>
-                <LazyFlowCharts
-                  filters={modelFilters}
-                  sensitiveVisible={flowSensitiveVisible}
-                />
-              </Suspense>
-            </FadeIn>
+            <Suspense fallback={<ChartsFallback />}>
+              <LazyFlowCharts
+                filters={modelFilters}
+                sensitiveVisible={flowSensitiveVisible}
+              />
+            </Suspense>
           )}
         </div>
       </SectionPageLayout.Content>

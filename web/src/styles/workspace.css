@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 /* The workspace uses a full sidebar and an open document canvas. */
 :root {
   --tc-rule: color-mix(in srgb, var(--border) 82%, transparent);
-  --tc-gutter: clamp(1rem, 3.2vw, 3.5rem);
+  --tc-gutter: clamp(1rem, 2.8vw, 3rem);
 }
 .tc-site-logo {
   display: inline-flex;
@@ -57,21 +57,33 @@ For commercial licensing, please contact support@quantumnous.com
   font-size: 0.86rem;
 }
 .tc-workspace-shell {
-  background: var(--background);
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      60rem 34rem at 8% -12%,
+      var(--tc-ambient-indigo),
+      transparent 68%
+    ),
+    radial-gradient(
+      52rem 30rem at 100% -8%,
+      var(--tc-ambient-violet),
+      transparent 70%
+    );
+  background-repeat: no-repeat;
 }
 .tc-masthead {
-  background: color-mix(in srgb, var(--background) 86%, var(--card));
+  background: color-mix(in srgb, var(--background) 82%, transparent);
   border-bottom: 1px solid var(--tc-rule);
   box-shadow: none;
-  backdrop-filter: saturate(1.4) blur(16px);
+  backdrop-filter: saturate(1.35) blur(18px);
 }
 .tc-masthead-inner {
   display: flex;
-  min-height: 4.5rem;
+  min-height: var(--app-header-height);
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.75rem var(--tc-gutter);
+  padding: 0.5rem var(--tc-gutter);
 }
 .tc-system-brand {
   display: inline-flex;
@@ -172,14 +184,15 @@ For commercial licensing, please contact support@quantumnous.com
   overflow-wrap: anywhere;
 }
 .tc-navigation-panel [data-active] {
-  background: var(--sidebar-accent);
+  background: color-mix(in oklch, var(--sidebar-accent) 78%, transparent);
   color: var(--sidebar-accent-foreground);
   font-weight: 600;
 }
 .tc-navigation-panel [data-sidebar='menu-button'][data-active] {
-  background: var(--tc-gradient);
-  color: #fff;
-  box-shadow: var(--tc-shadow-lg);
+  background: color-mix(in oklch, var(--sidebar-accent) 78%, transparent);
+  color: var(--sidebar-accent-foreground);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklch, var(--sidebar-primary) 14%, transparent);
 }
 .tc-navigation-panel
   [data-sidebar='menu-button'][data-active]
@@ -218,32 +231,39 @@ For commercial licensing, please contact support@quantumnous.com
   stroke-width: 1.7;
 }
 .tc-workspace-content {
-  background: var(--background);
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      60rem 34rem at 8% -12%,
+      var(--tc-ambient-indigo),
+      transparent 68%
+    ),
+    radial-gradient(
+      52rem 30rem at 100% -8%,
+      var(--tc-ambient-violet),
+      transparent 70%
+    ),
+    radial-gradient(
+      46rem 30rem at 48% 108%,
+      var(--tc-ambient-teal),
+      transparent 72%
+    );
+  background-repeat: no-repeat;
 }
 .tc-main {
   width: 100%;
   background: transparent;
 }
 .tc-page-heading {
-  padding: 1.6rem var(--tc-gutter) 1.3rem;
+  padding: 1.25rem var(--tc-gutter) 0.9rem;
   background: none;
 }
 .tc-page-title {
-  font-size: clamp(1.5rem, 2.1vw, 2.05rem);
-  line-height: 1.15;
-  letter-spacing: -0.03em;
-  font-weight: 680;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-weight: 600;
   overflow-wrap: anywhere;
-}
-.tc-page-title::before {
-  display: inline-block;
-  content: '';
-  width: 0.3rem;
-  height: 1em;
-  background: var(--tc-gradient);
-  margin-inline-end: 0.7rem;
-  border-radius: 999px;
-  vertical-align: -0.08em;
 }
 .tc-channel-title-wrap {
   display: inline-flex;
@@ -318,14 +338,15 @@ For commercial licensing, please contact support@quantumnous.com
 }
 .tc-page-footer {
   padding-inline: var(--tc-gutter);
-  background: color-mix(in srgb, var(--background) 92%, var(--card));
+  background: color-mix(in srgb, var(--background) 82%, transparent);
   box-shadow: none;
+  backdrop-filter: blur(14px);
 }
 /* List pages stack a filter panel above the results at every width, so the
    table always gets the full content width. */
 .tc-data-workspace {
   --tc-data-radius: var(--radius-xl);
-  --tc-data-shadow: var(--tc-shadow-md);
+  --tc-data-shadow: var(--tc-shadow-sm);
   display: flex;
   flex-direction: column;
   gap: 0.875rem;
@@ -337,17 +358,7 @@ For commercial licensing, please contact support@quantumnous.com
   border: 1px solid var(--tc-rule);
   border-radius: var(--tc-data-radius);
   background: var(--card);
-  box-shadow: var(--tc-data-shadow);
-}
-.tc-data-tools::before {
-  position: absolute;
-  inset-inline: 1rem;
-  inset-block-start: 0;
-  height: 2px;
-  border-radius: 0 0 999px 999px;
-  background: var(--tc-gradient);
-  content: '';
-  opacity: 0.75;
+  box-shadow: var(--tc-shadow-sm);
 }
 /* Feature filter bars bring their own frame; the shared panel replaces it. */
 .tc-data-tools > .tc-log-filters,
@@ -375,7 +386,7 @@ For commercial licensing, please contact support@quantumnous.com
 }
 .tc-data-results [data-slot='table-head'] {
   height: 2.75rem;
-  background: color-mix(in oklch, var(--muted) 40%, var(--card));
+  background: var(--table-header);
   color: var(--muted-foreground);
   font-size: 0.75rem;
   font-weight: 600;
@@ -423,10 +434,10 @@ For commercial licensing, please contact support@quantumnous.com
   border: 1px solid var(--tc-rule);
   border-radius: var(--radius-xl);
   background: var(--card);
-  box-shadow: var(--tc-shadow-md);
+  box-shadow: var(--tc-shadow-sm);
 }
 .tc-panel-heading {
-  padding: 1.125rem 1.25rem;
+  padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--tc-rule);
 }
 .tc-wallet-workspace {
@@ -660,7 +671,7 @@ For commercial licensing, please contact support@quantumnous.com
 @media (max-width: 639px) {
   .tc-masthead-inner {
     gap: 0.5rem;
-    padding-block: 0.75rem;
+    padding-block: 0.5rem;
   }
   .tc-masthead-actions {
     flex-wrap: nowrap;
@@ -681,7 +692,7 @@ For commercial licensing, please contact support@quantumnous.com
     font-size: 0.82rem;
   }
   .tc-page-heading {
-    padding-block: 1.1rem;
+    padding-block: 0.95rem 0.75rem;
   }
   .tc-data-workspace {
     gap: 0.625rem;
@@ -689,15 +700,8 @@ For commercial licensing, please contact support@quantumnous.com
   .tc-data-tools {
     padding: 0.625rem 0.75rem;
   }
-  .tc-data-tools::before {
-    inset-inline: 0.75rem;
-  }
   .tc-page-title {
-    font-size: 1.6rem;
-  }
-  .tc-page-title::before {
-    width: 0.25rem;
-    margin-inline-end: 0.5rem;
+    font-size: 1.25rem;
   }
   .tc-page-heading > div {
     gap: 0.8rem;

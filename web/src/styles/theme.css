@@ -29,7 +29,9 @@ For commercial licensing, please contact support@quantumnous.com
   --font-manrope:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
     'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-
+  --font-mono:
+    'Cascadia Code', 'SFMono-Regular', 'JetBrains Mono', 'Menlo', 'Consolas',
+    'Liberation Mono', monospace;
   --color-brand: var(--tc-brand-accent);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -85,22 +87,34 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 :root {
-  --radius: 0.875rem;
+  --radius: 0.75rem;
   --app-header-height: 3.75rem;
   --tc-brand-accent: #6366f1;
   /* Signature gradient used by primary actions, hero accents and icon tiles. */
   --tc-gradient-from: #6366f1;
-  --tc-gradient-to: #a855f7;
+  --tc-gradient-to: #8b5cf6;
   --tc-gradient: linear-gradient(
     135deg,
     var(--tc-gradient-from),
     var(--tc-gradient-to)
   );
-  --tc-shadow-sm: 0 1px 2px rgb(15 23 42 / 6%);
+  --tc-shadow-sm: 0 1px 2px rgb(15 23 42 / 4%);
   --tc-shadow-md:
-    0 1px 2px rgb(15 23 42 / 6%), 0 8px 24px -12px rgb(15 23 42 / 18%);
+    0 1px 2px rgb(15 23 42 / 4%), 0 6px 16px -12px rgb(15 23 42 / 12%);
   --tc-shadow-lg:
-    0 1px 2px rgb(15 23 42 / 5%), 0 18px 40px -18px rgb(79 70 229 / 28%);
+    0 1px 2px rgb(15 23 42 / 4%), 0 16px 36px -20px rgb(79 70 229 / 22%);
+  /* Ambient wash shared by the workspace, public and auth shells. */
+  --tc-ambient-indigo: color-mix(
+    in oklch,
+    var(--tc-gradient-from) 14%,
+    transparent
+  );
+  --tc-ambient-violet: color-mix(
+    in oklch,
+    var(--tc-gradient-to) 12%,
+    transparent
+  );
+  --tc-ambient-teal: color-mix(in oklch, var(--chart-3) 8%, transparent);
   /* Static build-channel fallback consumed when JS hasn't booted yet. */
   --app-rev: '2k6e8r7p';
   --font-ui-sans:
@@ -131,25 +145,25 @@ For commercial licensing, please contact support@quantumnous.com
   --info-foreground: oklch(0.985 0 0);
   --neutral: oklch(0.708 0 0);
   --neutral-foreground: oklch(0.145 0 0);
-  --border: #e2e8f0;
-  --input: #cbd5e1;
+  --border: #e6ebf3;
+  --input: #cfd8e3;
   --ring: #6366f1;
-  /* Chart ramp follows the brand gradient: indigo → violet → cyan → amber. */
+  /* Chart ramp follows the brand gradient: indigo → violet → teal → amber → rose. */
   --chart-1: #6366f1;
-  --chart-2: #a855f7;
-  --chart-3: #06b6d4;
+  --chart-2: #8b5cf6;
+  --chart-3: #14b8a6;
   --chart-4: #f59e0b;
-  --chart-5: #ec4899;
+  --chart-5: #f43f5e;
   --overview-accent-1: #6366f1;
-  --overview-accent-2: #a855f7;
-  --overview-accent-3: #06b6d4;
+  --overview-accent-2: #8b5cf6;
+  --overview-accent-3: #14b8a6;
   --sidebar: #ffffff;
   --sidebar-foreground: #1e293b;
   --sidebar-primary: #4f46e5;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #eef2ff;
   --sidebar-accent-foreground: #3730a3;
-  --sidebar-border: #e2e8f0;
+  --sidebar-border: #e6ebf3;
   --sidebar-ring: #6366f1;
   --skeleton-base: #eef2f6;
   --skeleton-highlight: #f8fafc;
@@ -195,10 +209,22 @@ For commercial licensing, please contact support@quantumnous.com
   --popover: #1a2338;
   --popover-foreground: #e8ecf7;
   --tc-brand-accent: #818cf8;
-  --tc-shadow-sm: 0 1px 2px rgb(0 0 0 / 35%);
-  --tc-shadow-md: 0 1px 2px rgb(0 0 0 / 35%), 0 8px 24px -12px rgb(0 0 0 / 55%);
+  --tc-shadow-sm: 0 1px 2px rgb(0 0 0 / 32%);
+  --tc-shadow-md:
+    0 1px 2px rgb(0 0 0 / 32%), 0 6px 16px -12px rgb(0 0 0 / 48%);
   --tc-shadow-lg:
-    0 1px 2px rgb(0 0 0 / 35%), 0 20px 44px -20px rgb(129 140 248 / 32%);
+    0 1px 2px rgb(0 0 0 / 32%), 0 16px 36px -20px rgb(129 140 248 / 26%);
+  --tc-ambient-indigo: color-mix(
+    in oklch,
+    var(--tc-gradient-from) 10%,
+    transparent
+  );
+  --tc-ambient-violet: color-mix(
+    in oklch,
+    var(--tc-gradient-to) 9%,
+    transparent
+  );
+  --tc-ambient-teal: color-mix(in oklch, var(--chart-3) 6%, transparent);
   --primary: #818cf8;
   --primary-foreground: #0b1020;
   --secondary: #1e293b;
@@ -221,13 +247,13 @@ For commercial licensing, please contact support@quantumnous.com
   --input: #38455f;
   --ring: #818cf8;
   --chart-1: #818cf8;
-  --chart-2: #c084fc;
-  --chart-3: #22d3ee;
+  --chart-2: #a78bfa;
+  --chart-3: #2dd4bf;
   --chart-4: #fbbf24;
-  --chart-5: #f472b6;
+  --chart-5: #fb7185;
   --overview-accent-1: #818cf8;
-  --overview-accent-2: #c084fc;
-  --overview-accent-3: #22d3ee;
+  --overview-accent-2: #a78bfa;
+  --overview-accent-3: #2dd4bf;
   --sidebar: #0e1426;
   --sidebar-foreground: #cbd5e1;
   --sidebar-primary: #818cf8;
@@ -268,12 +294,17 @@ For commercial licensing, please contact support@quantumnous.com
   background-image:
     radial-gradient(
       60% 45% at 15% 0%,
-      color-mix(in oklch, var(--tc-gradient-from) 12%, transparent),
+      color-mix(in oklch, var(--tc-gradient-from) 16%, transparent),
       transparent 70%
     ),
     radial-gradient(
       50% 40% at 90% 5%,
-      color-mix(in oklch, var(--tc-gradient-to) 10%, transparent),
+      color-mix(in oklch, var(--tc-gradient-to) 13%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      45% 35% at 55% 105%,
+      var(--tc-ambient-teal),
       transparent 70%
     );
   background-repeat: no-repeat;

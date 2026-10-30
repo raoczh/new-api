@@ -206,6 +206,29 @@ describe('pricing synchronization', () => {
     expect(screen.getByText(custom)).toBeVisible()
   })
 
+  it('wraps long request rules inside the price cell instead of widening the table', () => {
+    const requestRules =
+      '(header("x-upstream-route-identifier") == "priority-queue" ? 2 : 1) * (param("long-request-parameter-name") == "enabled" ? 3 : 1)'
+    render(
+      <TableFixture
+        prices={{
+          m: {
+            current: {},
+            upstreams: {
+              upstream: {
+                billing_mode: 'tiered_expr',
+                billing_expr: `tier("base", p * 2 + c * 8) * ${requestRules}`,
+              },
+            },
+          },
+        }}
+      />
+    )
+    const rule = screen.getByText(/Includes request rules/)
+    expect(rule).toHaveClass('wrap-anywhere')
+    expect(rule.parentElement).toHaveClass('whitespace-normal')
+  })
+
   it('shows a mobile comparison list and preserves source-wide selection', async () => {
     const original = window.matchMedia
     vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({

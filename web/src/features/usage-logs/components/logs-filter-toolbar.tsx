@@ -164,8 +164,8 @@ export function LogsFilterToolbar<TData>(props: LogsFilterToolbarProps<TData>) {
                   {activeMobileFilterCount > 0 && (
                     <Badge
                       className={cn(
-                        !props.compactMobile &&
-                          'ml-0.5 size-5 justify-center p-0 text-[10px]'
+                        'size-5 justify-center p-0 text-[10px]',
+                        !props.compactMobile && 'ml-0.5'
                       )}
                     >
                       {activeMobileFilterCount}

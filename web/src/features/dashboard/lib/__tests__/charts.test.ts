@@ -21,7 +21,7 @@ import { describe, expect, test } from 'vitest'
 import type { QuotaDataItem } from '@/features/dashboard/types'
 import type { TimeGranularity } from '@/lib/time'
 
-import { processChartData, processUserChartData } from '../charts'
+import { processUserChartData } from '../charts'
 
 const cases: Array<{
   granularity: TimeGranularity
@@ -148,25 +148,7 @@ describe('user chart grouping', () => {
   })
 })
 
-describe.each(cases)('dashboard $granularity chart chronology', (scenario) => {
-  test('orders model buckets across New Year while aggregating repeated labels', () => {
-    const data = unorderedUsage(scenario.start, scenario.interval)
-    const original = structuredClone(data)
-    const result = processChartData(data, scenario.granularity)
-
-    for (const key of ['spec_line', 'spec_area', 'spec_model_line'] as const) {
-      const values: Array<{ Time: string; rawQuota: number; Count: number }> =
-        result[key].data[0].values
-      expect(values.map((row) => row.Time)).toEqual(scenario.labels)
-      expect(
-        values.map((row) =>
-          key === 'spec_model_line' ? row.Count : row.rawQuota / 500000
-        )
-      ).toEqual([11, 2, 3, 4, 5, 6, 7, 8])
-    }
-    expect(data).toEqual(original)
-  })
-
+describe.each(cases)('dashboard $granularity user chart', (scenario) => {
   test('orders user buckets across New Year while aggregating repeated labels', () => {
     const data = unorderedUsage(scenario.start, scenario.interval)
     const original = structuredClone(data)
@@ -179,21 +161,5 @@ describe.each(cases)('dashboard $granularity chart chronology', (scenario) => {
       11, 2, 3, 4, 5, 6, 7, 8,
     ])
     expect(data).toEqual(original)
-  })
-
-  test('keeps the existing seven padded model buckets in chronological order', () => {
-    const data = [unorderedUsage(scenario.start, scenario.interval)[0]]
-    const result = processChartData(data, scenario.granularity)
-
-    for (const key of ['spec_line', 'spec_area', 'spec_model_line'] as const) {
-      const values: Array<{ Time: string; rawQuota: number; Count: number }> =
-        result[key].data[0].values
-      expect(values.map((row) => row.Time)).toEqual(scenario.labels.slice(1))
-      expect(
-        values.map((row) =>
-          key === 'spec_model_line' ? row.Count : row.rawQuota / 500000
-        )
-      ).toEqual([0, 0, 0, 0, 0, 0, 8])
-    }
   })
 })

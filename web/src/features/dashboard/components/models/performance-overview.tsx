@@ -21,6 +21,7 @@ import { Gauge, HeartPulse, Timer } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Card } from '@/components/ui/card'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getPerfMetricsSummary } from '@/features/performance-metrics/api'
@@ -61,14 +62,14 @@ export function PerformanceOverview() {
 
   if (!loading && !hasData) {
     return (
-      <div className='text-muted-foreground overflow-hidden rounded-lg border px-4 py-3 text-center text-xs'>
+      <Card className='text-muted-foreground gap-0 px-4 py-3 text-center text-xs shadow-(--tc-shadow-sm)'>
         {t('No performance data available')}
-      </div>
+      </Card>
     )
   }
 
   return (
-    <div className='overflow-hidden rounded-lg border'>
+    <Card className='gap-0 py-0 shadow-(--tc-shadow-sm)'>
       <div className='flex flex-wrap items-center gap-x-5 gap-y-2.5 px-4 py-2.5 sm:px-5 sm:py-3'>
         {/* Title */}
         <div className='flex items-center gap-1.5'>
@@ -131,7 +132,7 @@ export function PerformanceOverview() {
           </div>
         )}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -149,10 +150,10 @@ function InlineMetric(props: {
       <IconBadge tone={props.tone} size='xs'>
         <Icon />
       </IconBadge>
-      <span className='text-muted-foreground text-[11px]'>{props.label}</span>
+      <span className='text-muted-foreground text-xs'>{props.label}</span>
       <span
         className={cn(
-          'font-mono text-xs font-semibold tabular-nums',
+          'text-xs font-semibold tabular-nums',
           props.valueClassName
         )}
       >
@@ -179,7 +180,7 @@ function ModelBadge(props: { model: PerfModelSummary }) {
       />
       <span
         className={cn(
-          'font-mono text-[11px] font-semibold tabular-nums',
+          'text-[11px] font-semibold tabular-nums',
           getSuccessRateTextClass(model.success_rate)
         )}
       >

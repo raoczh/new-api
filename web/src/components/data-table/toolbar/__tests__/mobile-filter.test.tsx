@@ -21,7 +21,7 @@ import {
   useReactTable,
   type ColumnFiltersState,
 } from '@tanstack/react-table'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -29,6 +29,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
+import { DataTableMobileFilterPanel } from '../mobile-filter-panel'
 import { DataTableToolbar } from '../toolbar'
 
 const rows = [{ name: 'Channel', model: 'model', status: 'enabled' }]
@@ -158,4 +159,33 @@ it.each([
   expect(
     screen.queryByRole('button', { name: /^(Collapse|Expand)$/ })
   ).not.toBeInTheDocument()
+})
+
+it('tightens the action row spacing in the compact mobile filter panel', () => {
+  render(
+    <DataTableMobileFilterPanel
+      compact
+      actions={
+        <>
+          <Button>Hide</Button>
+          <Button>Filter</Button>
+          <Button>Search</Button>
+          <Button>Export</Button>
+          <Button>View</Button>
+        </>
+      }
+    >
+      <span>Filters</span>
+    </DataTableMobileFilterPanel>
+  )
+
+  const actions = screen.getByRole('group', { name: 'Actions' })
+  expect(actions).toHaveClass(
+    'gap-1',
+    '[&>button]:px-1.5',
+    '[&>button]:text-[0.8rem]'
+  )
+  for (const name of ['Hide', 'Filter', 'Search', 'Export', 'View']) {
+    expect(within(actions).getByRole('button', { name })).toBeVisible()
+  }
 })

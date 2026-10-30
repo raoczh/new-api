@@ -138,7 +138,7 @@ it('shows contact methods from system settings and confirms before signing out',
   expect(
     screen.queryByRole('link', { name: /QuantumNous/ })
   ).not.toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'Contact support' }))
+  await user.click(screen.getByRole('button', { name: 'Support' }))
   expect(
     screen.getByRole('link', { name: 'help@example.com' })
   ).toHaveAttribute('href', 'mailto:help@example.com')
@@ -151,10 +151,30 @@ it('shows contact methods from system settings and confirms before signing out',
   expect(screen.getByRole('alertdialog', { name: 'Sign out' })).toBeVisible()
 })
 
-it('hides contact support when no contact method is configured', async () => {
+it('shows configured FAQ entries in the support popover', async () => {
+  client.setQueryData(['status'], {
+    faq_enabled: true,
+    faq: [
+      {
+        id: 1,
+        question: 'How do I create a key?',
+        answer: 'Open the API Keys page.',
+      },
+    ],
+  })
+  const user = userEvent.setup()
+  await renderNavigation()
+
+  await user.click(screen.getByRole('button', { name: 'Support' }))
+  expect(screen.getByText('How do I create a key?')).toBeVisible()
+  await user.click(screen.getByText('How do I create a key?'))
+  expect(await screen.findByText('Open the API Keys page.')).toBeVisible()
+})
+
+it('hides the support entry when no contact method or FAQ is configured', async () => {
   await renderNavigation()
   expect(
-    screen.queryByRole('button', { name: 'Contact support' })
+    screen.queryByRole('button', { name: 'Support' })
   ).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Log out' })).toBeVisible()
 })
@@ -171,7 +191,10 @@ it('shows all permitted page links immediately and supports direct keyboard navi
     screen.getByRole('navigation', { name: 'Navigation' })
   )
   expect(navigation.getByRole('link', { name: 'AI Chat' })).toBeVisible()
-  expect(navigation.getByRole('link', { name: 'Overview' })).toBeVisible()
+  expect(navigation.getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
+    'href',
+    '/dashboard/overview'
+  )
   expect(navigation.getByRole('link', { name: 'Wallet' })).toBeVisible()
   expect(
     navigation.queryByRole('link', { name: 'Channels' })

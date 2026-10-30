@@ -43,9 +43,10 @@ func TestDashboardModelFilterDatabaseMatrix(t *testing.T) {
 			t.Cleanup(func() {
 				DB = previousDB
 				assert.NoError(t, db.Migrator().DropTable(&QuotaData{}))
+				assert.NoError(t, db.Migrator().DropTable(&Channel{}))
 				assert.NoError(t, sqlDB.Close())
 			})
-			require.NoError(t, db.AutoMigrate(&QuotaData{}))
+			require.NoError(t, db.AutoMigrate(&QuotaData{}, &Channel{}))
 			var version string
 			versionQuery := "SELECT version()"
 			if dialect == "sqlite" {
@@ -106,6 +107,44 @@ func TestDashboardModelFilterDatabaseMatrix(t *testing.T) {
 						flowCount += row.Count
 					}
 					assert.Equal(t, tc.wantCount, flowCount, "flow dashboard")
+				})
+			}
+
+			filterRows := []QuotaData{
+				{UserID: 1, Username: "alice", ModelName: "gpt-alpha", UseGroup: "vip", ChannelID: 5, TokenID: 11, CreatedAt: 3000, Count: 17},
+				{UserID: 2, Username: "bob", ModelName: "gpt-alpha", UseGroup: "default", ChannelID: 6, TokenID: 22, CreatedAt: 3000, Count: 19},
+			}
+			require.NoError(t, db.Create(&filterRows).Error)
+			require.NoError(t, db.Create(&Channel{Id: 5, Name: "filter-east"}).Error)
+			require.NoError(t, db.Create(&Channel{Id: 6, Name: "filter-west"}).Error)
+
+			for _, tc := range []struct {
+				name   string
+				filter QuotaDataFilter
+				want   int
+			}{
+				{"group", QuotaDataFilter{Group: "vip"}, 17},
+				{"channel", QuotaDataFilter{ChannelID: 6}, 19},
+				{"token", QuotaDataFilter{TokenID: 11}, 17},
+				{"combined", QuotaDataFilter{Group: "vip", ChannelID: 5, TokenID: 11, ModelName: "gpt-alpha"}, 17},
+				{"username and group", QuotaDataFilter{Username: "alice", Group: "vip"}, 17},
+			} {
+				t.Run("filtered "+tc.name, func(t *testing.T) {
+					standard, queryErr := GetAllQuotaDatesFiltered(2500, 3500, tc.filter)
+					require.NoError(t, queryErr)
+					standardCount := 0
+					for _, row := range standard {
+						standardCount += row.Count
+					}
+					assert.Equal(t, tc.want, standardCount, "standard dashboard")
+
+					flow, queryErr := GetFlowQuotaDataFiltered(2500, 3500, tc.filter, 0, common.RoleAdminUser)
+					require.NoError(t, queryErr)
+					flowCount := 0
+					for _, row := range flow {
+						flowCount += row.Count
+					}
+					assert.Equal(t, tc.want, flowCount, "flow dashboard")
 				})
 			}
 		})

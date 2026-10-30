@@ -71,14 +71,47 @@ func parseOptionalTimestamp(c *gin.Context, key string) (int64, bool) {
 	return value, true
 }
 
+func parseOptionalNonNegativeInt(c *gin.Context, key string) (int, bool) {
+	raw := c.Query(key)
+	if raw == "" {
+		return 0, true
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		common.ApiErrorMsg(c, "invalid "+key)
+		return 0, false
+	}
+	return value, true
+}
+
+func quotaDataFilterFromQuery(c *gin.Context) (model.QuotaDataFilter, bool) {
+	channelID, ok := parseOptionalNonNegativeInt(c, "channel_id")
+	if !ok {
+		return model.QuotaDataFilter{}, false
+	}
+	tokenID, ok := parseOptionalNonNegativeInt(c, "token_id")
+	if !ok {
+		return model.QuotaDataFilter{}, false
+	}
+	return model.QuotaDataFilter{
+		Username:  c.Query("username"),
+		ModelName: c.Query("model_name"),
+		Group:     c.Query("group"),
+		ChannelID: channelID,
+		TokenID:   tokenID,
+	}, true
+}
+
 func GetAllQuotaDates(c *gin.Context) {
 	startTimestamp, endTimestamp, ok := parseAdminQuotaTimeRange(c)
 	if !ok {
 		return
 	}
-	username := c.Query("username")
-	modelName := c.Query("model_name")
-	dates, err := model.GetAllQuotaDates(startTimestamp, endTimestamp, username, modelName)
+	filter, ok := quotaDataFilterFromQuery(c)
+	if !ok {
+		return
+	}
+	dates, err := model.GetAllQuotaDatesFiltered(startTimestamp, endTimestamp, filter)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -119,8 +152,11 @@ func GetUserQuotaDates(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	modelName := c.Query("model_name")
-	dates, err := model.GetQuotaDataByUserId(userId, modelName, startTimestamp, endTimestamp)
+	filter, ok := quotaDataFilterFromQuery(c)
+	if !ok {
+		return
+	}
+	dates, err := model.GetQuotaDataByUserIdFiltered(userId, filter, startTimestamp, endTimestamp)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -138,9 +174,11 @@ func GetAllFlowQuotaDates(c *gin.Context) {
 	if !ok {
 		return
 	}
-	username := c.Query("username")
-	modelName := c.Query("model_name")
-	dates, err := model.GetFlowQuotaData(startTimestamp, endTimestamp, username, modelName, 0, c.GetInt("role"))
+	filter, ok := quotaDataFilterFromQuery(c)
+	if !ok {
+		return
+	}
+	dates, err := model.GetFlowQuotaDataFiltered(startTimestamp, endTimestamp, filter, 0, c.GetInt("role"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -163,8 +201,12 @@ func GetUserFlowQuotaDates(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	modelName := c.Query("model_name")
-	dates, err := model.GetFlowQuotaData(startTimestamp, endTimestamp, "", modelName, userId, common.RoleCommonUser)
+	filter, ok := quotaDataFilterFromQuery(c)
+	if !ok {
+		return
+	}
+	filter.Username = ""
+	dates, err := model.GetFlowQuotaDataFiltered(startTimestamp, endTimestamp, filter, userId, common.RoleCommonUser)
 	if err != nil {
 		common.ApiError(c, err)
 		return

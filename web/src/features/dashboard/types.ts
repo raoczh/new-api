@@ -192,15 +192,12 @@ export interface DashboardFilters {
   time_granularity?: TimeGranularity
   username?: string
   model_name?: string
+  group?: string
+  channel_id?: string
+  token_id?: string
 }
 
-export type ConsumptionDistributionChartType = 'bar' | 'area'
-
-export type ModelAnalyticsChartTab = 'trend' | 'proportion' | 'top'
-
 export interface DashboardChartPreferences {
-  consumptionDistributionChart: ConsumptionDistributionChartType
-  modelAnalyticsChart: ModelAnalyticsChartTab
   defaultTimeRangeDays: number
   defaultTimeGranularity: TimeGranularity
 }
@@ -231,31 +228,9 @@ export interface ApiInfoItem {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type VChartSpec = Record<string, any>
 
-export interface ProcessedChartData {
-  spec_pie: VChartSpec
-  spec_line: VChartSpec
-  spec_area: VChartSpec
-  spec_model_line: VChartSpec
-  spec_rank_bar: VChartSpec
-  totalQuotaDisplay: string
-  totalCountDisplay: string
-}
-
 export interface ProcessedUserChartData {
   spec_user_rank: VChartSpec
   spec_user_trend: VChartSpec
-}
-
-// ============================================================================
-// Announcement Types
-// ============================================================================
-
-export interface AnnouncementItem {
-  id?: number
-  content: string
-  publishDate?: string
-  type?: 'default' | 'ongoing' | 'success' | 'warning' | 'error'
-  extra?: string
 }
 
 // ============================================================================

@@ -99,6 +99,62 @@ func TestGetAllFlowQuotaDatesUsesRootDimensions(t *testing.T) {
 	require.Equal(t, "east", payload.Data[0].ChannelName)
 }
 
+func TestGetAllFlowQuotaDatesAppliesAdminFilters(t *testing.T) {
+	setupFlowControllerTestDB(t)
+
+	cases := []struct {
+		name      string
+		query     string
+		wantCount int
+		wantUser  string
+	}{
+		{"group", "group=vip", 1, "bob"},
+		{"channel", "channel_id=1", 2, ""},
+		{"token", "token_id=11", 1, "alice"},
+		{"combined", "group=default&channel_id=1&token_id=11", 1, "alice"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			ctx.Set("role", common.RoleAdminUser)
+			ctx.Request = httptest.NewRequest(
+				http.MethodGet,
+				"/api/data/flow?start_timestamp=1000&end_timestamp=2000&"+tc.query,
+				nil,
+			)
+
+			GetAllFlowQuotaDates(ctx)
+
+			payload := decodeFlowQuotaResponse(t, recorder)
+			require.Len(t, payload.Data, tc.wantCount)
+			if tc.wantUser != "" {
+				require.Equal(t, tc.wantUser, payload.Data[0].Username)
+			}
+		})
+	}
+}
+
+func TestGetAllFlowQuotaDatesRejectsInvalidNumericFilter(t *testing.T) {
+	setupFlowControllerTestDB(t)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("role", common.RoleAdminUser)
+	ctx.Request = httptest.NewRequest(
+		http.MethodGet,
+		"/api/data/flow?start_timestamp=1000&end_timestamp=2000&channel_id=bad",
+		nil,
+	)
+
+	GetAllFlowQuotaDates(ctx)
+
+	var payload flowQuotaResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.False(t, payload.Success)
+	require.Equal(t, "invalid channel_id", payload.Message)
+}
+
 func TestGetUserFlowQuotaDatesRestrictsToAuthenticatedUser(t *testing.T) {
 	setupFlowControllerTestDB(t)
 

@@ -87,7 +87,7 @@ export function DataTableMobileFilterPanel(
           className={cn(
             'flex items-center justify-end gap-1.5',
             props.compact &&
-              'min-w-0 flex-wrap [&>button]:h-auto [&>button]:min-h-9 [&>button]:max-w-full [&>button]:[overflow-wrap:anywhere] [&>button]:whitespace-normal'
+              'min-w-0 flex-wrap gap-1 [&>button]:h-auto [&>button]:min-h-9 [&>button]:max-w-full [&>button]:px-1.5 [&>button]:text-[0.8rem] [&>button]:[overflow-wrap:anywhere] [&>button]:whitespace-normal'
           )}
         >
           {props.actions}

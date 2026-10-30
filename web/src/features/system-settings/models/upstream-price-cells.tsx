@@ -63,7 +63,7 @@ export function SyncPriceCell(props: {
           />
         </div>
         {parsed ? (
-          <div className='space-y-2'>
+          <div className='space-y-2 whitespace-normal'>
             {parsed.tiers.map((tier) => (
               <div
                 key={`${tier.label}:${tier.condition}`}
@@ -78,7 +78,7 @@ export function SyncPriceCell(props: {
               </div>
             ))}
             {parsed.requestRuleExpr && (
-              <div className='text-muted-foreground text-xs! break-all'>
+              <div className='text-muted-foreground text-xs! wrap-anywhere'>
                 {t('Includes request rules')}: {parsed.requestRuleExpr}
               </div>
             )}

@@ -25,12 +25,10 @@ export {
   getSavedChartPreferences,
   saveChartPreferences,
   buildDefaultDashboardFilters,
+  getDashboardQuickRange,
+  detectDashboardQuickRange,
 } from './filters'
-export {
-  getDashboardChartColors,
-  processChartData,
-  processUserChartData,
-} from './charts'
+export { getDashboardChartColors, processUserChartData } from './charts'
 export {
   buildDashboardFlowData,
   buildFlowSankeySpec,
@@ -38,5 +36,8 @@ export {
   flowSankeyDatumValue,
   getFlowStages,
 } from './flow'
+export {
+  buildModelBreakdownRows,
+  type ModelBreakdownRow,
+} from './model-breakdown'
 export { safeDivide, calculateDashboardStats, getCacheHitRate } from './stats'
-export { getPreviewText } from './text'

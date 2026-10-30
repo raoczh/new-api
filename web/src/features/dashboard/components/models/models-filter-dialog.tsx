@@ -35,12 +35,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  DASHBOARD_QUICK_RANGES,
   TIME_GRANULARITY_OPTIONS,
-  TIME_RANGE_PRESETS,
+  type DashboardQuickRangeValue,
 } from '@/features/dashboard/constants'
 import {
   buildDefaultDashboardFilters,
   cleanFilters,
+  detectDashboardQuickRange,
+  getDashboardQuickRange,
 } from '@/features/dashboard/lib'
 import type {
   DashboardChartPreferences,
@@ -64,23 +67,6 @@ interface ModelsFilterProps {
 // Quick-range presets imply a sensible granularity (matching the app's
 // range<->granularity pairing), so picking "7 Days" requests daily buckets
 // instead of leaving the granularity on its previous value (e.g. hourly).
-function granularityForRangeDays(days: number): TimeGranularity {
-  if (days <= 1) return 'hour'
-  if (days >= 29) return 'week'
-  return 'day'
-}
-
-// Highlights the matching quick-range button when the applied range spans an
-// exact preset; custom ranges leave every quick button unselected.
-function detectQuickRangeDays(
-  filters: DashboardFilters | undefined
-): number | null {
-  const start = filters?.start_timestamp
-  const end = filters?.end_timestamp
-  if (!start || !end) return null
-  const days = Math.round((end.getTime() - start.getTime()) / 86_400_000)
-  return TIME_RANGE_PRESETS.some((preset) => preset.days === days) ? days : null
-}
 
 /**
  * Section divider component for better visual organization
@@ -107,9 +93,10 @@ export function ModelsFilter(props: ModelsFilterProps) {
     () =>
       props.currentFilters ?? buildDefaultDashboardFilters(props.preferences)
   )
-  const [selectedRange, setSelectedRange] = useState<number | null>(() =>
-    detectQuickRangeDays(props.currentFilters)
-  )
+  const [selectedRange, setSelectedRange] =
+    useState<DashboardQuickRangeValue | null>(() =>
+      detectDashboardQuickRange(props.currentFilters)
+    )
 
   const handleOpenChange = (nextOpen: boolean) => {
     // Sync the editing state from the applied filters every time the dialog
@@ -118,7 +105,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
       const applied =
         props.currentFilters ?? buildDefaultDashboardFilters(props.preferences)
       setFilters(applied)
-      setSelectedRange(detectQuickRangeDays(applied))
+      setSelectedRange(detectDashboardQuickRange(applied))
     }
     setOpen(nextOpen)
   }
@@ -140,7 +127,12 @@ export function ModelsFilter(props: ModelsFilterProps) {
       start_timestamp: start,
       end_timestamp: end,
     })
-    setSelectedRange(days)
+    setSelectedRange(
+      detectDashboardQuickRange({
+        start_timestamp: start,
+        end_timestamp: end,
+      })
+    )
     props.onReset()
     setOpen(false)
   }
@@ -155,16 +147,16 @@ export function ModelsFilter(props: ModelsFilterProps) {
     }
   }
 
-  const handleQuickRange = (days: number) => {
-    const { start, end } = getRollingDateRange(days)
+  const handleQuickRange = (value: DashboardQuickRangeValue) => {
+    const { start, end, granularity } = getDashboardQuickRange(value)
 
     setFilters((prev) => ({
       ...prev,
       start_timestamp: start,
       end_timestamp: end,
-      time_granularity: granularityForRangeDays(days),
+      time_granularity: granularity,
     }))
-    setSelectedRange(days)
+    setSelectedRange(value)
   }
 
   return (
@@ -180,7 +172,7 @@ export function ModelsFilter(props: ModelsFilterProps) {
       title={t(props.titleKey ?? 'Model Analytics Filters')}
       description={t(
         props.descriptionKey ??
-          'Filter the model analytics view by time range, model, and user.'
+          'Filter the model analytics view by time range, model, user, group, channel, and token.'
       )}
       contentClassName='max-sm:h-dvh max-sm:w-screen max-sm:max-w-none max-sm:rounded-none max-sm:p-4 sm:max-w-lg'
       contentHeight='min(48vh, 460px)'
@@ -206,17 +198,19 @@ export function ModelsFilter(props: ModelsFilterProps) {
               <Calendar className='h-4 w-4' />
               {t('Quick Range')}
             </Label>
-            <div className='grid grid-cols-2 gap-2 sm:flex'>
-              {TIME_RANGE_PRESETS.map((range) => (
+            <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap'>
+              {DASHBOARD_QUICK_RANGES.map((range) => (
                 <Button
-                  key={range.days}
+                  key={range.value}
                   type='button'
                   size='sm'
-                  variant={selectedRange === range.days ? 'default' : 'outline'}
-                  onClick={() => handleQuickRange(range.days)}
+                  variant={
+                    selectedRange === range.value ? 'default' : 'outline'
+                  }
+                  onClick={() => handleQuickRange(range.value)}
                   className={cn(
                     'flex-1',
-                    selectedRange === range.days &&
+                    selectedRange === range.value &&
                       'ring-ring ring-2 ring-offset-2'
                   )}
                 >
@@ -297,14 +291,48 @@ export function ModelsFilter(props: ModelsFilterProps) {
             <>
               <SectionDivider label={t('Admin Only')} />
 
-              <div className='grid gap-2'>
-                <Label htmlFor='username'>{t('Username')}</Label>
-                <Input
-                  id='username'
-                  placeholder={t('Filter by username')}
-                  value={filters.username}
-                  onChange={(e) => handleChange('username', e.target.value)}
-                />
+              <div className='grid gap-2.5 sm:grid-cols-2'>
+                <div className='grid gap-2 sm:col-span-2'>
+                  <Label htmlFor='username'>{t('Username')}</Label>
+                  <Input
+                    id='username'
+                    placeholder={t('Filter by username')}
+                    value={filters.username}
+                    onChange={(e) => handleChange('username', e.target.value)}
+                  />
+                </div>
+
+                <div className='grid gap-2'>
+                  <Label htmlFor='group'>{t('Group')}</Label>
+                  <Input
+                    id='group'
+                    placeholder={t('Filter by group')}
+                    value={filters.group ?? ''}
+                    onChange={(e) => handleChange('group', e.target.value)}
+                  />
+                </div>
+
+                <div className='grid gap-2'>
+                  <Label htmlFor='channel_id'>{t('Channel ID')}</Label>
+                  <Input
+                    id='channel_id'
+                    inputMode='numeric'
+                    placeholder={t('Filter by channel ID')}
+                    value={filters.channel_id ?? ''}
+                    onChange={(e) => handleChange('channel_id', e.target.value)}
+                  />
+                </div>
+
+                <div className='grid gap-2 sm:col-span-2'>
+                  <Label htmlFor='token_id'>{t('Token ID')}</Label>
+                  <Input
+                    id='token_id'
+                    inputMode='numeric'
+                    placeholder={t('Token ID')}
+                    value={filters.token_id ?? ''}
+                    onChange={(e) => handleChange('token_id', e.target.value)}
+                  />
+                </div>
               </div>
             </>
           )}

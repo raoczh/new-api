@@ -167,7 +167,7 @@ export function ModelDistributionChart(props: ModelDistributionChartProps) {
         <div
           role='group'
           aria-label={t('Pie chart metric')}
-          className='bg-muted/60 inline-flex h-7 overflow-x-auto rounded-lg border p-0.5 sm:h-8'
+          className='bg-muted/50 border-border/60 inline-flex h-8 overflow-x-auto rounded-lg border p-0.5'
         >
           {METRIC_OPTIONS.map((option) => (
             <button
@@ -177,8 +177,8 @@ export function ModelDistributionChart(props: ModelDistributionChartProps) {
               aria-pressed={metric === option.value}
               className={
                 metric === option.value
-                  ? 'text-foreground bg-background shrink-0 rounded-md px-3 text-xs font-medium shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground shrink-0 rounded-md px-3 text-xs font-medium'
+                  ? 'text-foreground bg-card shrink-0 rounded-md px-2.5 text-xs font-medium shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground shrink-0 rounded-md px-2.5 text-xs font-medium'
               }
             >
               {t(option.labelKey)}

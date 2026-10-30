@@ -103,6 +103,13 @@ For commercial licensing, please contact support@quantumnous.com
   }
   html {
     @apply overflow-x-hidden font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  /* Chinese glyphs should not inherit the tighter Latin display tracking. */
+  html[lang^='zh'] :is(h1, h2, h3, h4, h5, h6, .tc-page-title) {
+    letter-spacing: 0;
   }
   /* Authenticated pages own their scroll containers: pin the document to the
      viewport so the shell's `h-svh` cannot push a second, document-level
@@ -118,6 +125,7 @@ For commercial licensing, please contact support@quantumnous.com
   body {
     @apply bg-background text-foreground has-[div[data-variant='inset']]:bg-sidebar min-h-svh w-full;
     font-family: var(--font-body);
+    font-optical-sizing: auto;
   }
 
   :focus-visible {

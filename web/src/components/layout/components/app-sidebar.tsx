@@ -17,17 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link, useLocation } from '@tanstack/react-router'
-import { ArrowUpLeft, Headset, LogOut } from 'lucide-react'
+import { ArrowUpLeft, LogOut } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SignOutDialog } from '@/components/sign-out-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
 import {
   Sheet,
   SheetContent,
@@ -37,8 +32,8 @@ import {
 } from '@/components/ui/sheet'
 import { useSidebar } from '@/components/ui/sidebar'
 import { useSidebarView } from '@/hooks/use-sidebar-view'
-import { useStatus } from '@/hooks/use-status'
 
+import { HelpPopover } from './help-popover'
 import { NavGroup } from './nav-group'
 
 /** Full page navigation, shared by the desktop sidebar and mobile drawer. */
@@ -125,72 +120,14 @@ function scrollToCurrentPage(navigation: HTMLElement | null) {
     ?.scrollIntoView({ block: 'nearest' })
 }
 
-/** Bottom of the sidebar: contact methods from system settings, and sign-out. */
+/** Bottom of the sidebar: help entry and sign-out. */
 function SidebarAccountActions() {
   const { t } = useTranslation()
-  const { status } = useStatus()
   const [signingOut, setSigningOut] = useState(false)
-  const email = status?.contact_email?.trim()
-  const wechatQR = status?.contact_wechat_qrcode?.trim()
-  const qqGroup = status?.contact_qq_group?.trim()
-  const hasContact = Boolean(email || wechatQR || qqGroup)
 
   return (
     <div className='tc-workspace-attribution'>
-      {hasContact && (
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button
-                variant='ghost'
-                className='tc-sidebar-action'
-                aria-label={t('Contact support')}
-              />
-            }
-          >
-            <Headset aria-hidden='true' />
-            <span>{t('Contact support')}</span>
-          </PopoverTrigger>
-          <PopoverContent
-            side='top'
-            align='start'
-            className='w-64 space-y-3'
-            aria-label={t('Contact support')}
-          >
-            {email && (
-              <div className='min-w-0 space-y-1'>
-                <p className='text-muted-foreground text-xs'>
-                  {t('Contact Email')}
-                </p>
-                <a
-                  className='text-sm font-medium break-all hover:underline'
-                  href={`mailto:${email}`}
-                >
-                  {email}
-                </a>
-              </div>
-            )}
-            {wechatQR && (
-              <div className='space-y-1'>
-                <p className='text-muted-foreground text-xs'>
-                  {t('WeChat Group QR Code')}
-                </p>
-                <img
-                  src={wechatQR}
-                  alt={t('WeChat Group QR Code')}
-                  className='size-32 rounded-sm border bg-white object-contain p-1'
-                />
-              </div>
-            )}
-            {qqGroup && (
-              <div className='min-w-0 space-y-1'>
-                <p className='text-muted-foreground text-xs'>{t('QQ Group')}</p>
-                <p className='text-sm font-medium break-all'>{qqGroup}</p>
-              </div>
-            )}
-          </PopoverContent>
-        </Popover>
-      )}
+      <HelpPopover />
       <Button
         variant='ghost'
         className='tc-sidebar-action'

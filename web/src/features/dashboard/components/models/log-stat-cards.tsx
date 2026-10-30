@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Card } from '@/components/ui/card'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getUserQuotaDates } from '@/features/dashboard/api'
@@ -144,8 +145,8 @@ export function LogStatCards(props: LogStatCardsProps) {
   })
 
   return (
-    <div className='overflow-hidden rounded-lg border'>
-      <div className='divide-border/60 grid min-w-0 grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-7'>
+    <Card className='gap-0 overflow-hidden p-0 shadow-(--tc-shadow-sm)'>
+      <div className='bg-border/60 grid min-w-0 grid-cols-2 gap-px sm:grid-cols-3 lg:grid-cols-7'>
         {items.map((it, idx) => {
           const Icon = it.icon
           let valueContent
@@ -159,10 +160,10 @@ export function LogStatCards(props: LogStatCardsProps) {
           } else if (error) {
             valueContent = (
               <>
-                <div className='text-muted-foreground mt-1 font-mono text-base leading-tight font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'>
+                <div className='text-muted-foreground mt-1 text-base leading-tight font-semibold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'>
                   --
                 </div>
-                <div className='text-muted-foreground/40 mt-1 hidden text-xs md:block'>
+                <div className='text-muted-foreground/50 mt-1 hidden text-xs md:block'>
                   {it.desc}
                 </div>
               </>
@@ -171,7 +172,7 @@ export function LogStatCards(props: LogStatCardsProps) {
             valueContent = (
               <>
                 <div
-                  className='text-foreground mt-1 max-w-full truncate font-mono text-base leading-tight font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'
+                  className='text-foreground mt-1 max-w-full truncate text-base leading-tight font-semibold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'
                   title={it.fullValue}
                 >
                   {it.value}
@@ -190,7 +191,7 @@ export function LogStatCards(props: LogStatCardsProps) {
               aria-label={it.title}
               aria-busy={loading}
               className={cn(
-                'min-w-0 px-2.5 py-1.5 sm:px-3 sm:py-4 xl:px-4',
+                'bg-card min-w-0 px-3 py-2.5 sm:px-3.5 sm:py-4 xl:px-4',
                 idx === items.length - 1 &&
                   items.length % 2 !== 0 &&
                   'col-span-2 sm:col-span-1'
@@ -205,7 +206,7 @@ export function LogStatCards(props: LogStatCardsProps) {
                   <Icon />
                 </IconBadge>
                 <div
-                  className='text-muted-foreground truncate text-[11px] leading-4 font-medium tracking-wide uppercase sm:text-xs sm:tracking-wider'
+                  className='text-muted-foreground truncate text-[11px] leading-4 font-medium sm:text-xs'
                   title={it.title}
                 >
                   {it.title}
@@ -217,11 +218,6 @@ export function LogStatCards(props: LogStatCardsProps) {
           )
         })}
       </div>
-      {/*<p className='text-muted-foreground border-t px-3 py-2 text-xs'>*/}
-      {/*  {t(*/}
-      {/*    'Cache usage is recorded only after the upgrade; historical data is not backfilled.'*/}
-      {/*  )}*/}
-      {/*</p>*/}
-    </div>
+    </Card>
   )
 }

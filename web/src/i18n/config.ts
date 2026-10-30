@@ -51,4 +51,16 @@ i18n
     },
   })
 
+// Keep the document language in sync with the interface so the CJK
+// typography rules and assistive technologies see the right language.
+i18n.on('languageChanged', (language) => {
+  if (typeof document === 'undefined') return
+  document.documentElement.lang = language === 'zhCN' ? 'zh-CN' : 'en'
+})
+
+if (typeof document !== 'undefined') {
+  const initialLanguage = i18n.resolvedLanguage || i18n.language
+  document.documentElement.lang = initialLanguage === 'zhCN' ? 'zh-CN' : 'en'
+}
+
 export default i18n
