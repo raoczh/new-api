@@ -91,7 +91,7 @@ async function renderNavigation(path = '/keys', role = 1) {
   const root = createRootRoute({
     component: () => (
       <>
-        <AppHeader showSearch={false} showProfileDropdown={false} />
+        <AppHeader showProfileDropdown={false} />
         <AppSidebar />
       </>
     ),
@@ -361,9 +361,7 @@ it('dismisses mobile tools and notifications on desktop and keeps them closed on
   await renderNavigation()
   await user.click(screen.getByRole('button', { name: 'Actions' }))
   await user.click(screen.getByRole('button', { name: 'Notifications' }))
-  expect(
-    screen.getByRole('dialog', { name: 'System Announcements' })
-  ).toBeVisible()
+  expect(screen.getByRole('dialog', { name: 'Announcements' })).toBeVisible()
 
   act(() => {
     vi.stubGlobal('innerWidth', 1280)
@@ -374,7 +372,7 @@ it('dismisses mobile tools and notifications on desktop and keeps them closed on
       screen.queryByRole('dialog', { name: 'Actions' })
     ).not.toBeInTheDocument()
     expect(
-      screen.queryByRole('dialog', { name: 'System Announcements' })
+      screen.queryByRole('dialog', { name: 'Announcements' })
     ).not.toBeInTheDocument()
   })
 
@@ -388,7 +386,7 @@ it('dismisses mobile tools and notifications on desktop and keeps them closed on
   )
   await user.click(screen.getByRole('button', { name: 'Actions' }))
   expect(
-    screen.queryByRole('dialog', { name: 'System Announcements' })
+    screen.queryByRole('dialog', { name: 'Announcements' })
   ).not.toBeInTheDocument()
 })
 

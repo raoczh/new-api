@@ -371,9 +371,21 @@ func SearchUsers(c *gin.Context) {
 			status = &parsed
 		}
 	}
+	var recharged *bool
+	if rechargedStr := c.Query("recharged"); rechargedStr != "" {
+		if parsed, err := strconv.ParseBool(rechargedStr); err == nil {
+			recharged = &parsed
+		}
+	}
 	pageInfo := common.GetPageQuery(c)
 	sortOptions := model.NewUserSortOptions(c.Query("sort_by"), c.Query("sort_order"))
-	users, total, err := model.SearchUsers(keyword, group, role, status, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), sortOptions)
+	users, total, err := model.SearchUsers(model.UserSearchFilter{
+		Keyword:   keyword,
+		Group:     group,
+		Role:      role,
+		Status:    status,
+		Recharged: recharged,
+	}, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), sortOptions)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -528,6 +540,10 @@ func buildSelfUserData(user *model.User) map[string]any {
 		"stripe_customer":   user.StripeCustomer,
 		"sidebar_modules":   userSetting.SidebarModules, // 正确提取sidebar_modules字段
 		"permissions":       permissions,
+		// Per-user relay limits are stored in the setting blob; expose them so
+		// the profile page can show the limits that actually apply.
+		"max_concurrent_requests": userSetting.MaxConcurrentRequests,
+		"requests_per_minute":     userSetting.RequestsPerMinute,
 	}
 }
 

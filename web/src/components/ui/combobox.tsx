@@ -49,6 +49,7 @@ type LegacyComboboxProps = {
   emptyText?: string
   allowCustomValue?: boolean
   showSelectedIcon?: boolean
+  showClear?: boolean
   className?: string
   popupClassName?: string
   id?: string
@@ -111,6 +112,9 @@ function OptionCombobox(props: LegacyComboboxProps) {
       value={selected ?? null}
       name={props.name}
       disabled={props.disabled}
+      // Non-modal keeps the surrounding filter bar usable while the list is
+      // open, so a pick can be applied straight from the same toolbar.
+      modal={false}
       open={open && !props.disabled}
       inputValue={open ? search : displayedValue}
       onInputValueChange={(value, details) => {
@@ -121,6 +125,11 @@ function OptionCombobox(props: LegacyComboboxProps) {
         if (details.reason !== 'input-change') setSearch('')
       }}
       onValueChange={(option) => {
+        // Clearing reports null; callers that support an empty state get ''.
+        if (props.showClear) {
+          props.onValueChange?.(option ? option.value : '')
+          return
+        }
         if (option) props.onValueChange?.(option.value)
       }}
       filter={(option, query) => {
@@ -151,6 +160,7 @@ function OptionCombobox(props: LegacyComboboxProps) {
             props.searchPlaceholder ?? props.placeholder ?? t('Search...')
           }
           triggerAriaLabel={props['aria-label'] ?? t('Open')}
+          showClear={props.showClear}
           className='h-full min-h-8 w-full'
         >
           {props.showSelectedIcon && !open && selected?.icon && (
@@ -214,9 +224,11 @@ function ComboboxTrigger({
 }
 
 function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
+  const { t } = useTranslation()
   return (
     <ComboboxPrimitive.Clear
       data-slot='combobox-clear'
+      aria-label={t('Clear selection')}
       render={<InputGroupButton variant='ghost' size='icon-xs' />}
       className={cn(className)}
       {...props}

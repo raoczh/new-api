@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
 import { LanguageSwitcher } from '@/components/language-switcher'
-import { NotificationPopover } from '@/components/notification-popover'
+import { NotificationCenter } from '@/components/notification-center'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { TokenComeBrand } from '@/components/tokencome-brand'
@@ -288,10 +288,10 @@ export function PublicHeader(props: PublicHeaderProps) {
               {showLanguageSwitcher && <LanguageSwitcher />}
               {showThemeSwitch && <ThemeSwitch />}
               {showNotifications && isDesktop && (
-                <NotificationPopover
+                <NotificationCenter
                   open={notifications.popoverOpen}
                   onOpenChange={notifications.setPopoverOpen}
-                  unreadCount={notifications.unreadCount}
+                  hasUnreadAnnouncements={notifications.hasUnreadAnnouncements}
                   activeTab={notifications.activeTab}
                   onTabChange={notifications.setActiveTab}
                   notice={notifications.notice}
@@ -392,10 +392,10 @@ export function PublicHeader(props: PublicHeaderProps) {
             <div className='flex items-center gap-2'>
               {showLanguageSwitcher && <LanguageSwitcher />}
               {showNotifications && !isDesktop && (
-                <NotificationPopover
+                <NotificationCenter
                   open={notifications.popoverOpen}
                   onOpenChange={notifications.setPopoverOpen}
-                  unreadCount={notifications.unreadCount}
+                  hasUnreadAnnouncements={notifications.hasUnreadAnnouncements}
                   activeTab={notifications.activeTab}
                   onTabChange={notifications.setActiveTab}
                   notice={notifications.notice}

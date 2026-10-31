@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { useState, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useStatus } from '@/hooks/use-status'
 import { getNotice } from '@/lib/api'
@@ -59,15 +59,24 @@ function getAnnouncementKey(item: Record<string, unknown>): string {
   return `hash:${hashString(fingerprint)}`
 }
 
+type NotificationTab = 'notice' | 'announcements'
+
+type UseNotificationsOptions = {
+  /**
+   * Open the announcement dialog automatically once per session when an
+   * unread notice arrives. System announcements never auto-open; they only
+   * light the bell dot.
+   */
+  autoOpenUnreadNotice?: boolean
+}
+
 /**
- * Hook to manage notifications (Notice + Announcements)
- * Provides unread counts and read status management
+ * Hook to manage the announcement dialog (Notice + system announcements).
+ * Provides the bell dot state and read-status management.
  */
-export function useNotifications() {
-  const [popoverOpen, setPopoverOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'notice' | 'announcements'>(
-    'notice'
-  )
+export function useNotifications(options: UseNotificationsOptions = {}) {
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<NotificationTab>('notice')
 
   // Fetch Notice from API
   const {
@@ -104,67 +113,67 @@ export function useNotifications() {
     ? (noticeResponse.data || '').trim()
     : ''
 
-  // Calculate unread counts
-  const unreadCounts = useMemo(() => {
-    const noticeUnread =
-      noticeContent && noticeContent !== lastReadNotice ? 1 : 0
+  const unreadNotice = !!noticeContent && noticeContent !== lastReadNotice
 
-    const announcementsUnread = announcements.filter(
-      (item: Record<string, unknown>) => {
-        const key = getAnnouncementKey(item)
-        return !isAnnouncementRead(key)
-      }
-    ).length
+  const unreadAnnouncementsCount = useMemo(
+    () =>
+      announcements.filter(
+        (item: Record<string, unknown>) =>
+          !isAnnouncementRead(getAnnouncementKey(item))
+      ).length,
+    [announcements, isAnnouncementRead]
+  )
 
-    return {
-      notice: noticeUnread,
-      announcements: announcementsUnread,
-      total: noticeUnread + announcementsUnread,
-    }
-  }, [noticeContent, lastReadNotice, announcements, isAnnouncementRead])
-
-  const markAnnouncementsAsRead = () => {
+  const markAnnouncementsAsRead = useCallback(() => {
     if (announcements.length > 0) {
-      const allKeys = announcements.map((item: Record<string, unknown>) =>
-        getAnnouncementKey(item)
+      markAnnouncementsRead(
+        announcements.map((item: Record<string, unknown>) =>
+          getAnnouncementKey(item)
+        )
       )
-      markAnnouncementsRead(allKeys)
     }
-  }
+  }, [announcements, markAnnouncementsRead])
 
-  // Handle popover open
-  const handleOpenPopover = (tab?: 'notice' | 'announcements') => {
-    const nextTab = tab || activeTab
+  const openDialog = useCallback(
+    (tab: NotificationTab = activeTab) => {
+      // Opening the centre counts as reading what it shows.
+      if (noticeContent) markNoticeRead(noticeContent)
+      if (tab === 'announcements') markAnnouncementsAsRead()
+      setActiveTab(tab)
+      setDialogOpen(true)
+    },
+    [activeTab, markAnnouncementsAsRead, markNoticeRead, noticeContent]
+  )
 
-    // Mark currently visible content as read when opening the notification center
-    if (noticeContent) {
-      markNoticeRead(noticeContent)
-    }
-    if (nextTab === 'announcements') {
-      markAnnouncementsAsRead()
-    }
+  const handleDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        openDialog(activeTab)
+        return
+      }
+      setDialogOpen(false)
+    },
+    [activeTab, openDialog]
+  )
 
-    setActiveTab(nextTab)
-    setPopoverOpen(true)
-  }
+  const handleTabChange = useCallback(
+    (tab: NotificationTab) => {
+      setActiveTab(tab)
+      if (tab === 'announcements') markAnnouncementsAsRead()
+    },
+    [markAnnouncementsAsRead]
+  )
 
-  const handlePopoverOpenChange = (open: boolean) => {
-    if (open) {
-      handleOpenPopover(activeTab)
-      return
-    }
-
-    setPopoverOpen(false)
-  }
-
-  // Handle tab change - mark announcements as read when switching to that tab
-  const handleTabChange = (tab: 'notice' | 'announcements') => {
-    setActiveTab(tab)
-
-    if (tab === 'announcements') {
-      markAnnouncementsAsRead()
-    }
-  }
+  // A new notice pops the dialog once per session; announcements only use the
+  // bell dot, so returning users are not interrupted for the timeline.
+  const autoOpenedRef = useRef(false)
+  const autoOpenUnreadNotice = options.autoOpenUnreadNotice ?? false
+  useEffect(() => {
+    if (!autoOpenUnreadNotice || autoOpenedRef.current) return
+    if (noticeLoading || !unreadNotice) return
+    autoOpenedRef.current = true
+    openDialog('notice')
+  }, [autoOpenUnreadNotice, noticeLoading, openDialog, unreadNotice])
 
   return {
     // Data
@@ -172,20 +181,18 @@ export function useNotifications() {
     announcements,
     loading: noticeLoading || statusLoading,
 
-    // Unread counts
-    unreadCount: unreadCounts.total,
-    unreadNoticeCount: unreadCounts.notice,
-    unreadAnnouncementsCount: unreadCounts.announcements,
+    // Bell dot: system announcements stay unread until the timeline is opened.
+    hasUnreadAnnouncements: unreadAnnouncementsCount > 0,
 
-    // Popover state
-    popoverOpen,
-    setPopoverOpen: handlePopoverOpenChange,
+    // Dialog state
+    popoverOpen: dialogOpen,
+    setPopoverOpen: handleDialogOpenChange,
     activeTab,
     setActiveTab: handleTabChange,
 
     // Actions
-    openPopover: handleOpenPopover,
-    closePopover: () => setPopoverOpen(false),
+    openPopover: openDialog,
+    closePopover: () => setDialogOpen(false),
     refetchNotice,
   }
 }

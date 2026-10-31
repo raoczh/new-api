@@ -78,6 +78,11 @@ async function renderFilter(
   }
 ) {
   vi.spyOn(api, 'get').mockImplementation(async (url) => {
+    if (url === '/api/user/models' || url === '/api/channel/models_enabled') {
+      return {
+        data: { success: true, data: ['gemini-3.7-flash', 'gpt-5.2'] },
+      }
+    }
     if (url === '/api/user/self/groups' || url === '/api/group/') {
       if (groups === null) throw new Error('Group loading failed')
       return {
@@ -133,15 +138,11 @@ afterEach(() => {
   }
 })
 
-it('loads personal groups and filters choices without submitting until Search', async () => {
+it('loads personal groups and applies the choice only on Search', async () => {
   const { router, initialHref } = await renderFilter()
   const input = screen.getByRole('combobox', { name: 'Group' })
   await userEvent.click(input)
   expect(await screen.findByRole('option', { name: 'default' })).toBeVisible()
-  await userEvent.type(input, 'prem')
-  expect(
-    screen.queryByRole('option', { name: 'default' })
-  ).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('option', { name: 'premium' }))
   expect(input).toHaveValue('premium')
   expect(latestStatsParams().get('group')).toBeNull()
@@ -150,6 +151,22 @@ it('loads personal groups and filters choices without submitting until Search', 
   expect(router.state.location.href).toBe(initialHref)
   expect(api.get).toHaveBeenCalledWith('/api/user/self/groups')
   expect(api.get).not.toHaveBeenCalledWith('/api/group/')
+})
+
+it('narrows the group list by typing without accepting free text', async () => {
+  const { router, initialHref } = await renderFilter()
+  const input = screen.getByRole('combobox', { name: 'Group' })
+  await userEvent.click(input)
+  await screen.findByRole('option', { name: 'default' })
+  await userEvent.type(input, 'prem')
+  expect(
+    screen.queryByRole('option', { name: 'default' })
+  ).not.toBeInTheDocument()
+  await userEvent.type(input, '{Escape}')
+  expect(input).toHaveValue('')
+  await userEvent.click(screen.getByRole('button', { name: 'Search' }))
+  await waitFor(() => expect(latestStatsParams().get('group')).toBeNull())
+  expect(router.state.location.href).toBe(initialHref)
 })
 
 it('loads all groups in the administrator view', async () => {
@@ -161,41 +178,19 @@ it('loads all groups in the administrator view', async () => {
   expect(api.get).not.toHaveBeenCalledWith('/api/user/self/groups')
 })
 
-it('confirms a keyboard choice before Enter submits the selected group', async () => {
-  const { router, initialHref } = await renderFilter()
+it('keeps a historical group visible and replaces it with a listed choice', async () => {
+  const { router, initialHref } = await renderFilter(
+    '/usage-logs/common?group=retired'
+  )
   const input = screen.getByRole('combobox', { name: 'Group' })
+  expect(input).toHaveValue('retired')
   await userEvent.click(input)
-  await screen.findByRole('option', { name: 'default' })
-  await userEvent.keyboard('{ArrowDown}{Enter}')
+  await userEvent.click(await screen.findByRole('option', { name: 'default' }))
   expect(input).toHaveValue('default')
-  expect(input).toHaveAttribute('aria-expanded', 'false')
-  expect(latestStatsParams().get('group')).toBeNull()
-  await userEvent.keyboard('{Enter}')
+  await userEvent.click(screen.getByRole('button', { name: 'Search' }))
   await waitFor(() => expect(latestStatsParams().get('group')).toBe('default'))
   expect(router.state.location.href).toBe(initialHref)
 })
-
-it.each([{}, null])(
-  'preserves historical input and supports clearing when groups are unavailable (%s)',
-  async (groups) => {
-    const { router, initialHref } = await renderFilter(
-      '/usage-logs/common?group=retired',
-      groups
-    )
-    const input = screen.getByRole('combobox', { name: 'Group' })
-    expect(input).toHaveValue('retired')
-    await userEvent.clear(input)
-    await userEvent.type(input, 'historical')
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }))
-    await waitFor(() =>
-      expect(latestStatsParams().get('group')).toBe('historical')
-    )
-    expect(router.state.location.href).toBe(initialHref)
-    await userEvent.clear(input)
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }))
-    await waitFor(() => expect(latestStatsParams().get('group')).toBeNull())
-  }
-)
 
 it('resets the selected group without changing the initial URL', async () => {
   const { router, initialHref } = await renderFilter(
@@ -209,21 +204,9 @@ it('resets the selected group without changing the initial URL', async () => {
   expect(router.state.location.href).toBe(initialHref)
 })
 
-it('keeps a selected group visible on focus and can clear it without choosing another option', async () => {
-  await renderFilter('/usage-logs/common?group=premium')
-  const input = screen.getByRole('combobox', { name: 'Group' })
-  await userEvent.click(input)
-  expect(input).toHaveValue('premium')
-  expect(await screen.findByRole('option', { name: 'default' })).toBeVisible()
-  await userEvent.clear(input)
-  await userEvent.keyboard('{Enter}')
-  await waitFor(() => expect(latestStatsParams().get('group')).toBeNull())
-})
-
-it('keeps the compact input and masks the dropdown together with other sensitive filters', async () => {
+it('masks the dropdown together with other sensitive filters', async () => {
   await renderFilter()
   const input = screen.getByRole('combobox', { name: 'Group' })
-  expect(input).toHaveClass('h-8', 'text-sm', 'leading-5')
   await userEvent.click(screen.getByRole('button', { name: /^Hide$/ }))
   await userEvent.click(input)
   const option = await screen.findByRole('option', { name: 'premium' })
@@ -288,21 +271,3 @@ it.each([1, 10])(
     expect(router.state.location.href).toBe(initialHref)
   }
 )
-
-it('keeps historical auto values editable when auto is the only available group', async () => {
-  const { router, initialHref } = await renderFilter(
-    '/usage-logs/common?group=auto',
-    {
-      auto: { desc: '', ratio: 1 },
-    }
-  )
-  const input = screen.getByRole('combobox', { name: 'Group' })
-  expect(input).toHaveValue('auto')
-  await userEvent.click(input)
-  expect(screen.queryByRole('option', { name: 'auto' })).not.toBeInTheDocument()
-  await userEvent.clear(input)
-  await userEvent.type(input, 'retired')
-  await userEvent.click(screen.getByRole('button', { name: 'Search' }))
-  await waitFor(() => expect(latestStatsParams().get('group')).toBe('retired'))
-  expect(router.state.location.href).toBe(initialHref)
-})

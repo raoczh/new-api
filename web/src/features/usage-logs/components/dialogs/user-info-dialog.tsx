@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -98,7 +99,20 @@ export function UserInfoDialog({
         <div className='space-y-4 py-4'>
           {/* Basic Info */}
           <div className='grid grid-cols-2 gap-4'>
-            <InfoItem label={t('Username')} value={userInfo.username} />
+            <div className='space-y-1.5'>
+              <Label className='text-muted-foreground text-xs'>
+                {t('Username')}
+              </Label>
+              <Link
+                to='/users'
+                search={{ filter: userInfo.username }}
+                onClick={() => onOpenChange(false)}
+                className='text-primary inline-flex max-w-full items-center text-sm font-semibold hover:underline'
+                title={t('View this user in the user list')}
+              >
+                <span className='truncate'>{userInfo.username}</span>
+              </Link>
+            </div>
             {userInfo.display_name && (
               <InfoItem
                 label={t('Display Name')}

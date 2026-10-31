@@ -86,12 +86,20 @@ async function renderMobileFilter() {
     ...original(query),
     matches: query === '(max-width: 640px)',
   }))
-  vi.spyOn(api, 'get').mockImplementation(async (url) => ({
-    data: {
-      success: true,
-      data: url === '/api/user/self/groups' ? {} : { quota: 0, rpm: 0, tpm: 0 },
-    },
-  }))
+  vi.spyOn(api, 'get').mockImplementation(async (url) => {
+    if (url === '/api/user/models') {
+      return {
+        data: { success: true, data: ['gemini-3.7-flash', 'gpt-5.2'] },
+      }
+    }
+    return {
+      data: {
+        success: true,
+        data:
+          url === '/api/user/self/groups' ? {} : { quota: 0, rpm: 0, tpm: 0 },
+      },
+    }
+  })
   const root = createRootRoute()
   const auth = createRoute({ getParentRoute: () => root, id: '_authenticated' })
   const logs = createRoute({
@@ -157,16 +165,18 @@ it('applies the selected mobile date range directly and resets pagination while 
   expect(router.state.location.href).toBe(initialHref)
 })
 
-it('applies mobile drawer filters only when Search is pressed', async () => {
+it('applies the chosen model from the picker only when Search is pressed', async () => {
   const router = await renderMobileFilter()
   const initialHref = router.state.location.href
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Filter' }))
   const dialog = await screen.findByRole('dialog', { name: 'Filter' })
-  await user.type(
-    within(dialog).getByPlaceholderText('Model Name'),
-    'gemini-3.7-flash'
+  const model = within(dialog).getByRole('combobox', { name: 'Model Name' })
+  await user.click(model)
+  await user.click(
+    await within(dialog).findByRole('option', { name: 'gemini-3.7-flash' })
   )
+  expect(model).toHaveValue('gemini-3.7-flash')
   expect(latestStatsParams().get('model_name')).toBeNull()
   await user.click(within(dialog).getByRole('button', { name: 'Search' }))
   await waitFor(() =>

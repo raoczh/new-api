@@ -85,6 +85,7 @@ export function UsersTable() {
       { columnId: 'status', searchKey: 'status', type: 'array' },
       { columnId: 'role', searchKey: 'role', type: 'array' },
       { columnId: 'group', searchKey: 'group', type: 'array' },
+      { columnId: 'recharged', searchKey: 'recharged', type: 'array' },
     ],
   })
   const statusFilter =
@@ -97,6 +98,10 @@ export function UsersTable() {
       | undefined) ?? []
   const groupFilter =
     (columnFilters.find((filter) => filter.id === 'group')?.value as
+      | string[]
+      | undefined) ?? []
+  const rechargedFilter =
+    (columnFilters.find((filter) => filter.id === 'recharged')?.value as
       | string[]
       | undefined) ?? []
 
@@ -138,6 +143,7 @@ export function UsersTable() {
       statusFilter,
       roleFilter,
       groupFilter,
+      rechargedFilter,
       sortParams,
       refreshTrigger,
     ],
@@ -146,7 +152,8 @@ export function UsersTable() {
       const hasColumnFilter =
         statusFilter.length > 0 ||
         roleFilter.length > 0 ||
-        groupFilter.length > 0
+        groupFilter.length > 0 ||
+        rechargedFilter.length > 0
       const params = {
         p: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
@@ -161,6 +168,7 @@ export function UsersTable() {
               status: statusFilter[0] ?? '',
               role: roleFilter[0] ?? '',
               group: groupFilter[0] ?? '',
+              recharged: rechargedFilter[0] ?? '',
             })
           : await getUsers(params)
 
@@ -185,6 +193,7 @@ export function UsersTable() {
     data: users,
     columns,
     enableRowSelection: true,
+    initialColumnVisibility: { recharged: false },
     columnFilters,
     globalFilter,
     pagination,
@@ -248,6 +257,15 @@ export function UsersTable() {
               label: group,
               value: group,
             })),
+            singleSelect: true,
+          },
+          {
+            columnId: 'recharged',
+            title: t('Recharge Status'),
+            options: [
+              { label: t('Recharged'), value: 'true' },
+              { label: t('Never recharged'), value: 'false' },
+            ],
             singleSelect: true,
           },
         ],

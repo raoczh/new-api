@@ -38,9 +38,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { getEnabledModels } from '@/features/channels/api'
 import { getGroups } from '@/features/users/api'
 import { useMediaQuery } from '@/hooks'
-import { getUserGroups } from '@/lib/api'
+import { getUserGroups, getUserModels } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
@@ -141,6 +142,30 @@ export function CommonLogsFilterBar<TData>(
       .filter((group) => group !== 'auto')
       .map((group) => ({ label: group, value: group }))
   }, [isAdmin, adminGroups, userGroups])
+  const { data: adminModels } = useQuery({
+    queryKey: ['channels', 'enabled-models'],
+    queryFn: async () => requireServerSuccess(await getEnabledModels()),
+    enabled: isAdmin,
+    // Channel read is a separate capability; a delegated administrator
+    // without it still gets the models their own account can call.
+    retry: false,
+    meta: { errorToast: false },
+  })
+  const { data: userModels } = useQuery({
+    queryKey: ['user-models'],
+    queryFn: async () => requireServerSuccess(await getUserModels()),
+  })
+  const modelOptions = useMemo(() => {
+    const adminModelList = isAdmin ? adminModels?.data : undefined
+    const models =
+      Array.isArray(adminModelList) && adminModelList.length > 0
+        ? adminModelList
+        : userModels?.data
+    if (!Array.isArray(models)) return []
+    return [...new Set(models)]
+      .sort((a, b) => a.localeCompare(b))
+      .map((model) => ({ label: model, value: model }))
+  }, [isAdmin, adminModels, userModels])
 
   const searchState = useMemo<CommonLogDraft>(() => {
     const { start, end } = getDefaultTimeRange()
@@ -317,22 +342,27 @@ export function CommonLogsFilterBar<TData>(
   )
   const modelFilter = (
     <LogsFilterField>
-      <LogsFilterInput
-        placeholder={t('Model Name')}
+      <Combobox
+        options={modelOptions}
+        showClear
+        aria-label={t('Model Name')}
+        emptyText={t('No models found.')}
+        placeholder={t('All Models')}
+        className='h-8 min-w-0 text-sm leading-5'
         value={filters.model || ''}
-        onChange={(e) => handleChange('model', e.target.value)}
+        onValueChange={(value) => handleChange('model', value ?? '')}
         onKeyDown={handleKeyDown}
-      />
+      />{' '}
     </LogsFilterField>
   )
   const groupFilter = (
     <LogsFilterField className={sensitiveInputClass}>
       <Combobox
         options={groupOptions}
-        allowCustomValue
+        showClear
         aria-label={t('Group')}
         emptyText={t('No group found.')}
-        placeholder={t('Group')}
+        placeholder={t('All Groups')}
         className='h-8 min-w-0 text-sm leading-5'
         popupClassName={sensitiveInputClass}
         value={filters.group || ''}

@@ -275,6 +275,15 @@ export function useUsersColumns(): ColumnDef<User>[] {
         meta: { mobileHidden: true },
       },
       {
+        // Filter-only column: the recharge-state filter needs a column to hold
+        // its value, but the list itself has no recharge column.
+        id: 'recharged',
+        header: t('Recharge Status'),
+        accessorFn: () => '',
+        enableSorting: false,
+        enableHiding: false,
+      },
+      {
         accessorKey: 'created_at',
         header: t('Time'),
         cell: ({ row }) => (

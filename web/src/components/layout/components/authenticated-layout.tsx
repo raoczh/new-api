@@ -16,11 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { CommandMenu } from '@/components/command-menu'
 import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarProvider } from '@/components/ui/sidebar'
-import { SearchProvider } from '@/context/search-provider'
 
 import { AppHeader } from './app-header'
 import { AppSidebar } from './app-sidebar'
@@ -31,21 +29,18 @@ type AuthenticatedLayoutProps = {
 
 export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
   return (
-    <SearchProvider>
-      <SidebarProvider
-        defaultOpen
-        className='tc-workspace-shell h-svh min-h-0 flex-col overflow-hidden'
-      >
-        <SkipToMain />
-        <AppHeader />
-        <div className='tc-workspace-body flex min-h-0 flex-1'>
-          <AppSidebar />
-          <div className='tc-workspace-content @container/content flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
-            {props.children ?? <AnimatedOutlet />}
-          </div>
+    <SidebarProvider
+      defaultOpen
+      className='tc-workspace-shell h-svh min-h-0 flex-col overflow-hidden'
+    >
+      <SkipToMain />
+      <AppHeader />
+      <div className='tc-workspace-body flex min-h-0 flex-1'>
+        <AppSidebar />
+        <div className='tc-workspace-content @container/content flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
+          {props.children ?? <AnimatedOutlet />}
         </div>
-      </SidebarProvider>
-      <CommandMenu />
-    </SearchProvider>
+      </div>
+    </SidebarProvider>
   )
 }

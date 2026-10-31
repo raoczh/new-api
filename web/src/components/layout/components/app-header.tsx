@@ -21,9 +21,8 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { LanguageSwitcher } from '@/components/language-switcher'
-import { NotificationPopover } from '@/components/notification-popover'
+import { NotificationCenter } from '@/components/notification-center'
 import { ProfileDropdown } from '@/components/profile-dropdown'
-import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { Button } from '@/components/ui/button'
 import {
@@ -44,7 +43,7 @@ import { TopNav } from './top-nav'
 
 /**
  * General application Header component
- * Integrates navigation bar, search, configuration and profile functions
+ * Integrates navigation bar, notifications, configuration and profile functions
  *
  * @example
  * // Basic usage
@@ -55,8 +54,8 @@ import { TopNav } from './top-nav'
  * <AppHeader navLinks={customLinks} />
  *
  * @example
- * // Hide navigation bar and search box
- * <AppHeader showTopNav={false} showSearch={false} />
+ * // Hide the top navigation bar
+ * <AppHeader showTopNav={false} />
  *
  * @example
  * // Fully customize left and right content
@@ -80,11 +79,6 @@ type AppHeaderProps = {
    */
   leftContent?: React.ReactNode
   /**
-   * Whether to show search box
-   * @default true
-   */
-  showSearch?: boolean
-  /**
    * Custom right content, overrides default right content if provided
    */
   rightContent?: React.ReactNode
@@ -104,7 +98,6 @@ export function AppHeader({
   navLinks = defaultTopNavLinks,
   showTopNav = true,
   leftContent,
-  showSearch = true,
   rightContent,
   showNotifications = true,
   showProfileDropdown = true,
@@ -116,10 +109,10 @@ export function AppHeader({
   const dynamicLinks = useTopNavLinks()
   const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
 
-  // Notifications hook
-  const notifications = useNotifications()
+  // Notifications hook; a new notice opens the dialog after sign-in.
+  const notifications = useNotifications({ autoOpenUnreadNotice: true })
 
-  // Close the old layout's popup before mounting its new trigger.
+  // Close the announcement dialog before mounting the other layout's trigger.
   if (previousIsMobile !== isMobile) {
     setPreviousIsMobile(isMobile)
     notifications.setPopoverOpen(false)
@@ -128,14 +121,11 @@ export function AppHeader({
   const tools = (
     <>
       {showTopNav && <TopNav links={links} />}
-      {showSearch && (
-        <Search className='w-9! flex-none p-0! [&>kbd]:hidden [&>span]:hidden' />
-      )}
       {showNotifications && (
-        <NotificationPopover
+        <NotificationCenter
           open={notifications.popoverOpen}
           onOpenChange={notifications.setPopoverOpen}
-          unreadCount={notifications.unreadCount}
+          hasUnreadAnnouncements={notifications.hasUnreadAnnouncements}
           activeTab={notifications.activeTab}
           onTabChange={notifications.setActiveTab}
           notice={notifications.notice}

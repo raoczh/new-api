@@ -463,7 +463,17 @@ func GetAllUsers(pageInfo *common.PageInfo, sortOptions ...UserSortOptions) (use
 	return users, total, nil
 }
 
-func SearchUsers(keyword string, group string, role *int, status *int, startIdx int, num int, sortOptions ...UserSortOptions) ([]*User, int64, error) {
+// UserSearchFilter holds the administrator user-list filters. A nil pointer
+// means the filter is not applied.
+type UserSearchFilter struct {
+	Keyword   string
+	Group     string
+	Role      *int
+	Status    *int
+	Recharged *bool
+}
+
+func SearchUsers(filter UserSearchFilter, startIdx int, num int, sortOptions ...UserSortOptions) ([]*User, int64, error) {
 	var users []*User
 	var total int64
 	var err error
@@ -484,10 +494,10 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 
 	// 构建搜索条件
 	likeCondition := "username LIKE ? OR email LIKE ? OR display_name LIKE ?"
-	likeArgs := []any{"%" + keyword + "%", "%" + keyword + "%", "%" + keyword + "%"}
+	likeArgs := []any{"%" + filter.Keyword + "%", "%" + filter.Keyword + "%", "%" + filter.Keyword + "%"}
 
 	// 尝试将关键字转换为整数ID
-	keywordInt, err := strconv.Atoi(keyword)
+	keywordInt, err := strconv.Atoi(filter.Keyword)
 	if err == nil {
 		// 如果是数字，同时搜索ID和其他字段
 		likeCondition = "id = ? OR " + likeCondition
@@ -495,17 +505,27 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	}
 
 	query = query.Where("("+likeCondition+")", likeArgs...)
-	if group != "" {
-		query = query.Where(commonGroupCol+" = ?", group)
+	if filter.Group != "" {
+		query = query.Where(commonGroupCol+" = ?", filter.Group)
 	}
-	if role != nil {
-		query = query.Where("role = ?", *role)
+	if filter.Role != nil {
+		query = query.Where("role = ?", *filter.Role)
 	}
-	if status != nil {
-		if *status == -1 {
+	if filter.Status != nil {
+		if *filter.Status == -1 {
 			query = query.Where("deleted_at IS NOT NULL")
 		} else {
-			query = query.Where("deleted_at IS NULL").Where("status = ?", *status)
+			query = query.Where("deleted_at IS NULL").Where("status = ?", *filter.Status)
+		}
+	}
+	if filter.Recharged != nil {
+		// 充值过的用户：成功在线充值订单或已使用的兑换码都算一次充值。
+		topUpUsers := tx.Model(&TopUp{}).Select("user_id").Where("status = ?", common.TopUpStatusSuccess)
+		redeemedUsers := tx.Unscoped().Model(&Redemption{}).Select("used_user_id").Where("status = ? AND used_user_id != 0", common.RedemptionCodeStatusUsed)
+		if *filter.Recharged {
+			query = query.Where("(id IN (?) OR id IN (?))", topUpUsers, redeemedUsers)
+		} else {
+			query = query.Where("(id NOT IN (?) AND id NOT IN (?))", topUpUsers, redeemedUsers)
 		}
 	}
 

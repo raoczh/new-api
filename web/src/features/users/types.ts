@@ -113,6 +113,8 @@ export interface SearchUsersParams {
   group?: string
   role?: string
   status?: string
+  /** "true" only users with a completed top-up or a redeemed code */
+  recharged?: string
   p?: number
   page_size?: number
   sort_by?: UserSortBy

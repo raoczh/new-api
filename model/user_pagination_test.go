@@ -59,8 +59,36 @@ func TestSearchUsersSortsBeforePagination(t *testing.T) {
 	truncateTables(t)
 	insertUsersForPaginationTest(t, 42)
 
-	users, total, err := SearchUsers("user", "", nil, nil, 20, 20, NewUserSortOptions("id", "asc"))
+	users, total, err := SearchUsers(UserSearchFilter{Keyword: "user"}, 20, 20, NewUserSortOptions("id", "asc"))
 	require.NoError(t, err)
 	assert.Equal(t, int64(42), total)
 	assert.Equal(t, []int{21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40}, collectUserIDs(users))
+}
+
+func TestSearchUsersFiltersByRechargeState(t *testing.T) {
+	truncateTables(t)
+	insertUsersForPaginationTest(t, 4)
+
+	require.NoError(t, DB.Create(&TopUp{
+		UserId: 2, Amount: 10, Money: 10, TradeNo: "recharged-topup", Status: common.TopUpStatusSuccess,
+	}).Error)
+	require.NoError(t, DB.Create(&TopUp{
+		UserId: 3, Amount: 10, Money: 10, TradeNo: "pending-topup", Status: common.TopUpStatusPending,
+	}).Error)
+	require.NoError(t, DB.Create(&Redemption{
+		UserId: 1, Key: "redeem-code-key", Name: "fixture", Quota: 100,
+		Status: common.RedemptionCodeStatusUsed, UsedUserId: 3, RedeemedTime: 1,
+	}).Error)
+
+	recharged := true
+	users, total, err := SearchUsers(UserSearchFilter{Keyword: "", Recharged: &recharged}, 0, 20, NewUserSortOptions("id", "asc"))
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), total)
+	assert.Equal(t, []int{2, 3}, collectUserIDs(users))
+
+	recharged = false
+	users, total, err = SearchUsers(UserSearchFilter{Keyword: "", Recharged: &recharged}, 0, 20, NewUserSortOptions("id", "asc"))
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), total)
+	assert.Equal(t, []int{1, 4}, collectUserIDs(users))
 }

@@ -55,6 +55,10 @@ export interface UserProfile {
   used_quota: number
   /** Total request count */
   request_count: number
+  /** Per-user concurrent relay request limit; absent or 0 means unlimited */
+  max_concurrent_requests?: number
+  /** Per-user relay requests per minute limit; absent or 0 means unlimited */
+  requests_per_minute?: number
   /** Account status (1=启用, 2=禁用, 3=待审核, 4=已删除) */
   status: number
   /** Access token (system token) */
