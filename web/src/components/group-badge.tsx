@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { AlertTriangle } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -129,5 +130,16 @@ export function GroupBadge(props: GroupBadgeProps) {
       <span className='max-w-full min-w-0 overflow-hidden'>{badge}</span>
       <GroupMultiplierBadge ratio={ratio} label={ratioLabel} />
     </span>
+  )
+}
+
+/** Marks a group name that is not in the pricing group table. */
+export function UnknownGroupBadge() {
+  const { t } = useTranslation()
+  return (
+    <StatusBadge variant='danger' copyable={false}>
+      <AlertTriangle className='mr-1 h-3 w-3' />
+      {t('Not in pricing table')}
+    </StatusBadge>
   )
 }

@@ -31,6 +31,8 @@ import {
   sideDrawerFormClassName,
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
+import { UnknownGroupBadge } from '@/components/group-badge'
+import { MultiSelect } from '@/components/multi-select'
 import { PermissionMatrix } from '@/components/permission-matrix'
 import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
@@ -90,6 +92,7 @@ import {
 import { BINDING_FIELDS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
   userFormSchema,
+  type LoadedUsableGroups,
   type UserFormValues,
   USER_FORM_DEFAULT_VALUES,
   transformFormDataToPayload,
@@ -119,6 +122,9 @@ export function UsersMutateDrawer({
   // Matrix as loaded from the server; an unchanged matrix is not resubmitted so
   // routine edits of an administrator do not require step-up verification.
   const loadedPermissions = useRef<AdminPermissionMatrix | undefined>(undefined)
+  // Usable group lists as loaded from the server; unchanged lists are not
+  // resubmitted, and nothing is sent when the load did not complete.
+  const loadedUsableGroups = useRef<LoadedUsableGroups | undefined>(undefined)
 
   // Fetch groups
   const { data: groupsData } = useQuery({
@@ -128,6 +134,21 @@ export function UsersMutateDrawer({
   })
 
   const groups = groupsData?.data || []
+
+  // Selected names missing from the pricing table stay visible and flagged.
+  const buildGroupOptions = (selected: string[] = []) => {
+    const known = new Set(groups)
+    return [
+      ...groups.map((group) => ({ label: group, value: group })),
+      ...selected
+        .filter((group) => !known.has(group))
+        .map((group) => ({
+          label: group,
+          value: group,
+          suffix: <UnknownGroupBadge />,
+        })),
+    ]
+  }
 
   // Permission catalog is owned by the backend; fetched once and reused.
   const { data: permissionCatalog = EMPTY_PERMISSION_CATALOG } = useQuery({
@@ -145,10 +166,15 @@ export function UsersMutateDrawer({
   useEffect(() => {
     if (open && isUpdate && currentRow) {
       // For update, fetch fresh data
+      loadedUsableGroups.current = undefined
       getUser(currentRow.id)
         .then((result) => {
           if (result.success && result.data) {
             loadedPermissions.current = result.data.admin_permissions
+            loadedUsableGroups.current = {
+              extra: result.data.extra_usable_groups ?? [],
+              hidden: result.data.hidden_usable_groups ?? [],
+            }
             form.reset(transformUserToFormDefaults(result.data))
           } else {
             handleServerError(result, t('Failed to load'))
@@ -181,12 +207,37 @@ export function UsersMutateDrawer({
       }
     }
 
+    if (isUpdate) {
+      const extra = data.extra_usable_groups ?? []
+      const hidden = data.hidden_usable_groups ?? []
+      const both = hidden.find((name) => extra.includes(name))
+      if (both) {
+        form.setError('hidden_usable_groups', {
+          type: 'manual',
+          message: t('{{group}} cannot be both extra visible and hidden.', {
+            group: both,
+          }),
+        })
+        return
+      }
+      if (data.group && hidden.includes(data.group)) {
+        form.setError('hidden_usable_groups', {
+          type: 'manual',
+          message: t('Cannot hide {{group}}: the user belongs to this group.', {
+            group: data.group,
+          }),
+        })
+        return
+      }
+    }
+
     setIsSubmitting(true)
     try {
       const payload = transformFormDataToPayload(
         data,
         currentRow?.id,
-        permissionCatalog
+        permissionCatalog,
+        loadedUsableGroups.current
       )
       if (
         isUpdate &&
@@ -264,6 +315,10 @@ export function UsersMutateDrawer({
       const result = requireServerSuccess(await getUser(currentRow.id))
       if (result.success && result.data) {
         loadedPermissions.current = result.data.admin_permissions
+        loadedUsableGroups.current = {
+          extra: result.data.extra_usable_groups ?? [],
+          hidden: result.data.hidden_usable_groups ?? [],
+        }
         form.reset(transformUserToFormDefaults(result.data))
       }
       triggerRefresh()
@@ -433,6 +488,54 @@ export function UsersMutateDrawer({
                             placeholder={t('Select a group')}
                           />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='extra_usable_groups'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Extra visible groups')}</FormLabel>
+                        <FormControl>
+                          <MultiSelect
+                            options={buildGroupOptions(field.value)}
+                            selected={field.value ?? []}
+                            onChange={field.onChange}
+                            placeholder={t('Select groups')}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Groups this user can use in addition to those allowed for their user group.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='hidden_usable_groups'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Hidden groups')}</FormLabel>
+                        <FormControl>
+                          <MultiSelect
+                            options={buildGroupOptions(field.value)}
+                            selected={field.value ?? []}
+                            onChange={field.onChange}
+                            placeholder={t('Select groups')}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Groups hidden from this user. API keys already bound to a hidden group are rejected on the next request.'
+                          )}
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

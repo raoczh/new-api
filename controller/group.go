@@ -30,8 +30,12 @@ func GetUserGroups(c *gin.Context) {
 	usableGroups := make(map[string]map[string]any)
 	userGroup := ""
 	userId := c.GetInt("id")
-	userGroup, _ = model.GetUserGroup(userId, false)
-	userUsableGroups := service.GetUserUsableGroups(userGroup)
+	userSetting := service.GetContextUserSetting(c)
+	if userCache, err := model.GetUserCache(userId); err == nil {
+		userGroup = userCache.Group
+		userSetting = userCache.GetSetting()
+	}
+	userUsableGroups := service.GetUserUsableGroups(userGroup, userSetting)
 	for groupName, _ := range ratio_setting.GetGroupRatioCopy() {
 		// UserUsableGroups contains the groups that the user can use
 		if desc, ok := userUsableGroups[groupName]; ok {

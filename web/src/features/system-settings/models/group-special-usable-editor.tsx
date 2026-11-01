@@ -27,6 +27,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { EmptyState } from '@/components/empty-state'
+import { UnknownGroupBadge } from '@/components/group-badge'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -202,12 +203,7 @@ function GroupSection(props: GroupSectionProps) {
             <span className='min-w-0 truncate font-semibold'>
               {props.groupName}
             </span>
-            {!isKnownGroup && (
-              <StatusBadge variant='danger' copyable={false}>
-                <AlertTriangle className='mr-1 h-3 w-3' />
-                {t('Not in pricing table')}
-              </StatusBadge>
-            )}
+            {!isKnownGroup && <UnknownGroupBadge />}
             <StatusBadge variant='neutral' copyable={false}>
               {props.items.length} {t('rules')}
             </StatusBadge>

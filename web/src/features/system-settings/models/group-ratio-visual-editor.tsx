@@ -46,6 +46,7 @@ import {
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
 import { EmptyState } from '@/components/empty-state'
+import { UnknownGroupBadge } from '@/components/group-badge'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -275,16 +276,6 @@ function sourceGroupPricingSignature(
     groupVendors: parseRatioMap(groupVendors),
     iqGroupModels: parseUsableMap(iqGroupModels),
   })
-}
-
-function UnknownGroupBadge() {
-  const { t } = useTranslation()
-  return (
-    <StatusBadge variant='danger' copyable={false}>
-      <AlertTriangle className='mr-1 h-3 w-3' />
-      {t('Not in pricing table')}
-    </StatusBadge>
-  )
 }
 
 type GroupNameSelectProps = {

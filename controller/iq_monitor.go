@@ -8,6 +8,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
@@ -41,21 +42,23 @@ func iqMonitorVisibleGroups(c *gin.Context) (map[string]string, error) {
 	pools := iqProbePools()
 	visible := make(map[string]string, len(pools))
 	if c.GetInt("role") >= common.RoleAdminUser {
-		usable := service.GetUserUsableGroups("")
+		usable := service.GetUserUsableGroups("", dto.UserSetting{})
 		for group := range pools {
 			visible[group] = usable[group]
 		}
 		return visible, nil
 	}
 	userGroup := ""
+	userSetting := service.GetContextUserSetting(c)
 	if userID := c.GetInt("id"); userID > 0 {
 		user, err := model.GetUserCache(userID)
 		if err != nil {
 			return nil, err
 		}
 		userGroup = user.Group
+		userSetting = user.GetSetting()
 	}
-	for group, desc := range service.GetUserUsableGroups(userGroup) {
+	for group, desc := range service.GetUserUsableGroups(userGroup, userSetting) {
 		if _, ok := pools[group]; ok {
 			visible[group] = desc
 		}

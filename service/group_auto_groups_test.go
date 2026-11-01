@@ -3,10 +3,12 @@ package service
 import (
 	"fmt"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
@@ -42,7 +44,7 @@ func TestGetRequestAutoGroupsInheritedListIsNotLimited(t *testing.T) {
 	configureRequestAutoGroupsTest(t)
 	ctx := newRequestAutoGroupsContext()
 
-	groups := GetRequestAutoGroups(ctx, "default")
+	groups := GetRequestAutoGroups(ctx, "default", dto.UserSetting{})
 
 	assert.Equal(t, []string{"vip", "default", "svip"}, groups)
 }
@@ -53,11 +55,11 @@ func TestGetRequestAutoGroupsFiltersBeforeApplyingCurrentLimit(t *testing.T) {
 	common.SetContextKey(ctx, constant.ContextKeyTokenAutoGroups, []string{"revoked", "vip", "default", "svip"})
 	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`[]`))
 
-	groups := GetRequestAutoGroups(ctx, "default")
+	groups := GetRequestAutoGroups(ctx, "default", dto.UserSetting{})
 
 	assert.Equal(t, []string{"vip", "default"}, groups)
 	require.NoError(t, setting.UpdateMaxTokenAutoGroups("1"))
-	assert.Equal(t, []string{"vip"}, GetRequestAutoGroups(ctx, "default"))
+	assert.Equal(t, []string{"vip"}, GetRequestAutoGroups(ctx, "default", dto.UserSetting{}))
 }
 
 func TestGetRequestAutoGroupsDoesNotFallBackAfterPermissionChange(t *testing.T) {
@@ -66,7 +68,47 @@ func TestGetRequestAutoGroupsDoesNotFallBackAfterPermissionChange(t *testing.T) 
 	common.SetContextKey(ctx, constant.ContextKeyTokenAutoGroups, []string{"vip"})
 	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default"}`))
 
-	groups := GetRequestAutoGroups(ctx, "default")
+	groups := GetRequestAutoGroups(ctx, "default", dto.UserSetting{})
 
 	assert.Empty(t, groups)
+}
+
+func TestGetUserUsableGroupsAppliesPerUserOverrides(t *testing.T) {
+	configureRequestAutoGroupsTest(t)
+	cases := []struct {
+		name    string
+		setting dto.UserSetting
+		want    []string
+	}{
+		{"no override keeps the user group view", dto.UserSetting{}, []string{"default", "svip", "vip"}},
+		{"hidden groups are removed", dto.UserSetting{HiddenUsableGroups: []string{"svip"}}, []string{"default", "vip"}},
+		{"extra groups are added", dto.UserSetting{ExtraUsableGroups: []string{"special"}}, []string{"default", "special", "svip", "vip"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := GetUserUsableGroups("default", tc.setting)
+			keys := make([]string, 0, len(got))
+			for name := range got {
+				keys = append(keys, name)
+			}
+			slices.Sort(keys)
+			assert.Equal(t, tc.want, keys)
+		})
+	}
+}
+
+func TestGetUserUsableGroupsKeepsOwnGroupWhenHidden(t *testing.T) {
+	configureRequestAutoGroupsTest(t)
+
+	got := GetUserUsableGroups("default", dto.UserSetting{HiddenUsableGroups: []string{"default"}})
+
+	assert.Contains(t, got, "default")
+}
+
+func TestGetUserAutoGroupSkipsHiddenGroups(t *testing.T) {
+	configureRequestAutoGroupsTest(t)
+
+	groups := GetUserAutoGroup("default", dto.UserSetting{HiddenUsableGroups: []string{"vip"}})
+
+	assert.Equal(t, []string{"default", "svip"}, groups)
 }

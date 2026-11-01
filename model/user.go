@@ -117,6 +117,11 @@ type User struct {
 	// fields so the admin form can edit them; nil means "not provided" on update.
 	MaxConcurrentRequests *int `json:"max_concurrent_requests,omitempty" gorm:"-:all"`
 	RequestsPerMinute     *int `json:"requests_per_minute,omitempty" gorm:"-:all"`
+
+	// Per-user usable group overrides live in Setting too; a nil list means
+	// "not provided" on update, an empty list clears the override.
+	ExtraUsableGroups  []string `json:"extra_usable_groups,omitempty" gorm:"-:all"`
+	HiddenUsableGroups []string `json:"hidden_usable_groups,omitempty" gorm:"-:all"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -217,12 +222,49 @@ func ValidateUserRelayLimits(maxConcurrentRequests, requestsPerMinute int) error
 	return nil
 }
 
+// maxUsableGroupOverrides bounds each per-user usable group list.
+const maxUsableGroupOverrides = 100
+
+// ValidateUserUsableGroupOverrides rejects malformed per-user usable group
+// lists. The user's own group always stays visible, so it cannot be hidden, and
+// a group cannot be both extra visible and hidden.
+func ValidateUserUsableGroupOverrides(userGroup string, extra, hidden []string) error {
+	sets := make([]map[string]struct{}, 0, 2)
+	for _, list := range [][]string{extra, hidden} {
+		if len(list) > maxUsableGroupOverrides {
+			return fmt.Errorf("at most %d groups can be listed", maxUsableGroupOverrides)
+		}
+		seen := make(map[string]struct{}, len(list))
+		for _, name := range list {
+			if name == "" || len(name) > 64 {
+				return fmt.Errorf("group name must be between 1 and 64 characters")
+			}
+			if _, ok := seen[name]; ok {
+				return fmt.Errorf("group %s is duplicated", name)
+			}
+			seen[name] = struct{}{}
+		}
+		sets = append(sets, seen)
+	}
+	for _, name := range hidden {
+		if name == userGroup {
+			return fmt.Errorf("group %s is the user's own group and cannot be hidden", name)
+		}
+		if _, ok := sets[0][name]; ok {
+			return fmt.Errorf("group %s cannot be both extra visible and hidden", name)
+		}
+	}
+	return nil
+}
+
 func (user *User) ApplyUserRelayLimitsToResponse() {
 	setting := user.GetSetting()
 	maxConcurrent := setting.MaxConcurrentRequests
 	requestsPerMinute := setting.RequestsPerMinute
 	user.MaxConcurrentRequests = &maxConcurrent
 	user.RequestsPerMinute = &requestsPerMinute
+	user.ExtraUsableGroups = setting.ExtraUsableGroups
+	user.HiddenUsableGroups = setting.HiddenUsableGroups
 }
 
 // userBindColumns 允许通过 UpdateUserBindColumn 更新的第三方账号绑定列白名单。
@@ -945,15 +987,21 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
 	}
-	// The admin form submits only the two limit fields; merge them into the
-	// stored Setting so unrelated preferences survive the update.
-	if user.MaxConcurrentRequests != nil || user.RequestsPerMinute != nil {
+	// The admin form submits only the limit and usable group fields; merge them
+	// into the stored Setting so unrelated preferences survive the update.
+	if user.MaxConcurrentRequests != nil || user.RequestsPerMinute != nil || user.ExtraUsableGroups != nil || user.HiddenUsableGroups != nil {
 		setting := current.GetSetting()
 		if user.MaxConcurrentRequests != nil {
 			setting.MaxConcurrentRequests = *user.MaxConcurrentRequests
 		}
 		if user.RequestsPerMinute != nil {
 			setting.RequestsPerMinute = *user.RequestsPerMinute
+		}
+		if user.ExtraUsableGroups != nil {
+			setting.ExtraUsableGroups = user.ExtraUsableGroups
+		}
+		if user.HiddenUsableGroups != nil {
+			setting.HiddenUsableGroups = user.HiddenUsableGroups
 		}
 		settingBytes, err := common.Marshal(setting)
 		if err != nil {

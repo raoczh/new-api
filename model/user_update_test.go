@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -373,6 +374,86 @@ func TestValidateUserRelayLimits(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+}
+
+func TestValidateUserUsableGroupOverrides(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		extra, hidden []string
+		wantErr       string
+	}{
+		{name: "both empty"},
+		{name: "disjoint lists", extra: []string{"vip"}, hidden: []string{"svip"}},
+		{name: "hiding the own group", hidden: []string{"default"}, wantErr: "default"},
+		{name: "same group in both lists", extra: []string{"vip"}, hidden: []string{"vip"}, wantErr: "vip"},
+		{name: "duplicate entry", extra: []string{"vip", "vip"}, wantErr: "vip"},
+		{name: "empty name", extra: []string{""}, wantErr: "between 1 and 64"},
+		{name: "name too long", hidden: []string{strings.Repeat("a", 65)}, wantErr: "between 1 and 64"},
+		{name: "too many groups", extra: make([]string, maxUsableGroupOverrides+1), wantErr: "at most"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateUserUsableGroupOverrides("default", tc.extra, tc.hidden)
+			if tc.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
+}
+
+func TestEditWithTxMergesUsableGroupOverridesIntoExistingSetting(t *testing.T) {
+	setupUserUpdateTestState(t)
+
+	user := User{
+		Id:       3,
+		Username: "usable-group-user",
+		Password: "password",
+		Status:   common.UserStatusEnabled,
+	}
+	user.SetSetting(dto.UserSetting{Language: "zh", MaxConcurrentRequests: 4})
+	require.NoError(t, DB.Create(&user).Error)
+
+	edit := User{
+		Id:                 user.Id,
+		Username:           "usable-group-user",
+		ExtraUsableGroups:  []string{"vip"},
+		HiddenUsableGroups: []string{"svip"},
+	}
+	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
+		return edit.EditWithTx(tx, false)
+	}))
+
+	var got User
+	require.NoError(t, DB.First(&got, user.Id).Error)
+	setting := got.GetSetting()
+	assert.Equal(t, []string{"vip"}, setting.ExtraUsableGroups)
+	assert.Equal(t, []string{"svip"}, setting.HiddenUsableGroups)
+	assert.Equal(t, 4, setting.MaxConcurrentRequests, "relay limits must survive the merge")
+	assert.Equal(t, "zh", setting.Language, "unrelated preferences must survive the merge")
+
+	// An update that provides neither list leaves both overrides untouched.
+	maxConcurrent := 8
+	edit = User{Id: user.Id, Username: "usable-group-user", MaxConcurrentRequests: &maxConcurrent}
+	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
+		return edit.EditWithTx(tx, false)
+	}))
+	require.NoError(t, DB.First(&got, user.Id).Error)
+	setting = got.GetSetting()
+	assert.Equal(t, []string{"vip"}, setting.ExtraUsableGroups)
+	assert.Equal(t, []string{"svip"}, setting.HiddenUsableGroups)
+	assert.Equal(t, 8, setting.MaxConcurrentRequests)
+
+	// An explicit empty list clears only that override.
+	edit = User{Id: user.Id, Username: "usable-group-user", HiddenUsableGroups: []string{}}
+	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error {
+		return edit.EditWithTx(tx, false)
+	}))
+	require.NoError(t, DB.First(&got, user.Id).Error)
+	setting = got.GetSetting()
+	assert.Equal(t, []string{"vip"}, setting.ExtraUsableGroups)
+	assert.Empty(t, setting.HiddenUsableGroups)
 }
 
 func TestEnsureEmailAvailableRejectsExistingEmailCaseInsensitive(t *testing.T) {

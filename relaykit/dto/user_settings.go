@@ -32,6 +32,12 @@ type UserSetting struct {
 	// RequestsPerMinute caps how many relay requests this user may start per
 	// minute. Zero means unlimited.
 	RequestsPerMinute int `json:"requests_per_minute,omitempty"`
+
+	// ExtraUsableGroups lists groups made visible to this user on top of what the
+	// user group allows; HiddenUsableGroups lists groups removed from that view.
+	// The user's own group always stays visible and cannot be hidden.
+	ExtraUsableGroups  []string `json:"extra_usable_groups,omitempty"`
+	HiddenUsableGroups []string `json:"hidden_usable_groups,omitempty"`
 }
 
 var (

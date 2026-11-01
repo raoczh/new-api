@@ -647,7 +647,7 @@ func GetUserModels(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	groups := service.GetUserUsableGroups(user.Group)
+	groups := service.GetUserUsableGroups(user.Group, user.GetSetting())
 	group := c.Query("group")
 	var groupsToQuery []string
 	switch {
@@ -657,7 +657,7 @@ func GetUserModels(c *gin.Context) {
 		}
 	case group == "auto":
 		if _, ok := groups[group]; ok {
-			groupsToQuery = service.GetUserAutoGroup(user.Group)
+			groupsToQuery = service.GetUserAutoGroup(user.Group, user.GetSetting())
 		}
 	default:
 		if _, ok := groups[group]; ok {
@@ -718,6 +718,20 @@ func UpdateUser(c *gin.Context) {
 			return
 		}
 	}
+	if updatedUser.ExtraUsableGroups != nil || updatedUser.HiddenUsableGroups != nil || updatedUser.Group != originUser.Group {
+		originSetting := originUser.GetSetting()
+		extraGroups, hiddenGroups := originSetting.ExtraUsableGroups, originSetting.HiddenUsableGroups
+		if updatedUser.ExtraUsableGroups != nil {
+			extraGroups = updatedUser.ExtraUsableGroups
+		}
+		if updatedUser.HiddenUsableGroups != nil {
+			hiddenGroups = updatedUser.HiddenUsableGroups
+		}
+		if err := model.ValidateUserUsableGroupOverrides(updatedUser.Group, extraGroups, hiddenGroups); err != nil {
+			common.ApiErrorT(c, "Invalid input {{error}}", map[string]any{"error": err.Error()})
+			return
+		}
+	}
 	myRole := c.GetInt("role")
 	if !canManageTargetRole(myRole, originUser.Role) {
 		common.ApiErrorT(c, "No permission to update users of same or higher permission level")
@@ -733,6 +747,12 @@ func UpdateUser(c *gin.Context) {
 	}
 	if updatedUser.RequestsPerMinute != nil {
 		auditParams["requests_per_minute"] = *updatedUser.RequestsPerMinute
+	}
+	if updatedUser.ExtraUsableGroups != nil {
+		auditParams["extra_usable_groups"] = updatedUser.ExtraUsableGroups
+	}
+	if updatedUser.HiddenUsableGroups != nil {
+		auditParams["hidden_usable_groups"] = updatedUser.HiddenUsableGroups
 	}
 	// Resetting a password or rewriting the admin permission matrix changes what
 	// the managed account can do or who can sign in to it.

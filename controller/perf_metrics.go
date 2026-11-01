@@ -91,6 +91,7 @@ func GetGroupStatus(c *gin.Context) {
 	}
 
 	userGroup := ""
+	userSetting := service.GetContextUserSetting(c)
 	if userID := c.GetInt("id"); userID > 0 {
 		user, err := model.GetUserCache(userID)
 		if err != nil {
@@ -98,9 +99,10 @@ func GetGroupStatus(c *gin.Context) {
 			return
 		}
 		userGroup = user.Group
+		userSetting = user.GetSetting()
 	}
 	groupDescs := map[string]string{}
-	for groupName, desc := range service.GetUserUsableGroups(userGroup) {
+	for groupName, desc := range service.GetUserUsableGroups(userGroup, userSetting) {
 		if ratio_setting.ContainsGroupRatio(groupName) {
 			groupDescs[groupName] = desc
 		}

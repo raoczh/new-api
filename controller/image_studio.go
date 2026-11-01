@@ -115,7 +115,7 @@ func CreateImageStudioTask(c *gin.Context) {
 	if req.Group == "" {
 		req.Group = userCache.Group
 	}
-	if !service.GroupInUserUsableGroups(userCache.Group, req.Group) {
+	if !service.GroupInUserUsableGroups(userCache.Group, userCache.GetSetting(), req.Group) {
 		common.ApiErrorMsg(c, "当前账号无权使用该分组，请重新选择")
 		return
 	}
@@ -546,11 +546,12 @@ func ListImageStudioModels(c *gin.Context) {
 
 	settings := system_setting.GetImageStudioSettings()
 	pricing := model.GetPricing()
-	usableGroups := service.GetUserUsableGroups(userCache.Group)
+	userSetting := userCache.GetSetting()
+	usableGroups := service.GetUserUsableGroups(userCache.Group, userSetting)
 
 	groups := make([]imageStudioGroupOption, 0, len(usableGroups))
 	for _, group := range setting.OrderedGroupNames(slices.Collect(maps.Keys(usableGroups))) {
-		if !service.IsUserSelectableGroup(userCache.Group, group) {
+		if !service.IsUserSelectableGroup(userCache.Group, userSetting, group) {
 			continue
 		}
 		groupRatio := service.GetUserGroupRatio(userCache.Group, group)

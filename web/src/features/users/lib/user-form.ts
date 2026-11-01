@@ -48,6 +48,8 @@ export const userFormSchema = z.object({
     .max(1_000_000)
     .optional(),
   requests_per_minute: z.number().int().min(0).max(1_000_000).optional(),
+  extra_usable_groups: z.array(z.string()).max(100).optional(),
+  hidden_usable_groups: z.array(z.string()).max(100).optional(),
   admin_permissions: z
     .record(z.string(), z.record(z.string(), z.boolean()))
     .optional(),
@@ -69,6 +71,8 @@ export const USER_FORM_DEFAULT_VALUES: UserFormValues = {
   remark: '',
   max_concurrent_requests: 0,
   requests_per_minute: 0,
+  extra_usable_groups: [],
+  hidden_usable_groups: [],
   // Filled against the backend catalog at render time; see UsersMutateDrawer.
   admin_permissions: {},
 }
@@ -77,13 +81,19 @@ export const USER_FORM_DEFAULT_VALUES: UserFormValues = {
 // Form Data Transformation
 // ============================================================================
 
+/** Usable group overrides as the server returned them for the edited user. */
+export type LoadedUsableGroups = { extra: string[]; hidden: string[] }
+
 /**
- * Transform form data to API payload
+ * Transform form data to API payload. Usable group lists are only sent when
+ * they differ from `loadedGroups`; without it they are never sent, so a form
+ * that failed to load cannot overwrite what the server stores.
  */
 export function transformFormDataToPayload(
   data: UserFormValues,
   userId?: number,
-  catalog?: PermissionCatalog
+  catalog?: PermissionCatalog,
+  loadedGroups?: LoadedUsableGroups
 ): UserFormData & { id?: number } {
   const payload: UserFormData & { id?: number } = {
     username: data.username,
@@ -112,6 +122,16 @@ export function transformFormDataToPayload(
     payload.remark = data.remark || undefined
     payload.max_concurrent_requests = data.max_concurrent_requests ?? 0
     payload.requests_per_minute = data.requests_per_minute ?? 0
+    if (loadedGroups) {
+      const extra = data.extra_usable_groups ?? []
+      const hidden = data.hidden_usable_groups ?? []
+      if (JSON.stringify(extra) !== JSON.stringify(loadedGroups.extra)) {
+        payload.extra_usable_groups = extra
+      }
+      if (JSON.stringify(hidden) !== JSON.stringify(loadedGroups.hidden)) {
+        payload.hidden_usable_groups = hidden
+      }
+    }
     payload.id = userId
   }
 
@@ -134,6 +154,8 @@ export function transformUserToFormDefaults(user: User): UserFormValues {
     remark: user.remark || '',
     max_concurrent_requests: user.max_concurrent_requests ?? 0,
     requests_per_minute: user.requests_per_minute ?? 0,
+    extra_usable_groups: user.extra_usable_groups ?? [],
+    hidden_usable_groups: user.hidden_usable_groups ?? [],
     admin_permissions: user.admin_permissions ?? {},
   }
 }

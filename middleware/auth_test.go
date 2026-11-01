@@ -14,8 +14,11 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
+	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/golang-jwt/jwt/v5"
@@ -454,6 +457,56 @@ func TestAccessTokenIdentityAndSingleLookup(t *testing.T) {
 			assert.Equal(t, test.legacyQuery, countQueries("users", "access_token = "))
 		})
 	}
+}
+
+func TestTokenAuthRejectsGroupHiddenForUser(t *testing.T) {
+	setupDashboardAuthMiddlewareTest(t)
+	require.NoError(t, i18n.Init())
+	// ValidateUserToken builds its key column name from a package variable that
+	// only InitLogDB sets up outside the model package's own tests.
+	t.Setenv("LOG_SQL_DSN", "")
+	previousLogType := common.LogDatabaseType()
+	t.Cleanup(func() { common.SetLogDatabaseType(previousLogType) })
+	require.NoError(t, model.InitLogDB())
+	require.NoError(t, model.DB.AutoMigrate(&model.Token{}))
+	originalUsableGroups := setting.UserUsableGroups2JSONString()
+	originalGroupRatios := ratio_setting.GroupRatio2JSONString()
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default","vip":"VIP"}`))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"vip":1}`))
+	t.Cleanup(func() {
+		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(originalUsableGroups))
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalGroupRatios))
+	})
+
+	user := &model.User{
+		Username: "hidden-group-user", Password: "password-placeholder", Role: common.RoleCommonUser,
+		Status: common.UserStatusEnabled, Group: "default", AuthVersion: 1, AffCode: "middleware-aff-hidden-group",
+	}
+	require.NoError(t, model.DB.Create(user).Error)
+	require.NoError(t, model.DB.Create(&model.Token{
+		UserId: user.Id, Key: "hiddengrouptokenkey", Name: "vip-token", Status: common.TokenStatusEnabled,
+		ExpiredTime: -1, UnlimitedQuota: true, Group: "vip",
+	}).Error)
+
+	router := gin.New()
+	router.GET("/v1/ping", TokenAuth(), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/v1/ping", nil)
+	request.Header.Set("Authorization", "Bearer sk-hiddengrouptokenkey")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusOK, response.Code, "a group the user group allows must pass before it is hidden")
+
+	user.SetSetting(dto.UserSetting{HiddenUsableGroups: []string{"vip"}})
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", user.Id).Update("setting", user.Setting).Error)
+
+	request = httptest.NewRequest(http.MethodGet, "/v1/ping", nil)
+	request.Header.Set("Authorization", "Bearer sk-hiddengrouptokenkey")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusForbidden, response.Code, "a token bound to a group hidden for the user must be rejected")
 }
 
 func TestAPIKeyFromWebSocketSubprotocol(t *testing.T) {

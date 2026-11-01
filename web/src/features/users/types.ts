@@ -61,6 +61,8 @@ export const userSchema = z.object({
   remark: z.string().optional(),
   max_concurrent_requests: z.number().optional(),
   requests_per_minute: z.number().optional(),
+  extra_usable_groups: z.array(z.string()).optional(),
+  hidden_usable_groups: z.array(z.string()).optional(),
   admin_permissions: z
     .record(z.string(), z.record(z.string(), z.boolean()))
     .optional(),
@@ -131,6 +133,8 @@ export interface UserFormData {
   remark?: string // Only used when updating user
   max_concurrent_requests?: number // Only used when updating user
   requests_per_minute?: number // Only used when updating user
+  extra_usable_groups?: string[] // Only used when updating user
+  hidden_usable_groups?: string[] // Only used when updating user
   admin_permissions?: AdminPermissionMatrix
 }
 
