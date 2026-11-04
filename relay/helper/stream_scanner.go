@@ -164,6 +164,10 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		pingTicker = time.NewTicker(pingInterval)
 	}
 
+	// upstreamDataNotify 由 scanner goroutine 每收到一行上游数据时触发，
+	// ping goroutine 监听后重置计时器，实现"上游空闲才 ping"语义。
+	upstreamDataNotify := make(chan struct{}, 1)
+
 	logger.LogDebug(c, "relay timeout seconds: %d", common.RelayTimeout)
 	logger.LogDebug(c, "relay max idle conns: %d", common.RelayMaxIdleConns)
 	logger.LogDebug(c, "relay max idle conns per host: %d", common.RelayMaxIdleConnsPerHost)
@@ -195,7 +199,9 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 
 	ctx = context.WithValue(ctx, "stop_chan", stopChan)
 
-	// Handle ping data sending with improved error handling
+	// Handle ping data sending with improved error handling.
+	// 每次上游有数据时通过 upstreamDataNotify 重置计时器，实现"上游空闲才向下游 ping"语义，
+	// 避免上游持续推送时还向下游发出冗余的 ping 帧。
 	if pingEnabled && pingTicker != nil {
 		wg.Add(1)
 		gopool.Go(func() {
@@ -210,12 +216,15 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			}()
 
 			// 添加超时保护，防止 goroutine 无限运行
-			maxPingDuration := 30 * time.Minute // 最大 ping 持续时间
+			maxPingDuration := 30 * time.Minute
 			pingTimeout := time.NewTimer(maxPingDuration)
 			defer pingTimeout.Stop()
 
 			for {
 				select {
+				case <-upstreamDataNotify:
+					// 上游有新数据到达，重置 ping 计时器，推迟下一次 ping。
+					pingTicker.Reset(pingInterval)
 				case <-pingTicker.C:
 					var err error
 					func() {
@@ -234,7 +243,6 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				case <-stopChan:
 					return
 				case <-c.Request.Context().Done():
-					// 监听客户端断开连接
 					return
 				case <-pingTimeout.C:
 					logger.LogError(c, common.LogText("ping goroutine max duration reached"))
@@ -295,6 +303,11 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			}
 
 			ticker.Reset(streamingTimeout)
+			// 通知 ping goroutine 有上游数据，推迟下一次 ping。
+			select {
+			case upstreamDataNotify <- struct{}{}:
+			default:
+			}
 			data := scanner.Text()
 			logger.LogDebug(c, "stream scanner data: %s", data)
 
@@ -348,9 +361,17 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 	case <-stopChan:
 		// EndReason already set by the goroutine that triggered stopChan
 	case <-c.Request.Context().Done():
-		// 客户端断开：立即 cleanup 关闭上游 resp.Body，解除 scanner 阻塞并让上游停止生成，
-		// 避免为已放弃的请求继续消费上游 token。
+		// 客户端断开：继续 drain 上游直到流结束或超时，以捕获完整的 usage 数据用于计费。
+		// 不立即关闭 resp.Body，让 scanner goroutine 自然读完上游内容。
+		// 使用与 StreamingTimeout 相同的超时防止无限等待。
 		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, c.Request.Context().Err())
+		logger.LogInfo(c, common.LogText("client disconnected, draining upstream for billing (timeout=%ds)", int64(streamingTimeout.Seconds())))
+		select {
+		case <-stopChan:
+			// scanner goroutine 已结束，可能已收到 [DONE] 或 EOF
+		case <-ticker.C:
+			// drain 超时，仍以 ClientGone 结束
+		}
 	}
 
 	cleanup()
