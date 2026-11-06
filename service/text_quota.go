@@ -244,6 +244,12 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		UsageSemantic:         usageSemanticFromUsage(relayInfo, usage),
 	}
 	summary.IsClaudeUsageSemantic = summary.UsageSemantic == "anthropic"
+	if relayInfo.ChannelMeta != nil && relayInfo.ChannelSetting.IsZhiqiEngine() &&
+		relayInfo.PriceData.UsePrice && relayInfo.BillingImageCount != nil {
+		// A delivered image is sufficient evidence for per-image pricing; a
+		// provider is not required to fabricate token usage for URL results.
+		summary.FixedPriceBilling = true
+	}
 
 	if usage == nil {
 		usage = &dto.Usage{

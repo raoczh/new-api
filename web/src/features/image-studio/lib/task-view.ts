@@ -76,6 +76,20 @@ export function describeTaskParams(task: ImageStudioTask): string {
   const parts: string[] = []
   if (task.params?.size) parts.push(String(task.params.size))
   if (task.params?.quality) parts.push(String(task.params.quality))
+  if (task.params?.resolution) parts.push(task.params.resolution)
+  if (task.params?.aspect_ratio) parts.push(task.params.aspect_ratio)
+  if (task.params?.output_format) {
+    parts.push(task.params.output_format.toUpperCase())
+  }
+  if (typeof task.params?.output_compression === 'number') {
+    parts.push(`${task.params.output_compression}%`)
+  }
+  if (typeof task.params?.frame_count === 'number') {
+    parts.push(`${task.params.frame_count}f`)
+  }
+  if (typeof task.params?.frame_duration_ms === 'number') {
+    parts.push(`${task.params.frame_duration_ms}ms`)
+  }
   if (typeof task.params?.n === 'number' && task.params.n > 1) {
     parts.push(`×${task.params.n}`)
   }

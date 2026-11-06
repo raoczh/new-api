@@ -272,7 +272,7 @@ export const channelFormSchema = z
     tls_insecure_skip_verify: z.boolean().optional(),
     pass_through_body_enabled: z.boolean().optional(),
     responses_websocket_enabled: z.boolean().optional(),
-    image_reference_as_url: z.boolean().optional(),
+    zhiqi_engine: z.boolean().optional(),
     system_prompt: z.string().optional(),
     system_prompt_override: z.boolean().optional(),
     // Type-specific settings (stored in settings JSON)
@@ -468,7 +468,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   tls_insecure_skip_verify: false,
   pass_through_body_enabled: false,
   responses_websocket_enabled: false,
-  image_reference_as_url: false,
+  zhiqi_engine: false,
   system_prompt: '',
   system_prompt_override: false,
   // Type-specific settings
@@ -517,7 +517,7 @@ export function transformChannelToFormDefaults(
     tls_insecure_skip_verify: false,
     pass_through_body_enabled: false,
     responses_websocket_enabled: false,
-    image_reference_as_url: false,
+    zhiqi_engine: false,
     system_prompt: '',
     system_prompt_override: false,
   }
@@ -541,7 +541,9 @@ export function transformChannelToFormDefaults(
         pass_through_body_enabled: parsed.pass_through_body_enabled || false,
         responses_websocket_enabled:
           parsed.responses_websocket_enabled === true,
-        image_reference_as_url: parsed.image_reference_as_url === true,
+        zhiqi_engine:
+          (parsed.zhiqi_engine ?? parsed.image_reference_as_url ?? false) ===
+          true,
         system_prompt: parsed.system_prompt || '',
         system_prompt_override: parsed.system_prompt_override || false,
       }
@@ -688,11 +690,8 @@ export function buildSettingJSON(formData: ChannelFormValues): string {
     system_prompt_override: formData.system_prompt_override || false,
   }
 
-  // URL references change the upstream payload shape, so keep the default out
-  // of the saved JSON and only record the opt-in.
-  if (formData.image_reference_as_url === true) {
-    settingObj.image_reference_as_url = true
-  }
+  // Persist false too: disabling a migrated channel must not revive legacy true.
+  settingObj.zhiqi_engine = formData.zhiqi_engine === true
 
   const protocol = normalizeHttpProtocol(formData.http_protocol)
   const shards =

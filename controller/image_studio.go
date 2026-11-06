@@ -24,6 +24,7 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
+	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
@@ -102,11 +103,6 @@ func CreateImageStudioTask(c *gin.Context) {
 		common.ApiErrorMsg(c, "请输入提示词，描述你想生成的画面")
 		return
 	}
-	if len([]rune(req.Prompt)) > 8000 {
-		common.ApiErrorMsg(c, "提示词过长，请精简到 8000 字以内")
-		return
-	}
-
 	userCache, err := model.GetUserCache(userId)
 	if err != nil {
 		common.ApiError(c, err)
@@ -117,6 +113,21 @@ func CreateImageStudioTask(c *gin.Context) {
 	}
 	if !service.GroupInUserUsableGroups(userCache.Group, userCache.GetSetting(), req.Group) {
 		common.ApiErrorMsg(c, "当前账号无权使用该分组，请重新选择")
+		return
+	}
+
+	engines, err := loadImageStudioEngines()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	engine := engines[req.Group][req.Model]
+	promptLimit := 8000
+	if engine.ZhiqiEngine {
+		promptLimit = helper.ZhiqiMaxPromptRunes
+	}
+	if len([]rune(req.Prompt)) > promptLimit {
+		common.ApiErrorT(c, "The prompt is longer than {{max}} characters.", map[string]any{"max": promptLimit})
 		return
 	}
 
@@ -147,6 +158,44 @@ func CreateImageStudioTask(c *gin.Context) {
 	if err != nil {
 		common.ApiErrorMsg(c, err.Error())
 		return
+	}
+	if engine.ZhiqiEngine {
+		var parameters map[string]json.RawMessage
+		if err := common.Unmarshal(params, &parameters); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		parameters["model"], _ = common.Marshal(req.Model)
+		parameters["prompt"], _ = common.Marshal(req.Prompt)
+		zhiqiRequest, err := helper.DecodeZhiqiImageRequest(parameters)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		for _, key := range req.ReferenceKeys {
+			publicURL, err := service.ImageStudioFileAbsoluteURL(key)
+			if err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			zhiqiRequest.References = append(zhiqiRequest.References, helper.ZhiqiImageReference{Value: publicURL})
+		}
+		if req.MaskKey != "" {
+			publicURL, err := service.ImageStudioFileAbsoluteURL(req.MaskKey)
+			if err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			zhiqiRequest.Mask = &helper.ZhiqiImageReference{Value: publicURL}
+		}
+		if err := zhiqiRequest.Validate(len(req.ReferenceKeys) > 0); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if zhiqiRequest.Stream != nil && *zhiqiRequest.Stream {
+			common.ApiErrorT(c, "Image Studio uses background tasks; stream is only available on the Images API")
+			return
+		}
 	}
 
 	activeCount, err := model.CountActiveUserImageStudioTasks(userId)
@@ -521,6 +570,51 @@ type imageStudioModelOption struct {
 	PriceUnit   string   `json:"price_unit,omitempty"`
 	InputPrice  *float64 `json:"input_price,omitempty"`
 	OutputPrice *float64 `json:"output_price,omitempty"`
+	imageStudioEngine
+}
+
+type imageStudioEngine struct {
+	ZhiqiEngine        bool `json:"zhiqi_engine,omitempty"`
+	ZhiqiMixedChannels bool `json:"zhiqi_mixed_channels,omitempty"`
+	ordinaryChannel    bool
+}
+
+// A model/group can fail over between several channels. Dedicated controls
+// are safe only when every eligible channel uses the same image contract.
+func loadImageStudioEngines() (map[string]map[string]imageStudioEngine, error) {
+	channels, err := model.GetAllChannels(0, -1, false, true)
+	if err != nil {
+		return nil, err
+	}
+	engines := make(map[string]map[string]imageStudioEngine)
+	for _, channel := range channels {
+		if channel.Status != common.ChannelStatusEnabled {
+			continue
+		}
+		isZhiqi := channel.GetSetting().IsZhiqiEngine()
+		if !isZhiqi && channel.Type == constant.ChannelTypeTaskPlugin {
+			continue
+		}
+		for group := range strings.SplitSeq(channel.Group, ",") {
+			if engines[group] == nil {
+				engines[group] = make(map[string]imageStudioEngine)
+			}
+			for _, modelName := range channel.GetModels() {
+				if !isZhiqi && constant.IsAdvancedCustomChannel(channel.Type) {
+					config := channel.GetOtherSettings().AdvancedCustom
+					if config == nil || !config.SupportsPathForModel(imageStudioGenerationPath, modelName) {
+						continue
+					}
+				}
+				engine := engines[group][modelName]
+				engine.ordinaryChannel = engine.ordinaryChannel || !isZhiqi
+				engine.ZhiqiMixedChannels = engine.ZhiqiMixedChannels || (isZhiqi || engine.ZhiqiEngine) && engine.ordinaryChannel
+				engine.ZhiqiEngine = (engine.ZhiqiEngine || isZhiqi) && !engine.ZhiqiMixedChannels
+				engines[group][modelName] = engine
+			}
+		}
+	}
+	return engines, nil
 }
 
 type imageStudioGroupOption struct {
@@ -548,6 +642,11 @@ func ListImageStudioModels(c *gin.Context) {
 	pricing := model.GetPricing()
 	userSetting := userCache.GetSetting()
 	usableGroups := service.GetUserUsableGroups(userCache.Group, userSetting)
+	engines, err := loadImageStudioEngines()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 
 	groups := make([]imageStudioGroupOption, 0, len(usableGroups))
 	for _, group := range setting.OrderedGroupNames(slices.Collect(maps.Keys(usableGroups))) {
@@ -564,9 +663,10 @@ func ListImageStudioModels(c *gin.Context) {
 				continue
 			}
 			option := imageStudioModelOption{
-				Model:       item.ModelName,
-				Description: item.Description,
-				QuotaType:   item.QuotaType,
+				Model:             item.ModelName,
+				Description:       item.Description,
+				QuotaType:         item.QuotaType,
+				imageStudioEngine: engines[group][item.ModelName],
 			}
 			if item.BillingMode == billing_setting.BillingModeTieredExpr && strings.TrimSpace(item.BillingExpr) != "" {
 				// A tiered model may still carry a legacy per-call price; the
@@ -760,6 +860,11 @@ func ServeImageStudioFile(c *gin.Context) {
 
 	c.Header("Cache-Control", "public, max-age=31536000, immutable")
 	c.Header("X-Content-Type-Options", "nosniff")
+	if strings.HasSuffix(key, ".svg") {
+		c.Header("Content-Type", "image/svg+xml")
+		c.Header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+		c.Header("Content-Disposition", `inline; filename="image.svg"`)
+	}
 	http.ServeContent(c.Writer, c.Request, info.Name(), info.ModTime(), file)
 }
 
@@ -847,7 +952,7 @@ func imageStudioQueueDepth(kind string) int64 {
 // logging, channel selection and retries behave exactly like a first-class
 // image request.
 func runImageStudioRelay(ctx context.Context, input service.ImageStudioRunInput) (*service.ImageStudioRunOutput, error) {
-	body, contentType, requestPath, err := buildImageStudioBody(input, dto.ChannelSettings{})
+	body, contentType, requestPath, err := buildImageStudioBody(input)
 	if err != nil {
 		return nil, err
 	}
@@ -877,26 +982,7 @@ func runImageStudioRelay(ctx context.Context, input service.ImageStudioRunInput)
 	if selectErr := imageStudioSelectChannel(c, input.Model, input.Group); selectErr != nil {
 		return nil, errors.New(selectErr.Error())
 	}
-	channelSetting, _ := common.GetContextKeyType[dto.ChannelSettings](c, constant.ContextKeyChannelSetting)
-
-	// A channel that only accepts reference URLs needs a different payload
-	// shape, so the body is rebuilt once the channel is known. The default
-	// body above stays in place for every other channel and keeps body-based
-	// affinity rules working during selection. A retry that switches channels
-	// keeps the first channel's shape, because the queue snapshot has already
-	// fixed the body.
-	if channelSetting.ImageReferenceAsURL && len(input.ReferenceKeys) > 0 {
-		body, contentType, requestPath, err = buildImageStudioBody(input, channelSetting)
-		if err != nil {
-			return nil, err
-		}
-		// Selection may have read the default body (for example a body-based
-		// affinity rule); drop that snapshot so Relay reads the rebuilt one.
-		common.CleanupBodyStorage(c)
-		c.Request = httptest.NewRequestWithContext(ctx, http.MethodPost, requestPath, bytes.NewReader(body))
-		c.Request.Header.Set("Content-Type", contentType)
-		c.Request.ContentLength = int64(len(body))
-	}
+	defer common.CleanupBodyStorage(c)
 
 	// The synthetic token mirrors the playground: it carries the chosen group
 	// and skips per-token quota, because the interactive page has no API key.
@@ -970,11 +1056,9 @@ func imageStudioSelectChannel(c *gin.Context, modelName string, group string) *t
 }
 
 // buildImageStudioBody renders the stored snapshot into an upstream request.
-// Reference images normally switch the request to the multipart edit endpoint,
-// which is what every image-editing adapter understands. A channel that only
-// accepts reference URLs gets a JSON generation body whose image entries are
-// absolute URLs instead.
-func buildImageStudioBody(input service.ImageStudioRunInput, setting dto.ChannelSettings) (body []byte, contentType string, requestPath string, err error) {
+// Reference images use the ordinary multipart edit endpoint. The relay builds
+// each channel's final payload, including Zhiqi URL parts, on every attempt.
+func buildImageStudioBody(input service.ImageStudioRunInput) (body []byte, contentType string, requestPath string, err error) {
 	params := map[string]any{}
 	if input.Params != "" {
 		if unmarshalErr := common.Unmarshal([]byte(input.Params), &params); unmarshalErr != nil {
@@ -989,34 +1073,6 @@ func buildImageStudioBody(input service.ImageStudioRunInput, setting dto.Channel
 		if marshalErr != nil {
 			return nil, "", "", marshalErr
 		}
-		return payload, "application/json", imageStudioGenerationPath, nil
-	}
-
-	if setting.ImageReferenceAsURL {
-		imageURLs := make([]string, 0, len(input.ReferenceKeys))
-		for _, key := range input.ReferenceKeys {
-			absoluteURL, urlErr := service.ImageStudioFileAbsoluteURL(key)
-			if urlErr != nil {
-				return nil, "", "", errors.New("参考图外链生成失败，请检查绘图设置中的公网地址")
-			}
-			imageURLs = append(imageURLs, absoluteURL)
-		}
-		params["image"] = imageURLs
-		if input.MaskKey != "" {
-			maskURL, urlErr := service.ImageStudioFileAbsoluteURL(input.MaskKey)
-			if urlErr != nil {
-				return nil, "", "", errors.New("蒙版外链生成失败，请检查绘图设置中的公网地址")
-			}
-			params["mask"] = maskURL
-		}
-		payload, marshalErr := common.Marshal(params)
-		if marshalErr != nil {
-			return nil, "", "", marshalErr
-		}
-		// URL references are a JSON payload for the generation endpoint: that is
-		// where providers expose an image URL array. The OpenAI adaptor forwards
-		// generations bodies unchanged, and adaptors that rewrite edit traffic
-		// (for example volcengine) map both paths to the same upstream route.
 		return payload, "application/json", imageStudioGenerationPath, nil
 	}
 
@@ -1052,6 +1108,9 @@ func buildImageStudioBody(input service.ImageStudioRunInput, setting dto.Channel
 }
 
 func writeImageStudioFilePart(writer *multipart.Writer, key string, fieldName string, filename string) error {
+	if strings.EqualFold(filepath.Ext(key), ".svg") {
+		return service.ErrImageStudioFileInvalid
+	}
 	file, _, err := service.OpenImageStudioFile(key)
 	if err != nil {
 		return errors.New("参考图读取失败，请重新上传")

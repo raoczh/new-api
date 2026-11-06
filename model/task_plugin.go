@@ -24,12 +24,15 @@ type TaskPluginChannelRef struct {
 func GetTaskPluginUsage(key string) ([]TaskPluginChannelRef, int64, error) {
 	var channels []Channel
 	boundTypes := []int{constant.ChannelTypeTaskPlugin, constant.ChannelTypeNewAPI}
+	if key == "zhiqi" {
+		boundTypes = append(boundTypes, constant.ChannelTypeOpenAI, constant.ChannelTypeCustom, constant.ChannelTypeAdvancedCustom)
+	}
 	if err := DB.Where("type IN ? AND status = ?", boundTypes, common.ChannelStatusEnabled).Find(&channels).Error; err != nil {
 		return nil, 0, err
 	}
 	refs := make([]TaskPluginChannelRef, 0)
 	for _, channel := range channels {
-		if channel.GetSetting().BindsTaskPlugin(key) {
+		if channel.BindsTaskPlugin(key) {
 			refs = append(refs, TaskPluginChannelRef{Id: channel.Id, Name: channel.Name, Type: channel.Type})
 		}
 	}
@@ -47,8 +50,11 @@ func UnbindTaskPlugin(channelID int, key string) (bool, error) {
 		return false, err
 	}
 	setting := channel.GetSetting()
-	if !setting.BindsTaskPlugin(key) {
+	if !channel.BindsTaskPlugin(key) {
 		return false, nil
+	}
+	if key == "zhiqi" {
+		setting.ZhiqiEngine = common.GetPointer(false)
 	}
 	if setting.TaskPluginKey == key {
 		setting.TaskPluginKey = ""

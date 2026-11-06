@@ -1,6 +1,9 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http/httptest"
@@ -80,7 +83,7 @@ func TestFixedPriceBillingDatabaseMatrix(t *testing.T) {
 			model.DB, model.LOG_DB = db, logDB
 			common.SetDatabaseTypes(dialect.name, dialect.name)
 			t.Cleanup(func() { model.DB, model.LOG_DB = oldDB, oldLogDB; common.SetDatabaseTypes(oldMainType, oldLogType) })
-			require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}, &model.Channel{}))
+			require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}, &model.Channel{}, &model.Task{}))
 			require.NoError(t, logDB.AutoMigrate(&model.Log{}))
 			versionQuery := "select version()"
 			if dialect.name == common.DatabaseTypeSQLite {
@@ -90,8 +93,208 @@ func TestFixedPriceBillingDatabaseMatrix(t *testing.T) {
 			require.NoError(t, db.Raw(versionQuery).Scan(&version).Error)
 			t.Logf("database: %s", version)
 			runFixedPriceAccountingCases(t, db, logDB)
+			runZhiqiImageAccountingCases(t, db, logDB)
 		})
 	}
+}
+
+func runZhiqiImageAccountingCases(t *testing.T, database, logDatabase *gorm.DB) {
+	t.Helper()
+	for _, scenario := range []string{"pending", "failure", "media_storage_failed", "free", "log_failure", "no_useprice_no_usage"} {
+		t.Run("zhiqi_"+scenario, func(t *testing.T) {
+			const initialQuota = 2_000_000
+			user := model.User{Username: "zhiqi_billing_" + scenario, Quota: initialQuota, Status: common.UserStatusEnabled}
+			require.NoError(t, database.Create(&user).Error)
+			token := model.Token{UserId: user.Id, Key: "zhiqi-billing-test-" + scenario, RemainQuota: initialQuota, Status: common.TokenStatusEnabled}
+			require.NoError(t, database.Create(&token).Error)
+			channel := model.Channel{Name: "zhiqi-billing", Key: "original-upstream-key", Status: common.ChannelStatusEnabled}
+			require.NoError(t, database.Create(&channel).Error)
+			t.Cleanup(func() {
+				require.NoError(t, database.Where("user_id = ?", user.Id).Delete(&model.Task{}).Error)
+				require.NoError(t, logDatabase.Where("user_id = ?", user.Id).Delete(&model.Log{}).Error)
+				require.NoError(t, database.Unscoped().Delete(&token).Error)
+				require.NoError(t, database.Unscoped().Delete(&user).Error)
+				require.NoError(t, database.Unscoped().Delete(&channel).Error)
+			})
+			requestContext, _ := gin.CreateTestContext(httptest.NewRecorder())
+			requestContext.Request = httptest.NewRequest("POST", "/v1/images/generations", nil)
+			requestContext.Set(common.RequestIdKey, "zhiqi-test-"+scenario)
+			const expression = `tier("image", fixed(0.04)) * image_count`
+			info := &relaycommon.RelayInfo{
+				UserId: user.Id, TokenId: token.Id, TokenKey: token.Key, UsingGroup: "default", UserGroup: "default",
+				OriginModelName: "zhiqi-test", StartTime: time.Now(), ForcePreConsume: true, ImageRequestCount: 3,
+				ChannelMeta:           &relaycommon.ChannelMeta{ChannelId: channel.Id, ApiKey: channel.Key, ChannelSetting: dto.ChannelSettings{ZhiqiEngine: common.GetPointer(true)}},
+				UserSetting:           dto.UserSetting{BillingPreference: "wallet_only"},
+				PriceData:             hosttypes.PriceData{GroupRatioInfo: hosttypes.GroupRatioInfo{GroupRatio: 1}},
+				BillingRequestInput:   &billingexpr.RequestInput{Body: []byte(`{"n":3,"size":"1024x1024","prompt":"do not persist"}`), Headers: map[string]string{"Authorization": "usable-secret", "X-Tier": "high"}, ImageCount: common.GetPointer(3)},
+				TieredBillingSnapshot: &billingexpr.BillingSnapshot{BillingMode: "tiered_expr", ExprString: expression, ExprHash: billingexpr.ExprHashString(expression), QuotaPerUnit: 500000, GroupRatio: 1, EstimatedQuotaAfterGroup: 60000, EstimatedImageCount: common.GetPointer(3)},
+			}
+			noUsePriceNoUsage := scenario == "no_useprice_no_usage"
+			if noUsePriceNoUsage {
+				info.TieredBillingSnapshot = nil
+				info.PriceData.ModelRatio = 2
+				info.PriceData.CompletionRatio = 3
+				info.SetEstimatePromptTokens(1000)
+			}
+			reserved := 60000
+			if scenario == "free" {
+				reserved = 0
+				info.PriceData.FreeModel = true
+			} else {
+				require.Nil(t, PreConsumeBilling(requestContext, reserved, info))
+			}
+			if scenario == "log_failure" {
+				const callback = "zhiqi_test_log_failure"
+				require.NoError(t, logDatabase.Callback().Create().Before("gorm:create").Register(callback, func(transaction *gorm.DB) {
+					if transaction.Statement.Table == "logs" {
+						transaction.AddError(errors.New("injected consume log failure"))
+					}
+				}))
+				t.Cleanup(func() { require.NoError(t, logDatabase.Callback().Create().Remove(callback)) })
+			}
+			var event map[string]json.RawMessage
+			require.NoError(t, common.Unmarshal([]byte(`{"type":"image_generation.pending","id":"private-upstream-task","billing_reason":"usable-secret"}`), &event))
+			var publicID string
+			if scenario == "media_storage_failed" {
+				require.NoError(t, SettleZhiqiImageReservation(requestContext, info, scenario))
+				require.NoError(t, SettleZhiqiImageReservation(requestContext, info, scenario))
+			} else {
+				var persistErr error
+				publicID, persistErr = PersistZhiqiImagePending(requestContext, info, event)
+				if scenario == "log_failure" {
+					require.Error(t, persistErr)
+					assert.Contains(t, persistErr.Error(), publicID)
+					assert.NotContains(t, persistErr.Error(), "private-upstream-task")
+				} else {
+					require.NoError(t, persistErr)
+				}
+				repeatedID, repeatedErr := PersistZhiqiImagePending(requestContext, info, event)
+				assert.Equal(t, publicID, repeatedID)
+				assert.Equal(t, persistErr, repeatedErr)
+				event["id"] = json.RawMessage(`"another-private-task"`)
+				_, changedErr := PersistZhiqiImagePending(requestContext, info, event)
+				require.Error(t, changedErr)
+				assert.NotContains(t, changedErr.Error(), "another-private-task")
+			}
+			var tasks []model.Task
+			require.NoError(t, database.Where("user_id = ?", user.Id).Find(&tasks).Error)
+			require.Len(t, tasks, 1)
+			task := &tasks[0]
+			assert.Equal(t, reserved, task.Quota)
+			assert.Equal(t, channel.Key, task.PrivateData.Key)
+			assert.NotContains(t, string(task.Data), "private-upstream-task")
+			assert.NotContains(t, string(task.PrivateData.PluginState), "usable-secret")
+			var frozen struct {
+				Billing zhiqiRelayImageBilling `json:"relayImageBilling"`
+			}
+			require.NoError(t, common.Unmarshal(task.PrivateData.PluginState, &frozen))
+			assert.NotContains(t, string(frozen.Billing.RequestInput.Body), "do not persist")
+			assert.Equal(t, "high", frozen.Billing.RequestInput.Headers["X-Tier"])
+			assert.True(t, requestContext.GetBool("zhiqi_image_pending"))
+			if info.Billing != nil {
+				assert.False(t, info.Billing.NeedsRefund())
+			}
+			var logs []model.Log
+			require.NoError(t, logDatabase.Where("user_id = ?", user.Id).Find(&logs).Error)
+			if scenario == "log_failure" {
+				assert.Empty(t, logs)
+				assert.Equal(t, "100%", task.Progress, "unlogged reservations must not enter polling")
+			} else {
+				require.Len(t, logs, 1)
+				assert.Contains(t, logs[0].Content, "reservation; complete upstream usage unavailable")
+				assert.Zero(t, logs[0].PromptTokens)
+				assert.Zero(t, logs[0].CompletionTokens)
+			}
+			actualQuota := reserved
+			if scenario == "pending" || scenario == "free" {
+				info.TieredBillingSnapshot.ExprString = `tier("changed", fixed(100))`
+				task.Status = model.TaskStatusSuccess
+				task.SetData(map[string]any{"data": map[string]any{"url": "https://example.com/image.png"}})
+				require.True(t, SettlePendingZhiqiImageTask(context.Background(), task, &relaycommon.TaskInfo{}))
+				actualQuota = 20000
+				if scenario == "free" {
+					actualQuota = 0
+				}
+			} else if noUsePriceNoUsage {
+				task.Status = model.TaskStatusSuccess
+				task.SetData(map[string]any{"data": map[string]any{"url": "https://example.com/image.png"}})
+				require.True(t, SettlePendingZhiqiImageTask(context.Background(), task, &relaycommon.TaskInfo{}))
+				assert.Equal(t, reserved, task.Quota, "missing upstream tokens must not become estimated usage or a refund")
+				var finalLogs []model.Log
+				require.NoError(t, logDatabase.Where("user_id = ?", user.Id).Find(&finalLogs).Error)
+				require.Len(t, finalLogs, 1, "missing usage must not write a fabricated token settlement")
+				assert.Zero(t, finalLogs[0].PromptTokens)
+				assert.Zero(t, finalLogs[0].CompletionTokens)
+			} else if scenario == "failure" {
+				task.Status = model.TaskStatusFailure
+				require.False(t, SettlePendingZhiqiImageTask(context.Background(), task, &relaycommon.TaskInfo{}))
+				RefundTaskQuota(context.Background(), task, "Task failed")
+				actualQuota = 0
+			}
+			require.NoError(t, database.First(&user, user.Id).Error)
+			require.NoError(t, database.First(&token, token.Id).Error)
+			require.NoError(t, database.First(&channel, channel.Id).Error)
+			assert.Equal(t, initialQuota-actualQuota, user.Quota)
+			assert.Equal(t, initialQuota-actualQuota, token.RemainQuota)
+			assert.Equal(t, actualQuota, user.UsedQuota)
+			assert.Equal(t, int64(actualQuota), channel.UsedQuota)
+			assert.Equal(t, 1, user.RequestCount)
+		})
+	}
+}
+
+func TestZhiqiPendingImageQuota(t *testing.T) {
+	const fixed = `tier("image", fixed(0.04)) * image_count`
+	const tokenExpression = `tier("image", p * 5 + cr * 1.25 + img * 8 + img_cr * 2 + c * 30)`
+	tooManyImages := make([]map[string]string, dto.MaxImageN+1)
+	for imageIndex := range tooManyImages {
+		tooManyImages[imageIndex] = map[string]string{"url": "image"}
+	}
+	oversizedBody, err := common.Marshal(map[string]any{"data": tooManyImages})
+	require.NoError(t, err)
+	for _, testCase := range []struct {
+		name, expression, body string
+		wantQuota              int
+		wantError, wantClamp   bool
+		legacyPrice            *hosttypes.PriceData
+	}{
+		{name: "object payload", expression: fixed, body: `{"data":{"url":"image"}}`, wantQuota: 20000},
+		{name: "split payload bills once", expression: fixed, body: `{"data":[{"url":"image"},{"b64_json":"image"},{"revised_prompt":"text"}]}`, wantQuota: 20000},
+		{name: "payloadless keeps reservation count", expression: fixed, body: `{"data":[{"revised_prompt":"text"}]}`, wantQuota: 60000},
+		{name: "oversized count keeps reservation", expression: fixed, body: string(oversizedBody), wantQuota: 60000},
+		{name: "frozen scalar n is not actual image count", expression: fixed + ` * (param("n") == 3 ? 2 : 1)`, body: `{"data":{"url":"image"}}`, wantQuota: 40000},
+		{name: "normalized cache usage", expression: tokenExpression, body: `{"usage":{"input_tokens":1000,"output_tokens":100,"input_tokens_details":{"image_tokens":600,"cached_tokens":300,"cached_tokens_details":{"image_tokens":200,"text_tokens":100}}}}`, wantQuota: 4113},
+		{name: "metadata upstream usage", expression: `tier("image", p * 2 + c * 8)`, body: `{"metadata":{"upstream_usage":{"input_tokens":100,"output_tokens":20,"cost":99999999}}}`, wantQuota: 180},
+		{name: "money is not usage", expression: tokenExpression, body: `{"usage":{"cost":100,"total_tokens":20}}`, wantError: true},
+		{name: "explicit zero tokens", expression: tokenExpression, body: `{"usage":{"input_tokens":0,"output_tokens":0}}`},
+		{name: "negative tokens rejected", expression: tokenExpression, body: `{"usage":{"input_tokens":-1,"output_tokens":2}}`, wantError: true},
+		{name: "large tokens clamp", expression: `tier("image", p * 100)`, body: `{"usage":{"input_tokens":99999999999999,"output_tokens":0}}`, wantQuota: math.MaxInt32, wantClamp: true},
+		{name: "task expressions are never interpreted", expression: `tier("image", u("image_count") * 0.04)`, body: `{}`, wantError: true},
+		{name: "legacy fixed price preserves separate ratios", body: `{"data":{"url":"image"}}`, wantQuota: 40000, legacyPrice: &hosttypes.PriceData{UsePrice: true, ModelPrice: 0.04, GroupRatioInfo: hosttypes.GroupRatioInfo{GroupRatio: 1}}},
+		{name: "legacy token price remains frozen", body: `{"usage":{"input_tokens":100,"output_tokens":20}}`, wantQuota: 640, legacyPrice: &hosttypes.PriceData{ModelRatio: 2, CompletionRatio: 3, GroupRatioInfo: hosttypes.GroupRatioInfo{GroupRatio: 1}}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			state := &zhiqiRelayImageBilling{
+				ImageCount: 3, QuotaPerUnit: 500000, RequestInput: billingexpr.RequestInput{Body: []byte(`{"n":3}`)},
+				Snapshot: &billingexpr.BillingSnapshot{BillingMode: "tiered_expr", ExprString: testCase.expression, ExprHash: billingexpr.ExprHashString(testCase.expression), QuotaPerUnit: 500000, GroupRatio: 1},
+			}
+			if testCase.legacyPrice != nil {
+				state.Snapshot = nil
+				state.PriceData = *testCase.legacyPrice
+				state.OtherRatios = map[string]float64{"quality": 2}
+			}
+			quota, clamp, err := calculatePendingZhiqiImageQuota(&model.Task{Quota: 60000, Data: json.RawMessage(testCase.body)}, state)
+			if testCase.wantError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, testCase.wantQuota, quota)
+			assert.Equal(t, testCase.wantClamp, clamp != nil)
+		})
+	}
+	assert.False(t, SettlePendingZhiqiImageTask(context.Background(), &model.Task{Platform: "other", Status: model.TaskStatusSuccess}, nil))
+	assert.False(t, SettlePendingZhiqiImageTask(context.Background(), &model.Task{Platform: "zhiqi", Status: model.TaskStatusSuccess}, nil))
 }
 
 func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {

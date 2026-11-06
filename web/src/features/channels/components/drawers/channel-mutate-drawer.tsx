@@ -306,7 +306,7 @@ const SENSITIVE_FORM_FIELDS = [
   'tls_insecure_skip_verify',
   'pass_through_body_enabled',
   'responses_websocket_enabled',
-  'image_reference_as_url',
+  'zhiqi_engine',
   'system_prompt',
   'system_prompt_override',
   'allow_service_tier',
@@ -1911,14 +1911,14 @@ export function ChannelMutateDrawer({
   const imageReferenceURLFields = (
     <FormField
       control={form.control}
-      name='image_reference_as_url'
+      name='zhiqi_engine'
       render={({ field }) => (
         <FormItem className='flex items-center justify-between px-4 py-3'>
           <div className='space-y-0.5'>
-            <FormLabel>{t('Reference Images as URLs')}</FormLabel>
+            <FormLabel>{t('Zhiqi Engine')}</FormLabel>
             <FormDescription>
               {t(
-                'Send reference images from the drawing page as public URLs instead of uploaded files. Enable this only when the upstream requires URL references.'
+                'Convert image parameters and public reference URLs using the Zhiqi image protocol. Enable only for compatible channels.'
               )}
             </FormDescription>
           </div>

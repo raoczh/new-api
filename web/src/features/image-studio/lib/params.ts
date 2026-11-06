@@ -31,13 +31,33 @@ export interface ImageStudioParamDraft {
   n: number
   transparent: boolean
   outputFormat: string
+  sizeMode?: 'exact' | 'resolution'
+  resolution?: string
+  aspectRatio?: string
+  outputCompression?: number
+  frameCount?: number
+  frameDurationMs?: number
 }
 
 /** Sentinels meaning "do not forward this field; let the model decide". */
 export const AUTO_IMAGE_STUDIO_SIZE = 'auto'
 export const AUTO_IMAGE_STUDIO_QUALITY = 'auto'
 
-export function createDefaultParamDraft(): ImageStudioParamDraft {
+export function createDefaultParamDraft(
+  zhiqiEngine = false
+): ImageStudioParamDraft {
+  if (zhiqiEngine) {
+    return {
+      size: '',
+      sizeMode: 'resolution',
+      resolution: '',
+      aspectRatio: '',
+      quality: '',
+      n: 1,
+      transparent: false,
+      outputFormat: '',
+    }
+  }
   return {
     size: DEFAULT_IMAGE_STUDIO_PARAMS.size,
     quality: DEFAULT_IMAGE_STUDIO_PARAMS.quality,
@@ -59,7 +79,9 @@ export function createDefaultParamDraft(): ImageStudioParamDraft {
  * every OpenAI-compatible image API understands; leaving it blank is the same
  * as omitting the field, so providers keep their own default.
  */
-export function draftToParams(draft: ImageStudioParamDraft): ImageStudioTaskParams {
+export function draftToParams(
+  draft: ImageStudioParamDraft
+): ImageStudioTaskParams {
   const params: ImageStudioTaskParams = {
     n: draft.n,
     output_format: draft.outputFormat,
@@ -77,8 +99,11 @@ export function draftToParams(draft: ImageStudioParamDraft): ImageStudioTaskPara
 }
 
 /** Stored records may predate the sentinel; treat them as auto too. */
-export function paramsToDraft(params?: ImageStudioTaskParams | null): ImageStudioParamDraft {
-  const draft = createDefaultParamDraft()
+export function paramsToDraft(
+  params?: ImageStudioTaskParams | null,
+  zhiqiEngine = false
+): ImageStudioParamDraft {
+  const draft = createDefaultParamDraft(zhiqiEngine)
   if (!params) return draft
   if (typeof params.size === 'string' && params.size) draft.size = params.size
   if (typeof params.quality === 'string' && params.quality) {
@@ -91,7 +116,79 @@ export function paramsToDraft(params?: ImageStudioTaskParams | null): ImageStudi
     draft.outputFormat = params.output_format
   }
   draft.transparent = params.background === 'transparent'
+  if (!zhiqiEngine) {
+    if (['svg', 'gif'].includes(draft.outputFormat)) {
+      draft.outputFormat = DEFAULT_IMAGE_STUDIO_PARAMS.output_format
+    }
+    if (['xhigh', 'max'].includes(draft.quality)) {
+      draft.quality = DEFAULT_IMAGE_STUDIO_PARAMS.quality
+    }
+  }
+  if (zhiqiEngine) {
+    draft.n = 1
+    draft.transparent = false
+    draft.resolution =
+      typeof params.resolution === 'string' ? params.resolution : ''
+    draft.aspectRatio =
+      typeof params.aspect_ratio === 'string' ? params.aspect_ratio : ''
+    draft.sizeMode =
+      draft.resolution || draft.aspectRatio || !draft.size
+        ? 'resolution'
+        : 'exact'
+    if (draft.outputFormat === 'jpeg' || draft.outputFormat === 'webp') {
+      if (typeof params.output_compression === 'number') {
+        draft.outputCompression = params.output_compression
+      }
+    }
+    if (draft.outputFormat === 'gif') {
+      if (typeof params.frame_count === 'number') {
+        draft.frameCount = params.frame_count
+      }
+      if (typeof params.frame_duration_ms === 'number') {
+        draft.frameDurationMs = params.frame_duration_ms
+      }
+    }
+  }
   return draft
+}
+
+/** Preserve the workbench's existing ordinary-channel request semantics. */
+export function buildComposerParams(
+  draft: ImageStudioParamDraft,
+  maxImages: number,
+  zhiqiEngine: boolean
+): ImageStudioTaskParams {
+  if (!zhiqiEngine) {
+    return {
+      n: clampImageCount(draft.n, maxImages),
+      size: draft.size,
+      quality: draft.quality,
+      output_format: draft.outputFormat,
+      ...(draft.transparent ? { background: 'transparent' } : {}),
+    }
+  }
+  const params: ImageStudioTaskParams = { n: 1, response_format: 'url' }
+  if (draft.sizeMode === 'exact') {
+    if (draft.size) params.size = draft.size
+  } else {
+    // Pixel mappings belong to the channel, never to the workbench.
+    if (draft.resolution) params.resolution = draft.resolution
+    if (draft.aspectRatio) params.aspect_ratio = draft.aspectRatio
+  }
+  if (draft.quality) params.quality = draft.quality
+  if (draft.outputFormat) params.output_format = draft.outputFormat
+  if (draft.outputFormat === 'jpeg' || draft.outputFormat === 'webp') {
+    if (draft.outputCompression !== undefined) {
+      params.output_compression = draft.outputCompression
+    }
+  }
+  if (draft.outputFormat === 'gif') {
+    if (draft.frameCount !== undefined) params.frame_count = draft.frameCount
+    if (draft.frameDurationMs !== undefined) {
+      params.frame_duration_ms = draft.frameDurationMs
+    }
+  }
+  return params
 }
 
 /** Clamp a requested count to what the server is willing to accept. */

@@ -20,16 +20,25 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { uploadImageStudioFile } from '../api'
-import { createDefaultParamDraft, type ImageStudioParamDraft } from '../lib/params'
+import {
+  createDefaultParamDraft,
+  paramsToDraft,
+  type ImageStudioParamDraft,
+} from '../lib/params'
+import { patchImageStudioParams } from '../lib/zhiqi'
 import type { ImageStudioReference } from '../types'
 
 export interface UseImageStudioDraftOptions {
   maxReferences: number
   uploadMaxMB: number
+  zhiqiEngine?: boolean
+  model?: string
+  group?: string
 }
 
 export interface DraftMask {
   key: string
+  referenceUid?: string
   /** Object URL or server URL used by the preview. */
   url: string
   uploading: boolean
@@ -49,6 +58,10 @@ export interface UseImageStudioDraftResult {
   setReferenceError: (value: string | null) => void
   addFiles: (files: File[]) => void
   removeReference: (uid: string) => void
+  replaceReference: (
+    uid: string,
+    reference: { key: string; url: string }
+  ) => void
   moveReference: (uid: string, direction: -1 | 1) => void
   mask: DraftMask | null
   setMask: (mask: DraftMask | null) => void
@@ -57,6 +70,9 @@ export interface UseImageStudioDraftResult {
     prompt: string
     params?: Record<string, unknown> | null
     referenceUrls?: string[]
+    zhiqiEngine?: boolean
+    model?: string
+    group?: string
   }) => void
   reset: () => void
 }
@@ -79,11 +95,25 @@ export function useImageStudioDraft(
   options: UseImageStudioDraftOptions
 ): UseImageStudioDraftResult {
   const { t } = useTranslation()
+  const zhiqiEngine = options.zhiqiEngine === true
+  const parameterScope = zhiqiEngine
+    ? JSON.stringify([options.group ?? '', options.model ?? ''])
+    : 'ordinary'
   const [prompt, setPrompt] = useState('')
-  const [params, setParams] = useState<ImageStudioParamDraft>(createDefaultParamDraft)
+  const [params, setParams] = useState<ImageStudioParamDraft>(() =>
+    createDefaultParamDraft(zhiqiEngine)
+  )
+  const [previousScope, setPreviousScope] = useState(parameterScope)
   const [references, setReferences] = useState<ImageStudioReference[]>([])
   const [mask, setMask] = useState<DraftMask | null>(null)
   const [referenceError, setReferenceError] = useState<string | null>(null)
+
+  // Reset before children render, so a new engine cannot submit old parameters.
+  if (previousScope !== parameterScope) {
+    setPreviousScope(parameterScope)
+    setParams(createDefaultParamDraft(zhiqiEngine))
+    setMask(null)
+  }
 
   // Object URLs must be revoked when they are dropped or the page unmounts.
   const objectUrls = useRef<Set<string>>(new Set())
@@ -108,13 +138,15 @@ export function useImageStudioDraft(
   }, [])
 
   const patchParams = useCallback((patch: Partial<ImageStudioParamDraft>) => {
-    setParams((previous) => ({ ...previous, ...patch }))
+    setParams((previous) => patchImageStudioParams(previous, patch))
   }, [])
 
   const updateReference = useCallback(
     (uid: string, patch: Partial<ImageStudioReference>) => {
       setReferences((previous) =>
-        previous.map((item) => (item.uid === uid ? { ...item, ...patch } : item))
+        previous.map((item) =>
+          item.uid === uid ? { ...item, ...patch } : item
+        )
       )
     },
     []
@@ -126,9 +158,12 @@ export function useImageStudioDraft(
       const room = options.maxReferences - references.length
       if (room <= 0) {
         setReferenceError(
-          t('You can attach up to {{max}} reference images. Remove one first.', {
-            max: options.maxReferences,
-          })
+          t(
+            'You can attach up to {{max}} reference images. Remove one first.',
+            {
+              max: options.maxReferences,
+            }
+          )
         )
         return
       }
@@ -136,10 +171,13 @@ export function useImageStudioDraft(
       const accepted = files.slice(0, room)
       if (files.length > room) {
         setReferenceError(
-          t('Up to {{max}} reference images are allowed; kept the first {{kept}}.', {
-            max: options.maxReferences,
-            kept: room,
-          })
+          t(
+            'Up to {{max}} reference images are allowed; kept the first {{kept}}.',
+            {
+              max: options.maxReferences,
+              kept: room,
+            }
+          )
         )
       }
 
@@ -163,7 +201,10 @@ export function useImageStudioDraft(
 
         void uploadImageStudioFile(file)
           .then((result) => {
-            updateReference(reference.uid, { key: result.key, uploading: false })
+            updateReference(reference.uid, {
+              key: result.key,
+              uploading: false,
+            })
           })
           .catch((error: unknown) => {
             const message =
@@ -193,6 +234,7 @@ export function useImageStudioDraft(
 
   const removeReference = useCallback(
     (uid: string) => {
+      setMask((previous) => (previous?.referenceUid === uid ? null : previous))
       setReferences((previous) => {
         const target = previous.find((item) => item.uid === uid)
         if (target) releaseUrl(target.url)
@@ -202,17 +244,43 @@ export function useImageStudioDraft(
     [releaseUrl]
   )
 
-  const moveReference = useCallback((uid: string, direction: -1 | 1) => {
-    setReferences((previous) => {
-      const index = previous.findIndex((item) => item.uid === uid)
-      const target = index + direction
-      if (index < 0 || target < 0 || target >= previous.length) return previous
-      const next = [...previous]
-      const [item] = next.splice(index, 1)
-      next.splice(target, 0, item)
-      return next
-    })
-  }, [])
+  const replaceReference = useCallback(
+    (uid: string, reference: { key: string; url: string }) => {
+      setReferences((previous) =>
+        previous.map((item) => {
+          if (item.uid !== uid) return item
+          releaseUrl(item.url)
+          return { ...item, ...reference, uploading: false, error: undefined }
+        })
+      )
+    },
+    [releaseUrl]
+  )
+
+  const moveReference = useCallback(
+    (uid: string, direction: -1 | 1) => {
+      const index = references.findIndex((item) => item.uid === uid)
+      if (
+        zhiqiEngine &&
+        index >= 0 &&
+        (index === 0 || index + direction === 0)
+      ) {
+        setMask(null)
+      }
+      setReferences((previous) => {
+        const index = previous.findIndex((item) => item.uid === uid)
+        const target = index + direction
+        if (index < 0 || target < 0 || target >= previous.length) {
+          return previous
+        }
+        const next = [...previous]
+        const [item] = next.splice(index, 1)
+        next.splice(target, 0, item)
+        return next
+      })
+    },
+    [references, zhiqiEngine]
+  )
 
   /** Reuse an existing record: the prompt, its settings and its references. */
   const applyPreset = useCallback(
@@ -220,12 +288,22 @@ export function useImageStudioDraft(
       prompt: string
       params?: Record<string, unknown> | null
       referenceUrls?: string[]
+      zhiqiEngine?: boolean
+      model?: string
+      group?: string
     }) => {
       setPrompt(preset.prompt)
-      setParams((previous) => ({
-        ...previous,
-        ...paramsFromPreset(preset.params),
-      }))
+      const targetEngine = preset.zhiqiEngine ?? zhiqiEngine
+      setPreviousScope(
+        targetEngine
+          ? JSON.stringify([
+              preset.group ?? options.group ?? '',
+              preset.model ?? options.model ?? '',
+            ])
+          : 'ordinary'
+      )
+      setParams(paramsToDraft(preset.params, targetEngine))
+      setReferenceError(null)
       setMask(null)
       setReferences((previous) => {
         for (const item of previous) releaseUrl(item.url)
@@ -239,23 +317,24 @@ export function useImageStudioDraft(
         }))
       })
     },
-    [releaseUrl]
+    [releaseUrl, zhiqiEngine, options.model, options.group]
   )
 
   const reset = useCallback(() => {
     setPrompt('')
-    setParams(createDefaultParamDraft())
+    setParams(createDefaultParamDraft(zhiqiEngine))
     setReferenceError(null)
     setMask(null)
     setReferences((previous) => {
       for (const item of previous) releaseUrl(item.url)
       return []
     })
-  }, [releaseUrl])
+  }, [releaseUrl, zhiqiEngine])
 
   const uploading = references.some((item) => item.uploading)
   const readyReferences = useMemo(
-    () => references.filter((item) => item.key && !item.uploading && !item.error),
+    () =>
+      references.filter((item) => item.key && !item.uploading && !item.error),
     [references]
   )
   const failedReferences = references.filter((item) => item.error)
@@ -273,6 +352,7 @@ export function useImageStudioDraft(
     setReferenceError,
     addFiles,
     removeReference,
+    replaceReference,
     moveReference,
     mask,
     setMask,
@@ -280,22 +360,6 @@ export function useImageStudioDraft(
     applyPreset,
     reset,
   }
-}
-
-/** Only the keys the editors expose survive a reuse; everything else is dropped. */
-function paramsFromPreset(params?: Record<string, unknown> | null): Partial<ImageStudioParamDraft> {
-  if (!params) return {}
-  const draft: Partial<ImageStudioParamDraft> = {}
-  if (typeof params.size === 'string' && params.size) draft.size = params.size
-  if (typeof params.quality === 'string' && params.quality) {
-    draft.quality = params.quality
-  }
-  if (typeof params.n === 'number' && params.n > 0) draft.n = Math.trunc(params.n)
-  if (typeof params.output_format === 'string' && params.output_format) {
-    draft.outputFormat = params.output_format
-  }
-  draft.transparent = params.background === 'transparent'
-  return draft
 }
 
 /**
@@ -306,5 +370,18 @@ function keyFromUrl(url: string): string {
   const marker = '/api/image-studio/files/'
   const index = url.indexOf(marker)
   if (index >= 0) return url.slice(index + marker.length)
-  return ''
+  try {
+    const parsedUrl = new URL(url)
+    if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+      return ''
+    }
+    const storedImage =
+      /\/(img\/([A-Za-z0-9]{3})\/([A-Za-z0-9]{32})\.(?:png|jpg|jpeg|webp|gif))$/.exec(
+        parsedUrl.pathname
+      )
+    if (!storedImage || !storedImage[3].startsWith(storedImage[2])) return ''
+    return storedImage[1]
+  } catch {
+    return ''
+  }
 }

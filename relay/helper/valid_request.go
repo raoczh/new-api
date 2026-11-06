@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -206,6 +207,15 @@ func GetAndValidateResponsesCompactionRequest(c *gin.Context) (*dto.OpenAIRespon
 }
 
 func GetAndValidOpenAIImageRequest(c *gin.Context, relayMode int) (*dto.ImageRequest, error) {
+	channelSettings, _ := common.GetContextKeyType[dto.ChannelSettings](c, constant.ContextKeyChannelSetting)
+	if channelSettings.IsZhiqiEngine() {
+		request, err := ReadZhiqiImageRequest(c)
+		if err != nil {
+			return nil, err
+		}
+		c.Set("zhiqi_image_ingress", true)
+		return request.ToImageRequest()
+	}
 	imageRequest := &dto.ImageRequest{}
 
 	switch relayMode {

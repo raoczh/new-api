@@ -37,9 +37,15 @@ export interface ImageStudioMaskEditorProps {
   open: boolean
   /** Reference image the mask is painted over. */
   imageUrl: string
+  /** Zhiqi redraws alpha-transparent pixels instead of a black/white mask. */
+  transparentAreas?: boolean
   disabled?: boolean
   onOpenChange: (open: boolean) => void
-  onUploaded: (mask: { key: string; url: string }) => void
+  onUploaded: (mask: {
+    key: string
+    url: string
+    reference?: { key: string; url: string }
+  }) => void
 }
 
 const MAX_STROKES = 40
@@ -47,8 +53,8 @@ const MAX_STROKES = 40
 /**
  * Inpainting mask painter.
  *
- * The exported PNG follows the OpenAI edit convention: white marks the area to
- * repaint and black keeps the original pixels. Painting happens on an overlay
+ * Ordinary channels retain the black/white mask. Zhiqi exports transparent
+ * painted pixels and a matching PNG reference. Painting happens on an overlay
  * canvas tinted red so the user can see the selection, then the mask is rebuilt
  * from the stored strokes at export time — that keeps the tint out of the file.
  */
@@ -58,6 +64,7 @@ export function ImageStudioMaskEditor(props: ImageStudioMaskEditorProps) {
   const baseRef = useRef<HTMLImageElement | null>(null)
   const strokesRef = useRef<Array<Array<{ x: number; y: number }>>>([])
   const drawingRef = useRef(false)
+  const saveGenerationRef = useRef(0)
   const [brush, setBrush] = useState(36)
   const [ready, setReady] = useState(false)
   const [strokeCount, setStrokeCount] = useState(0)
@@ -92,7 +99,13 @@ export function ImageStudioMaskEditor(props: ImageStudioMaskEditorProps) {
         const [point] = stroke
         if (!point) continue
         context.beginPath()
-        context.arc(point.x * scale, point.y * scale, (brush * scale) / 2, 0, Math.PI * 2)
+        context.arc(
+          point.x * scale,
+          point.y * scale,
+          (brush * scale) / 2,
+          0,
+          Math.PI * 2
+        )
         context.fillStyle = 'rgba(239, 68, 68, 0.45)'
         context.fill()
         continue
@@ -108,6 +121,7 @@ export function ImageStudioMaskEditor(props: ImageStudioMaskEditorProps) {
 
   useEffect(() => {
     if (!props.open) return
+    saveGenerationRef.current += 1
     setError(null)
     setReady(false)
     setUploading(false)
@@ -116,16 +130,22 @@ export function ImageStudioMaskEditor(props: ImageStudioMaskEditorProps) {
 
     const image = new Image()
     image.crossOrigin = 'anonymous'
-    image.onload = () => {
+    const handleLoad = () => {
       baseRef.current = image
       setReady(true)
-      redraw()
     }
-    image.onerror = () => {
+    const handleError = () => {
       setError(t('The reference image could not be loaded. Upload it again.'))
     }
+    image.addEventListener('load', handleLoad)
+    image.addEventListener('error', handleError)
     image.src = props.imageUrl
-  }, [props.open, props.imageUrl, redraw, t])
+    return () => {
+      saveGenerationRef.current += 1
+      image.removeEventListener('load', handleLoad)
+      image.removeEventListener('error', handleError)
+    }
+  }, [props.open, props.imageUrl, t])
 
   useEffect(() => {
     if (ready) redraw()
@@ -190,15 +210,22 @@ export function ImageStudioMaskEditor(props: ImageStudioMaskEditorProps) {
     }
     setUploading(true)
     setError(null)
+    const saveGeneration = saveGenerationRef.current
     try {
       const mask = document.createElement('canvas')
       mask.width = image.naturalWidth
       mask.height = image.naturalHeight
       const context = mask.getContext('2d')
-      if (!context) throw new Error(t('The browser could not prepare the mask.'))
+      if (!context) {
+        throw new Error(t('The browser could not prepare the mask.'))
+      }
 
       context.fillStyle = '#000000'
       context.fillRect(0, 0, mask.width, mask.height)
+      // Erase the painted alpha channel; white paint would remain opaque.
+      if (props.transparentAreas) {
+        context.globalCompositeOperation = 'destination-out'
+      }
       context.strokeStyle = '#ffffff'
       context.fillStyle = '#ffffff'
       context.lineCap = 'round'
@@ -226,8 +253,25 @@ export function ImageStudioMaskEditor(props: ImageStudioMaskEditorProps) {
       })
       if (!blob) throw new Error(t('The browser could not prepare the mask.'))
       const file = new File([blob], 'mask.png', { type: 'image/png' })
+      let reference: { key: string; url: string } | undefined
+      if (props.transparentAreas) {
+        // A PNG mask must accompany a same-size PNG reference, even for JPEG inputs.
+        context.globalCompositeOperation = 'source-over'
+        context.clearRect(0, 0, mask.width, mask.height)
+        context.drawImage(image, 0, 0)
+        const referenceBlob = await new Promise<Blob | null>((resolve) =>
+          mask.toBlob(resolve, 'image/png')
+        )
+        if (!referenceBlob) {
+          throw new Error(t('The browser could not prepare the mask.'))
+        }
+        reference = await uploadImageStudioFile(
+          new File([referenceBlob], 'reference.png', { type: 'image/png' })
+        )
+      }
       const uploaded = await uploadImageStudioFile(file)
-      props.onUploaded({ key: uploaded.key, url: uploaded.url })
+      if (saveGeneration !== saveGenerationRef.current) return
+      props.onUploaded({ key: uploaded.key, url: uploaded.url, reference })
       props.onOpenChange(false)
     } catch (caught) {
       setError(
@@ -236,7 +280,7 @@ export function ImageStudioMaskEditor(props: ImageStudioMaskEditorProps) {
           : t('The mask could not be saved. Try again.')
       )
     } finally {
-      setUploading(false)
+      if (saveGeneration === saveGenerationRef.current) setUploading(false)
     }
   }
 
@@ -265,7 +309,10 @@ export function ImageStudioMaskEditor(props: ImageStudioMaskEditorProps) {
         </div>
 
         <div className='flex flex-wrap items-center gap-3'>
-          <EraserIcon className='text-muted-foreground size-4' aria-hidden='true' />
+          <EraserIcon
+            className='text-muted-foreground size-4'
+            aria-hidden='true'
+          />
           <Slider
             className='w-40'
             min={8}
@@ -311,8 +358,14 @@ export function ImageStudioMaskEditor(props: ImageStudioMaskEditorProps) {
           >
             {t('Cancel')}
           </Button>
-          <Button type='button' onClick={handleSave} disabled={!ready || uploading}>
-            {uploading && <Loader2Icon className='size-4 animate-spin' aria-hidden='true' />}
+          <Button
+            type='button'
+            onClick={handleSave}
+            disabled={!ready || uploading}
+          >
+            {uploading && (
+              <Loader2Icon className='size-4 animate-spin' aria-hidden='true' />
+            )}
             {t('Apply mask')}
           </Button>
         </DialogFooter>

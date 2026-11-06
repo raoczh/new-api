@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -113,6 +114,84 @@ func TestGetAndValidOpenAIImageRequestMultipartStream(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid stream value")
 	})
+}
+
+func TestZhiqiImageRequestValidatesParametersWithoutChangingOrdinaryChannels(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		parameters string
+		wantError  string
+	}{
+		{name: "omitted optional parameters", parameters: ``},
+		{name: "explicit zero compression and false stream", parameters: `,"output_format":"webp","output_compression":0,"stream":false`},
+		{name: "complete specification supersedes size", parameters: `,"resolution":"4k","aspect_ratio":"4:3","size":"unused"`},
+		{name: "GIF boundaries", parameters: `,"output_format":"gif","frame_count":2,"frame_duration_ms":20`},
+		{name: "GIF cannot stream", parameters: `,"output_format":"gif","stream":true`, wantError: "GIF"},
+		{name: "non-GIF cannot have frames", parameters: `,"frame_count":2`, wantError: "GIF"},
+		{name: "fractional compression", parameters: `,"output_format":"jpeg","output_compression":0.5`, wantError: "invalid"},
+		{name: "unsupported compression format", parameters: `,"output_format":"png","output_compression":0`, wantError: "jpeg or webp"},
+		{name: "frame count under minimum", parameters: `,"output_format":"gif","frame_count":1`, wantError: "frame_count"},
+		{name: "frame duration over maximum", parameters: `,"output_format":"gif","frame_duration_ms":655351`, wantError: "frame_duration_ms"},
+		{name: "zero count is rejected", parameters: `,"n":0`, wantError: "n must"},
+		{name: "wrapped unsigned count is rejected", parameters: `,"n":18446744073686646784`, wantError: "n must"},
+		{name: "GPT count must be one", parameters: `,"n":2`, wantError: "n=1"},
+		{name: "ratio alias is not silently dropped", parameters: `,"ratio":"1:1"`, wantError: "ratio"},
+		{name: "callback is private", parameters: `,"callback_url":"https://example.com"`, wantError: "callback_url"},
+		{name: "uppercase pixel separator", parameters: `,"size":"1024X1024"`, wantError: "size"},
+		{name: "oversized image side", parameters: `,"size":"4097x1024"`, wantError: "4096"},
+	} {
+		t.Run(testCase.name, func(test *testing.T) {
+			context, _ := gin.CreateTestContext(httptest.NewRecorder())
+			context.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", strings.NewReader(`{"model":"gpt-image-2.6","prompt":"a cat"`+testCase.parameters+`}`))
+			context.Request.Header.Set("Content-Type", "application/json")
+			common.SetContextKey(context, constant.ContextKeyChannelSetting, dto.ChannelSettings{ZhiqiEngine: common.GetPointer(true)})
+			test.Cleanup(func() { common.CleanupBodyStorage(context) })
+			request, err := GetAndValidOpenAIImageRequest(context, relayconstant.RelayModeImagesGenerations)
+			if testCase.wantError != "" {
+				require.ErrorContains(test, err, testCase.wantError)
+				return
+			}
+			require.NoError(test, err)
+			assert.Empty(test, request.Quality, "omission must not acquire a provider default")
+			if request.Stream != nil {
+				assert.False(test, *request.Stream)
+				assert.JSONEq(test, `0`, string(request.OutputCompression))
+			}
+		})
+	}
+}
+
+func TestZhiqiMultipartPreservesReferenceOrderAndBillingScalars(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for _, field := range [][2]string{
+		{"model", "gpt-image-2.6"}, {"prompt", "private prompt"},
+		{"image", "https://example.com/first.png"}, {"image", "https://example.com/second.png"},
+		{"mask", "https://example.com/mask.png"}, {"resolution", "2k"}, {"aspect_ratio", "4:3"},
+		{"output_format", "webp"}, {"output_compression", "0"},
+	} {
+		require.NoError(t, writer.WriteField(field[0], field[1]))
+	}
+	require.NoError(t, writer.Close())
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest(http.MethodPost, "/v1/images/edits", bytes.NewReader(body.Bytes()))
+	context.Request.Header.Set("Content-Type", writer.FormDataContentType())
+	t.Cleanup(func() { common.CleanupBodyStorage(context) })
+	request, err := ReadZhiqiImageRequest(context)
+	require.NoError(t, err)
+	require.Len(t, request.References, 2)
+	assert.Equal(t, "https://example.com/first.png", request.References[0].Value)
+	assert.Equal(t, "https://example.com/second.png", request.References[1].Value)
+	require.NotNil(t, request.Mask)
+	assert.Equal(t, "https://example.com/mask.png", request.Mask.Value)
+	billingBody, err := request.BillingBody()
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"model":"gpt-image-2.6","n":1,"resolution":"2k","aspect_ratio":"4:3","output_format":"webp","output_compression":0}`, string(billingBody))
+	storage, err := common.GetBodyStorage(context)
+	require.NoError(t, err)
+	originalBody, err := storage.Bytes()
+	require.NoError(t, err)
+	assert.Equal(t, body.Bytes(), originalBody)
 }
 
 // Provider `parameters.n` is still bounded at ingress so a malformed multiplier

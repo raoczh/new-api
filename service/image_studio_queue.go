@@ -1,8 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/system_setting"
@@ -279,30 +282,75 @@ func persistImageStudioResults(body []byte) ([]string, int, error) {
 	if len(body) == 0 {
 		return nil, 0, errors.New("上游没有返回任何内容")
 	}
-	var response dto.ImageResponse
+	var response struct {
+		Data json.RawMessage `json:"data"`
+	}
 	if err := common.Unmarshal(body, &response); err != nil {
 		return nil, 0, fmt.Errorf("无法解析上游返回的数据：%w", err)
 	}
-	if len(response.Data) == 0 {
+	rawImages := bytes.TrimSpace(response.Data)
+	if len(rawImages) == 0 || bytes.Equal(rawImages, []byte("null")) {
 		return nil, 0, errors.New("上游未返回图片，请稍后重试或更换模型")
 	}
+	var images []dto.ImageData
+	if rawImages[0] == '{' {
+		var image dto.ImageData
+		if err := common.Unmarshal(rawImages, &image); err != nil {
+			return nil, 0, fmt.Errorf("无法解析上游返回的数据：%w", err)
+		}
+		images = []dto.ImageData{image}
+	} else if err := common.Unmarshal(rawImages, &images); err != nil {
+		return nil, 0, fmt.Errorf("无法解析上游返回的数据：%w", err)
+	}
 
-	keys := make([]string, 0, len(response.Data))
-	for _, item := range response.Data {
+	urlPayloads := make([]string, 0, len(images))
+	base64Payloads := make([]string, 0, len(images))
+	for _, image := range images {
+		if imageURL := strings.TrimSpace(image.Url); imageURL != "" {
+			urlPayloads = append(urlPayloads, imageURL)
+		}
+		if imageBase64 := strings.TrimSpace(image.B64Json); imageBase64 != "" {
+			base64Payloads = append(base64Payloads, imageBase64)
+		}
+	}
+	// Match the relay's payload semantics: URL and base64 lists can be two
+	// representations of the same images, even when split into separate entries.
+	// Persist the fuller representation once; prefer base64 on ties to avoid
+	// unnecessary downloads. This count is for stored results, not billing usage.
+	useBase64 := len(base64Payloads) >= len(urlPayloads)
+	payloads := urlPayloads
+	if useBase64 {
+		payloads = base64Payloads
+	}
+	keys := make([]string, 0, len(payloads))
+	for _, payload := range payloads {
 		var data []byte
-		switch {
-		case strings.TrimSpace(item.B64Json) != "":
-			_, _, cleanBase64, err := DecodeBase64ImageData(item.B64Json)
-			if err != nil {
-				return keys, len(keys), fmt.Errorf("图片数据解码失败：%w", err)
+		if useBase64 {
+			cleanBase64 := payload
+			if _, encoded, found := strings.Cut(cleanBase64, ","); found {
+				cleanBase64 = encoded
+			}
+			maxBytes := int64(constant.MaxFileDownloadMB) * 1024 * 1024
+			if int64(base64.StdEncoding.DecodedLen(len(cleanBase64))) > maxBytes+2 {
+				return keys, len(keys), common.ErrRequestBodyTooLarge
 			}
 			decoded, err := base64.StdEncoding.DecodeString(cleanBase64)
 			if err != nil {
 				return keys, len(keys), fmt.Errorf("图片数据解码失败：%w", err)
 			}
+			if int64(len(decoded)) > maxBytes {
+				return keys, len(keys), common.ErrRequestBodyTooLarge
+			}
+			if _, raster := detectImageMIME(decoded[:min(len(decoded), 512)]); raster {
+				// Retain the previous raster config check without decoding or
+				// re-encoding frames, while SVG uses the static document validator.
+				if _, _, err := getImageConfig(bytes.NewReader(decoded)); err != nil {
+					return keys, len(keys), fmt.Errorf("图片数据解码失败：%w", err)
+				}
+			}
 			data = decoded
-		case strings.TrimSpace(item.Url) != "":
-			_, encoded, err := GetImageFromUrl(item.Url)
+		} else {
+			_, encoded, err := GetImageFromUrl(payload)
 			if err != nil {
 				return keys, len(keys), fmt.Errorf("图片下载失败：%w", err)
 			}
@@ -311,10 +359,8 @@ func persistImageStudioResults(body []byte) ([]string, int, error) {
 				return keys, len(keys), fmt.Errorf("图片下载后解码失败：%w", err)
 			}
 			data = decoded
-		default:
-			continue
 		}
-		key, err := SaveImageStudioBytes(data)
+		key, err := SaveImageStudioResultBytes(data)
 		if err != nil {
 			return keys, len(keys), fmt.Errorf("图片保存失败：%w", err)
 		}

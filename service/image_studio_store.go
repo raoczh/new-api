@@ -31,8 +31,8 @@ var (
 	ErrImageStudioFileInvalid  = errors.New("image studio file is not a supported image")
 )
 
-// imageExtByMIME is the allow list. SVG is deliberately absent: it executes
-// script when rendered inline, and results are served from the gateway origin.
+// imageExtByMIME is the raster upload/reference allowlist. Only the separate
+// result path may store SVG, after validating its complete static document.
 var imageExtByMIME = map[string]string{
 	"image/png":  "png",
 	"image/jpeg": "jpg",
@@ -57,8 +57,8 @@ func detectImageMIME(header []byte) (string, bool) {
 	return ext, ok
 }
 
-// SaveImageStudioBytes stores a payload under a fresh opaque key and returns
-// that key.
+// SaveImageStudioBytes stores a raster upload/reference under a fresh opaque
+// key. SVG results must use SaveImageStudioResultBytes instead.
 func SaveImageStudioBytes(data []byte) (string, error) {
 	if len(data) == 0 {
 		return "", ErrImageStudioFileInvalid
@@ -71,7 +71,22 @@ func SaveImageStudioBytes(data []byte) (string, error) {
 	if !ok {
 		return "", ErrImageStudioFileInvalid
 	}
+	return storeImageStudioArtifact(data, ext)
+}
 
+// SaveImageStudioResultBytes preserves raster results (including GIF animation)
+// and accepts SVG only when the entire document is safe without response headers.
+func SaveImageStudioResultBytes(data []byte) (string, error) {
+	if _, raster := detectImageMIME(data[:min(len(data), 512)]); raster {
+		return SaveImageStudioBytes(data)
+	}
+	if err := validateImageStudioSVG(data); err != nil {
+		return "", err
+	}
+	return storeImageStudioArtifact(data, "svg")
+}
+
+func storeImageStudioArtifact(data []byte, ext string) (string, error) {
 	key, err := newImageStudioKey(ext)
 	if err != nil {
 		return "", err
@@ -143,6 +158,21 @@ func ValidateImageStudioKey(key string) error {
 	if len(ext) == 0 || len(ext) > imageStudioMaxExtLen {
 		return ErrImageStudioFileNotFound
 	}
+	if ext == "svg" {
+		// SVG is new: only accept the exact opaque layout emitted by the
+		// validated result store, not arbitrary .svg paths under the root.
+		shard, filename, found := strings.Cut(strings.TrimPrefix(key, imageStudioKeyPrefix), "/")
+		random := strings.TrimSuffix(filename, ".svg")
+		if !found || len(shard) != imageStudioKeyShardLen || len(random) != 32 || !strings.HasPrefix(random, shard) {
+			return ErrImageStudioFileNotFound
+		}
+		for _, character := range random {
+			if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z') {
+				return ErrImageStudioFileNotFound
+			}
+		}
+		return nil
+	}
 	if _, ok := imageExtByMIME["image/"+ext]; !ok {
 		// "jpg" is the only extension that differs from its MIME subtype.
 		if ext != "jpg" {
@@ -154,6 +184,7 @@ func ValidateImageStudioKey(key string) error {
 
 // OpenImageStudioFile opens an artifact for serving.
 func OpenImageStudioFile(key string) (*os.File, os.FileInfo, error) {
+	key = strings.TrimSpace(key)
 	if err := ValidateImageStudioKey(key); err != nil {
 		return nil, nil, err
 	}
@@ -172,6 +203,22 @@ func OpenImageStudioFile(key string) (*os.File, os.FileInfo, error) {
 	if info.IsDir() {
 		_ = file.Close()
 		return nil, nil, ErrImageStudioFileNotFound
+	}
+	if filepath.Ext(key) == ".svg" {
+		// A valid-looking key alone cannot vouch for files copied or replaced
+		// outside the store. Validate the same descriptor that will be served.
+		data, readErr := io.ReadAll(io.LimitReader(file, imageStudioMaxSVGBytes+1))
+		if readErr == nil {
+			readErr = validateImageStudioSVG(data)
+		}
+		if readErr != nil {
+			_ = file.Close()
+			return nil, nil, readErr
+		}
+		if _, seekErr := file.Seek(0, io.SeekStart); seekErr != nil {
+			_ = file.Close()
+			return nil, nil, seekErr
+		}
 	}
 	return file, info, nil
 }
@@ -223,8 +270,12 @@ func ImageStudioFileURL(key string) string {
 // ServerAddress is used. The result must be reachable by the upstream
 // provider, so a relative browser path is never returned.
 func ImageStudioFileAbsoluteURL(key string) (string, error) {
+	key = strings.TrimSpace(key)
 	if err := ValidateImageStudioKey(key); err != nil {
 		return "", err
+	}
+	if filepath.Ext(key) == ".svg" {
+		return "", ErrImageStudioFileInvalid
 	}
 	settings := system_setting.GetImageStudioSettings()
 	// PublicBaseURL maps the storage root directly; the gateway address needs

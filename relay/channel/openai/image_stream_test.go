@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -174,6 +175,69 @@ func TestOpenaiImageDoResponseUsesInfoIsStream(t *testing.T) {
 		require.Contains(t, recorder.Body.String(), `event: image_generation.completed`)
 		require.Contains(t, recorder.Body.String(), `data: [DONE]`)
 	})
+}
+
+func TestZhiqiImageStreamsPreserveHeartbeatsAndURLCompletion(test *testing.T) {
+	for _, operation := range []string{"image_generation", "image_edit"} {
+		test.Run(operation, func(test *testing.T) {
+			body := ": keep-alive\n\nevent: " + operation + ".completed\ndata: {\"url\":\"https://example.com/image.webp\",\"image_index\":0,\"output_format\":\"webp\"}\n\n"
+			context, recorder, response, info := newImageTestContext(test, body, "text/event-stream", true)
+			info.ChannelSetting.ZhiqiEngine = common.GetPointer(true)
+			info.RelayMode = relayconstant.RelayModeImagesGenerations
+			if operation == "image_edit" {
+				info.RelayMode = relayconstant.RelayModeImagesEdits
+			}
+			usage, apiError := OpenaiImageStreamHandler(context, info, response)
+			require.Nil(test, apiError)
+			assert.Contains(test, recorder.Body.String(), ": keep-alive\n\n")
+			assert.Contains(test, recorder.Body.String(), "event: "+operation+".completed")
+			assert.Contains(test, recorder.Body.String(), `"url":"https://example.com/image.webp"`)
+			assert.NotContains(test, recorder.Body.String(), `"usage"`)
+			assert.Zero(test, usage.TotalTokens)
+			require.NotNil(test, info.BillingImageCount)
+			assert.Equal(test, 1, *info.BillingImageCount)
+			assert.Equal(test, string(relaycommon.ResponseOutcomeCompleted), info.StreamStatus.ResponseOutcome())
+		})
+	}
+}
+
+func TestZhiqiJSONAsSSEPreservesOptionalFieldsWithoutInventingUsage(test *testing.T) {
+	body := `{"created":1781261901,"size":"1344x1008","quality":"high","output_format":"svg","data":[{"url":"https://example.com/image.svg"}]}`
+	context, recorder, response, info := newImageTestContext(test, body, "application/json", true)
+	info.ChannelSetting.ZhiqiEngine = common.GetPointer(true)
+	info.RelayMode = relayconstant.RelayModeImagesEdits
+	usage, apiError := OpenaiImageStreamHandler(context, info, response)
+	require.Nil(test, apiError)
+	assert.Zero(test, usage.TotalTokens)
+	assert.Contains(test, recorder.Body.String(), "event: image_edit.completed")
+	assert.Contains(test, recorder.Body.String(), `"image_index":0`)
+	assert.Contains(test, recorder.Body.String(), `"created":1781261901`)
+	assert.Contains(test, recorder.Body.String(), `"size":"1344x1008"`)
+	assert.Contains(test, recorder.Body.String(), `"quality":"high"`)
+	assert.Contains(test, recorder.Body.String(), `"output_format":"svg"`)
+	assert.NotContains(test, recorder.Body.String(), `"usage"`)
+}
+
+func TestZhiqiImageErrorsNeverBecomeEmptySuccessfulStreams(test *testing.T) {
+	for _, stream := range []bool{false, true} {
+		for _, body := range []string{
+			`{"data":[{"revised_prompt":"no image"}]}`,
+			`{"error":{"code":"media_storage_failed","message":"Media delivery failed"}}`,
+		} {
+			test.Run(fmt.Sprintf("stream=%t/%s", stream, body), func(test *testing.T) {
+				context, recorder, response, info := newImageTestContext(test, body, "application/json", stream)
+				info.ChannelSetting.ZhiqiEngine = common.GetPointer(true)
+				info.RelayMode = relayconstant.RelayModeImagesGenerations
+				_, apiError := (&Adaptor{}).DoResponse(context, response, info)
+				require.NotNil(test, apiError)
+				assert.Equal(test, http.StatusBadGateway, apiError.StatusCode)
+				assert.Empty(test, recorder.Body.String())
+				if strings.Contains(body, "media_storage_failed") {
+					assert.Equal(test, "media_storage_failed", string(apiError.GetErrorCode()))
+				}
+			})
+		}
+	}
 }
 
 // TestOpenaiImageStreamHandlerForwardsSSEAndUsage covers the core SSE path:

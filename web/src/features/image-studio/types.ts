@@ -35,6 +35,9 @@ export interface ImageStudioConfig {
 export interface ImageStudioModelOption {
   model: string
   description?: string
+  /** True only when every available image channel in this group uses Zhiqi. */
+  zhiqi_engine?: boolean
+  zhiqi_mixed_channels?: boolean
   quota_type: number
   price: number
   /**
@@ -76,6 +79,11 @@ export interface ImageStudioTaskParams {
   background?: string
   output_format?: string
   response_format?: string
+  resolution?: string
+  aspect_ratio?: string
+  output_compression?: number
+  frame_count?: number
+  frame_duration_ms?: number
   style?: string
   [key: string]: unknown
 }

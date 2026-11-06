@@ -1,14 +1,16 @@
 package controller
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -141,7 +143,7 @@ func TestBuildImageStudioBodySendsReferenceFilesByDefault(t *testing.T) {
 		Model:         "gpt-image-1",
 		Prompt:        "a cat",
 		ReferenceKeys: []string{referenceKey},
-	}, dto.ChannelSettings{})
+	})
 	require.NoError(t, err)
 
 	assert.Equal(t, imageStudioEditPath, requestPath)
@@ -150,49 +152,38 @@ func TestBuildImageStudioBodySendsReferenceFilesByDefault(t *testing.T) {
 	assert.NotContains(t, string(body), "http://")
 }
 
-func TestBuildImageStudioBodySendsReferenceURLsWhenChannelRequiresThem(t *testing.T) {
-	withImageStudioStorage(t)
-	referenceKey := saveImageStudioTestImage(t)
-
-	body, contentType, requestPath, err := buildImageStudioBody(service.ImageStudioRunInput{
-		Model:         "gpt-image-1",
-		Prompt:        "a cat",
-		ReferenceKeys: []string{referenceKey},
-	}, dto.ChannelSettings{ImageReferenceAsURL: true})
-	require.NoError(t, err)
-
-	assert.Equal(t, imageStudioGenerationPath, requestPath)
-	assert.Equal(t, "application/json", contentType)
-	var payload struct {
-		Model string   `json:"model"`
-		Image []string `json:"image"`
-	}
-	require.NoError(t, common.Unmarshal(body, &payload))
-	require.Len(t, payload.Image, 1)
-	assert.Equal(t, "https://img.example.com/"+referenceKey, payload.Image[0])
-}
-
-func TestBuildImageStudioBodySendsMaskAsURLWhenChannelRequiresThem(t *testing.T) {
+func TestBuildImageStudioBodyKeepsFilesForPerAttemptEngineConversion(t *testing.T) {
 	withImageStudioStorage(t)
 	referenceKey := saveImageStudioTestImage(t)
 	maskKey := saveImageStudioTestImage(t)
 
-	body, _, _, err := buildImageStudioBody(service.ImageStudioRunInput{
-		Model:         "gpt-image-1",
+	body, contentType, requestPath, err := buildImageStudioBody(service.ImageStudioRunInput{
+		Model:         "gpt-image-2.6",
 		Prompt:        "a cat",
-		ReferenceKeys: []string{referenceKey},
+		Params:        `{"resolution":"2k","aspect_ratio":"4:3","output_format":"webp","output_compression":0}`,
+		ReferenceKeys: []string{referenceKey, referenceKey},
 		MaskKey:       maskKey,
-	}, dto.ChannelSettings{ImageReferenceAsURL: true})
+	})
 	require.NoError(t, err)
 
-	var payload struct {
-		Mask string `json:"mask"`
-	}
-	require.NoError(t, common.Unmarshal(body, &payload))
-	assert.Equal(t, "https://img.example.com/"+maskKey, payload.Mask)
+	assert.Equal(t, imageStudioEditPath, requestPath)
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest(http.MethodPost, requestPath, bytes.NewReader(body))
+	context.Request.Header.Set("Content-Type", contentType)
+	t.Cleanup(func() { common.CleanupBodyStorage(context) })
+	request, err := helper.ReadZhiqiImageRequest(context)
+	require.NoError(t, err)
+	require.Len(t, request.References, 2)
+	assert.NotEmpty(t, request.References[0].Data)
+	require.NotNil(t, request.Mask)
+	assert.NotEmpty(t, request.Mask.Data)
+	assert.Equal(t, "2k", *request.Resolution)
+	assert.Equal(t, "4:3", *request.AspectRatio)
+	require.NotNil(t, request.OutputCompression)
+	assert.Zero(t, *request.OutputCompression)
 }
 
-func TestBuildImageStudioBodyFallsBackToServerAddressForReferenceURLs(t *testing.T) {
+func TestImageStudioReferenceURLsUseTheConfiguredPublicAddress(t *testing.T) {
 	withImageStudioStorage(t)
 	referenceKey := saveImageStudioTestImage(t)
 	settings := system_setting.GetImageStudioSettings()
@@ -201,26 +192,16 @@ func TestBuildImageStudioBodyFallsBackToServerAddressForReferenceURLs(t *testing
 	system_setting.ServerAddress = "https://gateway.example.com"
 	t.Cleanup(func() { system_setting.ServerAddress = originalServerAddress })
 
-	body, _, _, err := buildImageStudioBody(service.ImageStudioRunInput{
-		Model:         "gpt-image-1",
-		Prompt:        "a cat",
-		ReferenceKeys: []string{referenceKey},
-	}, dto.ChannelSettings{ImageReferenceAsURL: true})
+	publicURL, err := service.ImageStudioFileAbsoluteURL(referenceKey)
 	require.NoError(t, err)
-
-	var payload struct {
-		Image []string `json:"image"`
-	}
-	require.NoError(t, common.Unmarshal(body, &payload))
-	require.Len(t, payload.Image, 1)
 	assert.Equal(
 		t,
 		"https://gateway.example.com/api/image-studio/files/"+referenceKey,
-		payload.Image[0],
+		publicURL,
 	)
 }
 
-func TestBuildImageStudioBodyRejectsURLModeWithoutAbsoluteAddress(t *testing.T) {
+func TestImageStudioReferenceURLsRequireAnAbsoluteAddress(t *testing.T) {
 	withImageStudioStorage(t)
 	referenceKey := saveImageStudioTestImage(t)
 	settings := system_setting.GetImageStudioSettings()
@@ -229,13 +210,35 @@ func TestBuildImageStudioBodyRejectsURLModeWithoutAbsoluteAddress(t *testing.T) 
 	system_setting.ServerAddress = ""
 	t.Cleanup(func() { system_setting.ServerAddress = originalServerAddress })
 
-	_, _, _, err := buildImageStudioBody(service.ImageStudioRunInput{
-		Model:         "gpt-image-1",
-		Prompt:        "a cat",
-		ReferenceKeys: []string{referenceKey},
-	}, dto.ChannelSettings{ImageReferenceAsURL: true})
+	_, err := service.ImageStudioFileAbsoluteURL(referenceKey)
 
 	require.Error(t, err)
+}
+
+func TestImageStudioEngineSelectionDoesNotMixChannelContracts(t *testing.T) {
+	database, dialect := openTaskDialectDatabase(t, &model.Channel{})
+	originalDatabase := model.DB
+	originalMain, originalLog := common.MainDatabaseType(), common.LogDatabaseType()
+	model.DB = database
+	common.SetDatabaseTypes(dialect, dialect)
+	t.Cleanup(func() {
+		model.DB = originalDatabase
+		common.SetDatabaseTypes(originalMain, originalLog)
+	})
+	channels := []model.Channel{
+		{Name: "legacy zhiqi", Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Group: "default", Models: "zhiqi-image,mixed-image", Setting: common.GetPointer(`{"image_reference_as_url":true}`)},
+		{Name: "ordinary", Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Group: "default", Models: "mixed-image,ordinary-image"},
+		{Name: "explicit opt out", Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Group: "default", Models: "optout-image", Setting: common.GetPointer(`{"image_reference_as_url":true,"zhiqi_engine":false}`)},
+		{Name: "disabled ordinary", Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusManuallyDisabled, Group: "default", Models: "zhiqi-image"},
+	}
+	require.NoError(t, database.Create(&channels).Error)
+	engines, err := loadImageStudioEngines()
+	require.NoError(t, err)
+	assert.True(t, engines["default"]["zhiqi-image"].ZhiqiEngine)
+	assert.False(t, engines["default"]["mixed-image"].ZhiqiEngine)
+	assert.True(t, engines["default"]["mixed-image"].ZhiqiMixedChannels)
+	assert.False(t, engines["default"]["ordinary-image"].ZhiqiEngine)
+	assert.False(t, engines["default"]["optout-image"].ZhiqiEngine)
 }
 
 // withImageStudioStorage points artifact storage at a temporary directory and

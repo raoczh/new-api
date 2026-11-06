@@ -135,12 +135,13 @@ export function ImageStudioParameterRow(props: ImageStudioParameterRowProps) {
 interface ParameterChipProps {
   label: string
   value: string
+  selectedValue?: string
   options: Choice[]
   disabled?: boolean
   onSelect: (value: string) => void
 }
 
-function ParameterChip(props: ParameterChipProps) {
+export function ParameterChip(props: ParameterChipProps) {
   return (
     <Popover>
       <PopoverTrigger
@@ -177,7 +178,7 @@ function ParameterChip(props: ParameterChipProps) {
                   className='flex items-center justify-between gap-2 text-xs'
                 >
                   <span>{option.label}</span>
-                  {option.value === props.value && (
+                  {option.value === (props.selectedValue ?? props.value) && (
                     <CheckIcon className='size-3.5' aria-hidden='true' />
                   )}
                 </CommandItem>

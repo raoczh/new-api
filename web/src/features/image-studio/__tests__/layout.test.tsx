@@ -17,7 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import { ImageStudioPage } from '../index'
@@ -150,6 +156,83 @@ test('splits the workbench into an editor column and a gallery column', async ()
   )
   // Mobile keeps a single stacked column; only xl turns it into a grid.
   expect(grid).toHaveClass('flex-col')
+})
+
+test('reusing Zhiqi history switches model and keeps its parameters through the real page submit', async () => {
+  const zhiqiTask = {
+    ...task,
+    model: 'custom-zhiqi',
+    group: 'vip',
+    params: {
+      resolution: '4k',
+      aspect_ratio: '21:9',
+      output_format: 'jpeg',
+      output_compression: 0,
+    },
+  }
+  api.getImageStudioConfig.mockResolvedValue(config)
+  api.getImageStudioModels.mockResolvedValue([
+    groups[0],
+    {
+      ...groups[1],
+      models: [
+        { model: 'custom-zhiqi', price: 0, quota_type: 1, zhiqi_engine: true },
+      ],
+    },
+  ])
+  api.listImageStudioTasks.mockResolvedValue({ ...list, items: [zhiqiTask] })
+  api.getImageStudioTask.mockResolvedValue(zhiqiTask)
+  api.submitImageStudioTask.mockResolvedValue({
+    task: zhiqiTask,
+    image_count: 1,
+    queue_position: 0,
+  })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  const view = render(
+    <QueryClientProvider client={client}>
+      <ImageStudioPage />
+    </QueryClientProvider>
+  )
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: 'Open details for A lighthouse at dusk',
+    })
+  )
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Reuse these settings' })
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  await waitFor(() =>
+    expect(
+      screen.getByRole('combobox', { name: 'Select model' })
+    ).toHaveTextContent('custom-zhiqi')
+  )
+  expect(screen.getByRole('button', { name: 'Resolution: 4k' })).toBeVisible()
+  expect(
+    screen.getByRole('spinbutton', { name: 'Output compression (0-100)' })
+  ).toHaveValue(0)
+  fireEvent.click(screen.getByRole('button', { name: 'Generate 1' }))
+  await waitFor(() =>
+    expect(api.submitImageStudioTask).toHaveBeenCalledWith({
+      model: 'custom-zhiqi',
+      group: 'vip',
+      prompt: task.prompt,
+      params: {
+        n: 1,
+        response_format: 'url',
+        resolution: '4k',
+        aspect_ratio: '21:9',
+        output_format: 'jpeg',
+        output_compression: 0,
+      },
+      referenceKeys: [],
+      maskKey: undefined,
+    })
+  )
+  view.unmount()
+  client.clear()
 })
 
 test('lets each column scroll on its own', async () => {

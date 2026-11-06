@@ -1757,7 +1757,7 @@ test('turning on the upstream TLS verification skip saves it in the channel sett
   })
 })
 
-test('a saved reference image URL setting marks Request & Response and turning it off drops the key', async () => {
+test('a legacy URL setting enables Zhiqi and turning it off saves an explicit false without the legacy key', async () => {
   editingChannel = {
     ...editingChannel,
     setting: '{"image_reference_as_url":true}',
@@ -1772,7 +1772,7 @@ test('a saved reference image URL setting marks Request & Response and turning i
   expect(requestTab).toHaveAccessibleName(/Configured/)
   await user.click(requestTab)
   const toggle = screen.getByRole('switch', {
-    name: 'Reference Images as URLs',
+    name: 'Zhiqi Engine',
   })
   expect(toggle).toBeChecked()
   await user.click(toggle)
@@ -1781,12 +1781,13 @@ test('a saved reference image URL setting marks Request & Response and turning i
   await user.click(screen.getByRole('button', { name: 'Update Channel' }))
   await waitFor(() => expect(put).toHaveBeenCalled())
   const payload = put.mock.calls[0]?.[1] as { setting: string }
+  expect(JSON.parse(payload.setting)).toHaveProperty('zhiqi_engine', false)
   expect(JSON.parse(payload.setting)).not.toHaveProperty(
     'image_reference_as_url'
   )
 })
 
-test('turning on reference image URLs saves it in the channel setting', async () => {
+test('turning on Zhiqi saves only the new channel setting', async () => {
   const put = vi
     .spyOn(api, 'put')
     .mockResolvedValue({ data: { success: true } })
@@ -1795,7 +1796,7 @@ test('turning on reference image URLs saves it in the channel setting', async ()
   await screen.findByDisplayValue('Existing channel')
   await user.click(screen.getByRole('tab', { name: /Request & Response/ }))
   const toggle = screen.getByRole('switch', {
-    name: 'Reference Images as URLs',
+    name: 'Zhiqi Engine',
   })
   expect(toggle).not.toBeChecked()
   await user.click(toggle)
@@ -1803,8 +1804,33 @@ test('turning on reference image URLs saves it in the channel setting', async ()
   await waitFor(() => expect(put).toHaveBeenCalled())
   const payload = put.mock.calls[0]?.[1] as { setting: string }
   expect(JSON.parse(payload.setting)).toMatchObject({
-    image_reference_as_url: true,
+    zhiqi_engine: true,
   })
+  expect(JSON.parse(payload.setting)).not.toHaveProperty(
+    'image_reference_as_url'
+  )
+})
+
+test('explicitly disabled Zhiqi does not inherit a legacy true setting on load or save', async () => {
+  editingChannel = {
+    ...editingChannel,
+    setting: '{"zhiqi_engine":false,"image_reference_as_url":true}',
+  }
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true } })
+  const user = userEvent.setup()
+  render(<ConfigurationHarness currentRow={editingChannel} />)
+  await screen.findByDisplayValue('Existing channel')
+  await user.click(screen.getByRole('tab', { name: /Request & Response/ }))
+  expect(screen.getByRole('switch', { name: 'Zhiqi Engine' })).not.toBeChecked()
+  await user.click(screen.getByRole('button', { name: 'Update Channel' }))
+  await waitFor(() => expect(put).toHaveBeenCalled())
+  const payload = put.mock.calls[0]?.[1] as { setting: string }
+  expect(JSON.parse(payload.setting)).toHaveProperty('zhiqi_engine', false)
+  expect(JSON.parse(payload.setting)).not.toHaveProperty(
+    'image_reference_as_url'
+  )
 })
 
 test('an invalid edit switches categories and replaces configured styling with the field error', async () => {
@@ -2183,6 +2209,10 @@ test('an operator without sensitive write permission can discover saved models a
   expect(thinking).toHaveAttribute('aria-disabled', 'true')
   await user.click(thinking)
   expect(thinking).not.toBeChecked()
+  const zhiqi = screen.getByRole('switch', { name: 'Zhiqi Engine' })
+  expect(zhiqi).toHaveAttribute('aria-disabled', 'true')
+  await user.click(zhiqi)
+  expect(zhiqi).not.toBeChecked()
   await user.click(screen.getByRole('tab', { name: /Other Settings/ }))
   expect(screen.getByLabelText('Proxy Address')).toBeDisabled()
   await user.click(screen.getByRole('tab', { name: /Routing & Mapping/ }))

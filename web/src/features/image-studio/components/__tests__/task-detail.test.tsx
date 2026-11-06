@@ -82,6 +82,17 @@ test('opens the generated image in a full-screen preview', async () => {
   )
 })
 
+test('SVG results use the image preview without injecting vector markup', async () => {
+  const url = 'https://img.example.com/result.svg'
+  renderDetail(makeTask({ images: [url], params: { output_format: 'svg' } }))
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Preview generated image' })
+  )
+  const dialog = await screen.findByRole('dialog', { name: 'Image Preview' })
+  expect(within(dialog).getByRole('img')).toHaveAttribute('src', url)
+  expect(dialog.querySelector('iframe, object, embed')).toBeNull()
+})
+
 test('a failed record shows the error instead of a clickable image', async () => {
   renderDetail(
     makeTask({

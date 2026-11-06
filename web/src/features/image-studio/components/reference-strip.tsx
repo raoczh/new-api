@@ -35,6 +35,7 @@ import type { ImageStudioReference } from '../types'
 export interface ImageStudioReferenceStripProps {
   references: ImageStudioReference[]
   maxReferences: number
+  firstImageMaskOnly?: boolean
   disabled?: boolean
   onAddFiles: (files: File[]) => void
   onRemove: (uid: string) => void
@@ -93,6 +94,7 @@ export function ImageStudioReferenceStrip(
                 aria-label={t('Paint a mask on this image')}
                 disabled={
                   props.disabled ||
+                  (props.firstImageMaskOnly && index !== 0) ||
                   reference.uploading ||
                   Boolean(reference.error)
                 }

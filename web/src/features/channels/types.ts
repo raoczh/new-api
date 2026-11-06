@@ -87,6 +87,8 @@ export interface ChannelSettings {
   proxy?: string
   pass_through_body_enabled?: boolean
   responses_websocket_enabled?: boolean
+  zhiqi_engine?: boolean
+  /** Read-only migration source; new saves use zhiqi_engine. */
   image_reference_as_url?: boolean
   system_prompt?: string
   system_prompt_override?: boolean

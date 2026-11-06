@@ -53,6 +53,7 @@ func TestImageRequestReservesFinalQuantityBeforeUpstream(t *testing.T) {
 	for _, tc := range []struct {
 		name, body                                    string
 		tiered, passThrough, insufficient, retryReset bool
+		zhiqi                                         bool
 		override                                      any
 		count, status                                 int
 	}{
@@ -63,6 +64,8 @@ func TestImageRequestReservesFinalQuantityBeforeUpstream(t *testing.T) {
 		{name: "oversized override rejected", body: `{"model":"gpt-image-2","n":1}`, override: 129, status: http.StatusBadRequest},
 		{name: "insufficient reservation blocks upstream", body: `{"model":"gpt-image-2","n":1}`, override: 4, count: 4, insufficient: true, status: http.StatusForbidden},
 		{name: "retry drops the previous attempt's quantity", body: `{"model":"gpt-image-2","n":1}`, count: 1, retryReset: true},
+		{name: "Zhiqi generation preserves complete parameters", body: `{"model":"gpt-image-2","prompt":"a cat","n":1,"resolution":"2k","aspect_ratio":"4:3","output_format":"webp","output_compression":0,"stream":false}`, count: 1, zhiqi: true},
+		{name: "Zhiqi rejects a count override before sending", body: `{"model":"gpt-image-2","prompt":"a cat","n":1}`, override: 2, status: http.StatusBadRequest, zhiqi: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			received := make(chan []byte, 1)
@@ -81,7 +84,7 @@ func TestImageRequestReservesFinalQuantityBeforeUpstream(t *testing.T) {
 			c.Request.Header.Set("Content-Type", "application/json")
 			common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeOpenAI)
 			common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, upstream.URL)
-			common.SetContextKey(c, constant.ContextKeyChannelSetting, dto.ChannelSettings{PassThroughBodyEnabled: tc.passThrough})
+			common.SetContextKey(c, constant.ContextKeyChannelSetting, dto.ChannelSettings{PassThroughBodyEnabled: tc.passThrough, ZhiqiEngine: common.GetPointer(tc.zhiqi)})
 			if tc.override != nil {
 				common.SetContextKey(c, constant.ContextKeyChannelParamOverride, map[string]any{"operations": []any{map[string]any{"path": "n", "mode": "set", "value": tc.override}}})
 			}
@@ -120,6 +123,10 @@ func TestImageRequestReservesFinalQuantityBeforeUpstream(t *testing.T) {
 			assert.Equal(t, tc.count*20000, info.PriceData.QuotaToPreConsume)
 			assert.GreaterOrEqual(t, reservation.held, info.PriceData.QuotaToPreConsume)
 			assert.Nil(t, info.BillingImageCount)
+			if tc.zhiqi {
+				assert.JSONEq(t, tc.body, string(body))
+				assert.True(t, types.IsSkipRetryError(apiErr), "a submitted Zhiqi generation must not be automatically repeated")
+			}
 			if tc.tiered {
 				assert.Equal(t, tc.body, string(info.BillingRequestInput.Body))
 				assert.Equal(t, 1, *info.BillingRequestInput.ImageCount)
@@ -335,15 +342,12 @@ func TestImageHelperSendsReferenceImagesAsURLsWhenChannelRequiresThem(t *testing
 		require.NoError(t, writer.WriteField("model", "gpt-image-2"))
 		require.NoError(t, writer.WriteField("prompt", "a cat"))
 		require.NoError(t, writer.WriteField("output_format", "webp"))
-		require.NoError(t, writer.WriteField("complexity", "high"))
-		require.NoError(t, writer.WriteField("svg", "false"))
-		require.NoError(t, writer.WriteField("frame_count", "0"))
-		require.NoError(t, writer.WriteField("frame_duration_ms", "100"))
+		require.NoError(t, writer.WriteField("output_compression", "0"))
+		require.NoError(t, writer.WriteField("resolution", "2k"))
+		require.NoError(t, writer.WriteField("aspect_ratio", "4:3"))
 		fileFields := []string{"image[]", "image[]", "mask"}
 		if withMarkup {
 			fileFields = append(fileFields, "markup")
-		} else {
-			require.NoError(t, writer.WriteField("markup", `{"regions":[]}`))
 		}
 		for _, field := range fileFields {
 			part, err := writer.CreateFormFile(field, "ref.png")
@@ -359,14 +363,16 @@ func TestImageHelperSendsReferenceImagesAsURLsWhenChannelRequiresThem(t *testing
 		name, path   string
 		asURL, json  bool
 		markup       bool
+		passThrough  bool
 		wantPath     string
 		wantImages   int
 		wantKeptURLs []string
 	}{
-		{name: "multipart edit becomes JSON generation", path: "/v1/images/edits", asURL: true, wantPath: "/v1/images/generations", wantImages: 2},
-		{name: "inline references are published", path: "/v1/images/generations", asURL: true, json: true, wantPath: "/v1/images/generations", wantImages: 2, wantKeptURLs: []string{"https://cdn.example.com/a.png"}},
+		{name: "legacy flag sends multipart URL edit", path: "/v1/images/edits", asURL: true, wantPath: "/v1/images/edits", wantImages: 2},
+		{name: "inline references are published without changing order", path: "/v1/images/generations", asURL: true, json: true, wantPath: "/v1/images/edits", wantImages: 2, wantKeptURLs: []string{"https://cdn.example.com/a.png"}},
+		{name: "passthrough cannot bypass the engine contract", path: "/v1/images/edits", asURL: true, passThrough: true, wantPath: "/v1/images/edits", wantImages: 2},
 		{name: "switch off keeps the multipart edit", path: "/v1/images/edits", wantPath: "/v1/images/edits"},
-		{name: "markup file retains native edit support with URL mode enabled", path: "/v1/images/edits", asURL: true, markup: true, wantPath: "/v1/images/edits"},
+		{name: "ordinary markup file retains native edit support", path: "/v1/images/edits", markup: true, wantPath: "/v1/images/edits"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			type upstreamRequest struct {
@@ -397,7 +403,7 @@ func TestImageHelperSendsReferenceImagesAsURLsWhenChannelRequiresThem(t *testing
 			c.Request.Header.Set("Content-Type", contentType)
 			common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeOpenAI)
 			common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, upstream.URL)
-			common.SetContextKey(c, constant.ContextKeyChannelSetting, dto.ChannelSettings{ImageReferenceAsURL: tc.asURL})
+			common.SetContextKey(c, constant.ContextKeyChannelSetting, dto.ChannelSettings{ImageReferenceAsURL: tc.asURL, PassThroughBodyEnabled: tc.passThrough})
 			request, err := helper.GetAndValidOpenAIImageRequest(c, relayMode)
 			require.NoError(t, err)
 			info := &relaycommon.RelayInfo{Request: request, OriginModelName: "gpt-image-2", RelayMode: relayMode,
@@ -433,25 +439,25 @@ func TestImageHelperSendsReferenceImagesAsURLsWhenChannelRequiresThem(t *testing
 				return
 			}
 			assert.Equal(t, contentType, c.Request.Header.Get("Content-Type"))
-			assert.Equal(t, "application/json", got.contentType)
-			var images []string
-			require.NoError(t, common.Unmarshal([]byte(ojson.GetBytes(got.body, "image").Raw), &images))
+			assert.True(t, strings.HasPrefix(got.contentType, "multipart/form-data"))
+			upstreamForm := httptest.NewRequest(http.MethodPost, got.path, bytes.NewReader(got.body))
+			upstreamForm.Header.Set("Content-Type", got.contentType)
+			require.NoError(t, upstreamForm.ParseMultipartForm(1<<20))
+			t.Cleanup(func() { require.NoError(t, upstreamForm.MultipartForm.RemoveAll()) })
+			assert.Empty(t, upstreamForm.MultipartForm.File)
+			images := upstreamForm.MultipartForm.Value["image"]
 			require.Len(t, images, tc.wantImages)
-			for _, kept := range tc.wantKeptURLs {
-				assert.Contains(t, images, kept)
-			}
+			assert.Equal(t, tc.wantKeptURLs, append([]string(nil), images[:len(tc.wantKeptURLs)]...))
 			for _, image := range images[len(tc.wantKeptURLs):] {
 				assert.True(t, strings.HasPrefix(image, "https://img.example.com/img/"), image)
 			}
 			if !tc.json {
-				assert.True(t, strings.HasPrefix(ojson.GetBytes(got.body, "mask").String(), "https://img.example.com/img/"))
-				assert.Equal(t, "webp", ojson.GetBytes(got.body, "output_format").String())
-				assert.Equal(t, "a cat", ojson.GetBytes(got.body, "prompt").String())
-				assert.Equal(t, "high", ojson.GetBytes(got.body, "complexity").String())
-				assert.Equal(t, "false", ojson.GetBytes(got.body, "svg").Raw)
-				assert.Equal(t, "0", ojson.GetBytes(got.body, "frame_count").Raw)
-				assert.Equal(t, "100", ojson.GetBytes(got.body, "frame_duration_ms").Raw)
-				assert.JSONEq(t, `{"regions":[]}`, ojson.GetBytes(got.body, "markup").Raw)
+				assert.True(t, strings.HasPrefix(upstreamForm.FormValue("mask"), "https://img.example.com/img/"))
+				assert.Equal(t, "webp", upstreamForm.FormValue("output_format"))
+				assert.Equal(t, "a cat", upstreamForm.FormValue("prompt"))
+				assert.Equal(t, "0", upstreamForm.FormValue("output_compression"))
+				assert.Equal(t, "2k", upstreamForm.FormValue("resolution"))
+				assert.Equal(t, "4:3", upstreamForm.FormValue("aspect_ratio"))
 			}
 		})
 	}
