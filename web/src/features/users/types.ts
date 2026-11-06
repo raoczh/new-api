@@ -155,6 +155,33 @@ export interface ManageUserQuotaPayload {
   value: number
 }
 
+export interface UserRechargeRecord {
+  id: string
+  source: 'online' | 'redemption' | 'manual'
+  created_at: number
+  status: string
+  quota: string | null
+  reference: string
+  payment_method?: string
+  operator?: string
+  action?: string
+  before?: number
+  after?: number
+}
+
+export interface UserRechargeHistory {
+  items: UserRechargeRecord[]
+  total: number
+  page: number
+  page_size: number
+  summary: {
+    credited_quota: string
+    debited_quota: string
+    net_quota: string
+    unknown_count: number
+  }
+}
+
 // ============================================================================
 // Dialog Types
 // ============================================================================

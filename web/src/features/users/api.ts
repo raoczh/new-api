@@ -32,6 +32,7 @@ import type {
   ManageUserAction,
   ManageUserQuotaPayload,
   ApiResponse,
+  UserRechargeHistory,
 } from './types'
 
 // A step-up proof is single-use, so the request carrying it must never be
@@ -103,6 +104,21 @@ export async function searchUsers(
 export async function getUser(id: number): Promise<ApiResponse<User>> {
   const res = await api.get(`/api/user/${id}`)
   return res.data
+}
+
+export async function getUserRechargeHistory(
+  userId: number,
+  page: number,
+  pageSize: number,
+  signal?: AbortSignal
+): Promise<UserRechargeHistory> {
+  const response = await api.get<ApiResponse<UserRechargeHistory>>(
+    `/api/user/${userId}/recharge-history`,
+    { params: { p: page, page_size: pageSize }, signal }
+  )
+  const result = requireServerSuccess(response.data)
+  if (!result.data) throw new Error('Failed to load billing history')
+  return result.data
 }
 
 /**

@@ -534,19 +534,21 @@ func SearchUsers(filter UserSearchFilter, startIdx int, num int, sortOptions ...
 	// 构建基础查询
 	query := tx.Unscoped().Model(&User{})
 
-	// 构建搜索条件
-	likeCondition := "username LIKE ? OR email LIKE ? OR display_name LIKE ?"
-	likeArgs := []any{"%" + filter.Keyword + "%", "%" + filter.Keyword + "%", "%" + filter.Keyword + "%"}
-
-	// 尝试将关键字转换为整数ID
-	keywordInt, err := strconv.Atoi(filter.Keyword)
-	if err == nil {
-		// 如果是数字，同时搜索ID和其他字段
-		likeCondition = "id = ? OR " + likeCondition
-		likeArgs = append([]any{keywordInt}, likeArgs...)
+	keyword := strings.ToLower(strings.TrimSpace(filter.Keyword))
+	if keyword != "" {
+		// Always match a literal substring, independently of database collation.
+		// Use an explicit escape character so %, _ and backslashes stay literal.
+		escapedKeyword := strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(keyword)
+		pattern := "%" + escapedKeyword + "%"
+		condition := "LOWER(username) LIKE ? ESCAPE '!' OR LOWER(email) LIKE ? ESCAPE '!' OR LOWER(display_name) LIKE ? ESCAPE '!'"
+		arguments := []any{pattern, pattern, pattern}
+		if userID, parseError := strconv.Atoi(keyword); parseError == nil {
+			condition = "id = ? OR " + condition
+			arguments = append([]any{userID}, arguments...)
+		}
+		query = query.Where("("+condition+")", arguments...)
 	}
 
-	query = query.Where("("+likeCondition+")", likeArgs...)
 	if filter.Group != "" {
 		query = query.Where(commonGroupCol+" = ?", filter.Group)
 	}

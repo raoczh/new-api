@@ -28,6 +28,7 @@ import {
   ShieldAlert,
   Link2,
   CreditCard,
+  History,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -61,6 +62,7 @@ import {
 import { getUserActionMessage } from '../lib'
 import type { User } from '../types'
 import { UserBindingDialog } from './dialogs/user-binding-dialog'
+import { UserRechargeHistoryDialog } from './dialogs/user-recharge-history-dialog'
 import { useUsers } from './users-provider'
 
 const MANAGE_ACTION_TITLES: Record<AdminUserManageAction, string> = {
@@ -88,6 +90,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const [resetTwoFAOpen, setResetTwoFAOpen] = useState(false)
   const [bindingDialogOpen, setBindingDialogOpen] = useState(false)
   const [subscriptionsDialogOpen, setSubscriptionsDialogOpen] = useState(false)
+  const [rechargeHistoryOpen, setRechargeHistoryOpen] = useState(false)
 
   const handleEdit = () => {
     setCurrentRow(user)
@@ -277,6 +280,13 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
         <DropdownMenuSeparator />
 
+        <DropdownMenuItem onClick={() => setRechargeHistoryOpen(true)}>
+          {t('Recharge records')}
+          <DropdownMenuShortcut>
+            <History size={16} />
+          </DropdownMenuShortcut>
+        </DropdownMenuItem>
+
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault()
@@ -354,6 +364,13 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         user={{ id: user.id, username: user.username }}
         onSuccess={triggerRefresh}
       />
+      {rechargeHistoryOpen && (
+        <UserRechargeHistoryDialog
+          key={user.id}
+          user={user}
+          onOpenChange={setRechargeHistoryOpen}
+        />
+      )}
     </div>
   )
 }

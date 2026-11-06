@@ -315,6 +315,182 @@ func TestManageUserQuotaRecordsTopupAndAudit(t *testing.T) {
 	}
 }
 
+func TestUserRechargeHistory(t *testing.T) {
+	database := setupManageUserTestDB(t)
+	require.NoError(t, database.AutoMigrate(&model.TopUp{}, &model.Redemption{}))
+	previousQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 500000
+	t.Cleanup(func() { common.QuotaPerUnit = previousQuotaPerUnit })
+	user := model.User{Username: "history-owner", Role: common.RoleCommonUser, AffCode: "history-owner"}
+	require.NoError(t, database.Create(&user).Error)
+	createQuotaTestOperator(t, database, common.RoleRootUser)
+	for _, operation := range []struct {
+		mode  string
+		value int
+	}{{"add", 3000000}, {"subtract", 1000000}, {"override", 1000000}, {"override", 1000000}} {
+		response := performManageUserRequest(t, fmt.Sprintf(`{"id":%d,"action":"add_quota","mode":%q,"value":%d}`, user.Id, operation.mode, operation.value))
+		require.Contains(t, response.Body.String(), `"success":true`)
+	}
+	oldTimestamp := common.GetTimestamp() - 60*24*60*60
+	for _, order := range []model.TopUp{
+		{UserId: user.Id, Amount: 2, Money: 14, TradeNo: "old-epay", PaymentProvider: model.PaymentProviderEpay, Status: common.TopUpStatusSuccess},
+		{UserId: user.Id, Amount: 999, Money: 1.5, TradeNo: "stripe", PaymentProvider: model.PaymentProviderStripe, Status: common.TopUpStatusSuccess},
+		{UserId: user.Id, Amount: 250000, Money: 3, TradeNo: "creem", PaymentProvider: model.PaymentProviderCreem, Status: common.TopUpStatusSuccess},
+		{UserId: user.Id, Amount: 100, TradeNo: "pending", Status: common.TopUpStatusPending},
+		{UserId: user.Id, Amount: 100, TradeNo: "expired", Status: common.TopUpStatusExpired},
+		{UserId: user.Id, Amount: 0, Money: 20, TradeNo: "subscription", Status: common.TopUpStatusSuccess},
+		{UserId: 9999, Amount: 10, TradeNo: "other-user", Status: common.TopUpStatusSuccess},
+	} {
+		order.CreateTime = oldTimestamp
+		require.NoError(t, database.Create(&order).Error)
+	}
+	redemption := model.Redemption{
+		Key: "history-secret-code", Name: "Redeemed credit", Quota: 500000,
+		UsedUserId: user.Id, Status: common.RedemptionCodeStatusUsed, RedeemedTime: oldTimestamp,
+	}
+	require.NoError(t, database.Create(&redemption).Error)
+	require.NoError(t, database.Delete(&redemption).Error)
+	require.NoError(t, database.Create(&model.Redemption{
+		Key: "unused-secret-code", UsedUserId: user.Id, Quota: 999999, Status: common.RedemptionCodeStatusEnabled,
+	}).Error)
+	// These duplicate business/audit messages must not count the same recharge twice.
+	model.RecordLog(user.Id, model.LogTypeTopup, common.NewMessage("Online recharge"))
+
+	var firstPage model.UserRechargeHistory
+	for _, query := range []string{"?p=1&page_size=2", "?p=2&page_size=2", "?p=9223372036854775807&page_size=100"} {
+		recorder := httptest.NewRecorder()
+		requestContext, _ := gin.CreateTestContext(recorder)
+		requestContext.Request = httptest.NewRequest(http.MethodGet, "/api/user/"+strconv.Itoa(user.Id)+"/recharge-history"+query, nil)
+		requestContext.Params = gin.Params{{Key: "id", Value: strconv.Itoa(user.Id)}}
+		requestContext.Set("role", common.RoleRootUser)
+		GetUserRechargeHistory(requestContext)
+		var response struct {
+			Success bool                      `json:"success"`
+			Data    model.UserRechargeHistory `json:"data"`
+		}
+		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+		require.True(t, response.Success, recorder.Body.String())
+		assert.Equal(t, 10, response.Data.Total)
+		assert.Equal(t, model.UserRechargeSummary{CreditedQuota: "5500000", DebitedQuota: "2000000", NetQuota: "3500000"}, response.Data.Summary)
+		assert.NotContains(t, recorder.Body.String(), "secret-code")
+		assert.NotContains(t, recorder.Body.String(), "root_info")
+		if response.Data.Page == 1 {
+			firstPage = response.Data
+			require.Len(t, firstPage.Items, 2)
+			assert.Equal(t, "manual", firstPage.Items[0].Source)
+			assert.Equal(t, "root-operator", firstPage.Items[0].Operator)
+		} else if response.Data.Page == 2 {
+			require.Len(t, response.Data.Items, 2)
+			assert.NotEqual(t, firstPage.Items[0].ID, response.Data.Items[0].ID)
+		} else {
+			assert.Empty(t, response.Data.Items)
+		}
+	}
+
+	history, err := model.GetUserRechargeHistory(t.Context(), user.Id, &common.PageInfo{Page: 1, PageSize: 100})
+	require.NoError(t, err)
+	amounts := make(map[string]string)
+	for _, record := range history.Items {
+		if record.Source != "manual" {
+			require.NotNil(t, record.Quota)
+			amounts[record.Reference] = *record.Quota
+		}
+	}
+	assert.Equal(t, "1000000", amounts["old-epay"])
+	assert.Equal(t, "750000", amounts["stripe"])
+	assert.Equal(t, "250000", amounts["creem"])
+	assert.Equal(t, "500000", amounts["Redeemed credit"])
+	assert.NotContains(t, amounts, "subscription")
+	assert.NotContains(t, amounts, "other-user")
+
+	for _, testCase := range []struct {
+		name, targetID, query string
+		role                  int
+	}{
+		{"ordinary user denied", strconv.Itoa(user.Id), "", common.RoleCommonUser},
+		{"admin cannot read root", "9999", "", common.RoleAdminUser},
+		{"invalid target", "0", "", common.RoleRootUser},
+		{"missing target", "123456", "", common.RoleRootUser},
+		{"negative page", strconv.Itoa(user.Id), "?p=-1", common.RoleRootUser},
+		{"negative page size", strconv.Itoa(user.Id), "?page_size=-1", common.RoleRootUser},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			requestContext, _ := gin.CreateTestContext(recorder)
+			requestContext.Request = httptest.NewRequest(http.MethodGet, "/api/user/"+testCase.targetID+"/recharge-history"+testCase.query, nil)
+			requestContext.Params = gin.Params{{Key: "id", Value: testCase.targetID}}
+			requestContext.Set("role", testCase.role)
+			GetUserRechargeHistory(requestContext)
+			assert.NotContains(t, recorder.Body.String(), `"success":true`)
+		})
+	}
+}
+
+func TestUserRechargeHistoryLegacyAmountsAndExactTotals(t *testing.T) {
+	database := setupManageUserTestDB(t)
+	require.NoError(t, database.AutoMigrate(&model.TopUp{}, &model.Redemption{}))
+	for _, tradeNo := range []string{"large-first", "large-second"} {
+		require.NoError(t, database.Create(&model.TopUp{
+			UserId: 1, Amount: common.MaxWalletQuota, TradeNo: tradeNo,
+			PaymentProvider: model.PaymentProviderCreem, Status: common.TopUpStatusSuccess,
+		}).Error)
+	}
+	for _, metadata := range []string{
+		`{"op":{"action":"user.quota_add","params":{"quota":125}}}`,
+		`{"op":{"action":"user.quota_subtract","params":{"quota":25}}}`,
+		`{"op":{"action":"user.quota_override","params":{}}}`,
+	} {
+		require.NoError(t, model.LOG_DB.Create(&model.Log{UserId: 1, Type: model.LogTypeTopup, Other: metadata}).Error)
+	}
+	history, err := model.GetUserRechargeHistory(t.Context(), 1, &common.PageInfo{Page: 1, PageSize: 100})
+	require.NoError(t, err)
+	assert.Equal(t, model.UserRechargeSummary{
+		CreditedQuota: "18014398509482107", DebitedQuota: "25", NetQuota: "18014398509482082", UnknownCount: 1,
+	}, history.Summary)
+	assert.Len(t, history.Items, 5)
+
+	emptyHistory, err := model.GetUserRechargeHistory(t.Context(), 2, &common.PageInfo{Page: 1, PageSize: 10})
+	require.NoError(t, err)
+	assert.Empty(t, emptyHistory.Items)
+	assert.Equal(t, model.UserRechargeSummary{CreditedQuota: "0", DebitedQuota: "0", NetQuota: "0"}, emptyHistory.Summary)
+
+	require.NoError(t, model.LOG_DB.Migrator().DropTable(&model.Log{}))
+	_, err = model.GetUserRechargeHistory(t.Context(), 1, &common.PageInfo{Page: 1, PageSize: 10})
+	assert.Error(t, err, "do not silently return a partial total when the log store fails")
+}
+
+func TestUserRechargeHistoryClickHouse(t *testing.T) {
+	dsn := os.Getenv("TEST_RECHARGE_CLICKHOUSE_DSN")
+	if dsn == "" {
+		t.Skip("TEST_RECHARGE_CLICKHOUSE_DSN is not configured")
+	}
+	database := setupManageUserTestDB(t)
+	require.NoError(t, database.AutoMigrate(&model.TopUp{}, &model.Redemption{}))
+	_, isolatedDSN := newAuditTestDatabase(t, "clickhouse", dsn)
+	t.Setenv("LOG_SQL_DSN", isolatedDSN)
+	previousMaster := common.IsMasterNode
+	common.IsMasterNode = true
+	t.Cleanup(func() { common.IsMasterNode = previousMaster })
+	require.NoError(t, model.InitLogDB())
+	logConnection, err := model.LOG_DB.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = logConnection.Close() })
+	var version string
+	require.NoError(t, model.LOG_DB.Raw("SELECT version()").Scan(&version).Error)
+	t.Logf("log database: ClickHouse %s", version)
+	user := model.User{Username: "clickhouse-history", Role: common.RoleCommonUser, AffCode: "clickhouse-history"}
+	require.NoError(t, database.Create(&user).Error)
+	createQuotaTestOperator(t, database, common.RoleRootUser)
+	response := performManageUserRequest(t, fmt.Sprintf(`{"id":%d,"action":"add_quota","mode":"add","value":500000}`, user.Id))
+	require.Contains(t, response.Body.String(), `"success":true`)
+	history, err := model.GetUserRechargeHistory(t.Context(), user.Id, &common.PageInfo{Page: 1, PageSize: 10})
+	require.NoError(t, err)
+	require.Len(t, history.Items, 1)
+	assert.Equal(t, "manual", history.Items[0].Source)
+	assert.Equal(t, "root-operator", history.Items[0].Operator)
+	assert.Equal(t, model.UserRechargeSummary{CreditedQuota: "500000", DebitedQuota: "0", NetQuota: "500000"}, history.Summary)
+}
+
 func TestManageUserQuotaFailuresDoNotRecordTopup(t *testing.T) {
 	for _, tc := range []struct {
 		name, mode string
