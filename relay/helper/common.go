@@ -145,6 +145,9 @@ func FlushWriter(c *gin.Context) (err error) {
 		return nil
 	}
 
+	if discardStreamOutput(c) {
+		return nil
+	}
 	if requestContextDone(c) {
 		return fmt.Errorf("request context done: %w", c.Request.Context().Err())
 	}
@@ -161,7 +164,11 @@ func FlushWriter(c *gin.Context) (err error) {
 	var writer http.ResponseWriter = c.Writer
 	for {
 		if flusher, ok := writer.(interface{ FlushError() error }); ok {
-			return flusher.FlushError()
+			err := flusher.FlushError()
+			if err != nil && discardStreamOutput(c) {
+				return nil
+			}
+			return err
 		}
 		unwrapper, ok := writer.(interface{ Unwrap() http.ResponseWriter })
 		if !ok {
@@ -174,6 +181,17 @@ func FlushWriter(c *gin.Context) (err error) {
 
 func requestContextDone(c *gin.Context) bool {
 	return c != nil && c.Request != nil && c.Request.Context().Err() != nil
+}
+
+// Discarding is enabled only by StreamScannerHandler. A cancelled request
+// outside that scope still returns its original write/cancellation error.
+func discardStreamOutput(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	value, _ := c.Get("stream_drain_state")
+	state, _ := value.(*streamDrainState)
+	return state.discardOutput()
 }
 
 func SetEventStreamHeaders(c *gin.Context) {
@@ -194,7 +212,7 @@ func SetEventStreamHeaders(c *gin.Context) {
 }
 
 func ClaudeData(c *gin.Context, resp dto.ClaudeResponse) error {
-	if requestContextDone(c) {
+	if discardStreamOutput(c) || requestContextDone(c) {
 		return nil
 	}
 
@@ -210,7 +228,7 @@ func ClaudeData(c *gin.Context, resp dto.ClaudeResponse) error {
 }
 
 func ClaudeChunkData(c *gin.Context, resp dto.ClaudeResponse, data string) {
-	if requestContextDone(c) {
+	if discardStreamOutput(c) || requestContextDone(c) {
 		return
 	}
 
@@ -220,16 +238,25 @@ func ClaudeChunkData(c *gin.Context, resp dto.ClaudeResponse, data string) {
 }
 
 func ResponseChunkData(c *gin.Context, resp dto.ResponsesStreamResponse, data string) error {
+	if discardStreamOutput(c) {
+		return nil
+	}
 	if requestContextDone(c) {
 		return fmt.Errorf("request context done: %w", c.Request.Context().Err())
 	}
 
 	event := common.CustomEvent{Data: fmt.Sprintf("event: %s\n", resp.Type)}
 	if err := event.Render(c.Writer); err != nil {
+		if discardStreamOutput(c) {
+			return nil
+		}
 		return err
 	}
 	event.Data = fmt.Sprintf("data: %s", data)
 	if err := event.Render(c.Writer); err != nil {
+		if discardStreamOutput(c) {
+			return nil
+		}
 		return err
 	}
 	return FlushWriter(c)
@@ -240,6 +267,9 @@ func StringData(c *gin.Context, str string) error {
 		return errors.New("context or writer is nil")
 	}
 
+	if discardStreamOutput(c) {
+		return nil
+	}
 	if requestContextDone(c) {
 		return fmt.Errorf("request context done: %w", c.Request.Context().Err())
 	}

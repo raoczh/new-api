@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarProvider } from '@/components/ui/sidebar'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { AppHeader } from './app-header'
 import { AppSidebar } from './app-sidebar'
@@ -28,6 +29,10 @@ type AuthenticatedLayoutProps = {
 }
 
 export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
+  const signedIn = useAuthStore((state) => !!state.auth.user)
+  // Unmount pages on sign-out so their queries cannot refetch without credentials.
+  if (!signedIn) return null
+
   return (
     <SidebarProvider
       defaultOpen

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MoeForge/moego/ojson"
 	"github.com/QuantumNous/new-api/common"
 	taskdto "github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
@@ -20,16 +21,16 @@ import (
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/hot"
-	"github.com/tidwall/gjson"
 )
 
 const (
-	ginKeyChannelAffinityCacheKey   = "channel_affinity_cache_key"
-	ginKeyChannelAffinityTTLSeconds = "channel_affinity_ttl_seconds"
-	ginKeyChannelAffinityMeta       = "channel_affinity_meta"
-	ginKeyChannelAffinityLogInfo    = "channel_affinity_log_info"
-	ginKeyChannelAffinitySkipRetry  = "channel_affinity_skip_retry_on_failure"
-	ginKeyChannelAffinityFallback   = "channel_affinity_fallback_channel"
+	ginKeyChannelAffinityCacheKey    = "channel_affinity_cache_key"
+	ginKeyChannelAffinityTTLSeconds  = "channel_affinity_ttl_seconds"
+	ginKeyChannelAffinityMeta        = "channel_affinity_meta"
+	ginKeyChannelAffinityLogInfo     = "channel_affinity_log_info"
+	ginKeyChannelAffinitySkipRetry   = "channel_affinity_skip_retry_on_failure"
+	ginKeyChannelAffinityFallback    = "channel_affinity_fallback_channel"
+	ginKeyChannelAffinityRetryOffset = "channel_affinity_retry_offset"
 
 	channelAffinityCacheNamespace           = "new-api:channel_affinity:v1"
 	channelAffinityUsageCacheStatsNamespace = "new-api:channel_affinity_usage_cache_stats:v1"
@@ -325,12 +326,12 @@ func extractChannelAffinityValue(c *gin.Context, src operation_setting.ChannelAf
 		if err != nil || len(body) == 0 {
 			return ""
 		}
-		res := gjson.GetBytes(body, src.Path)
+		res := ojson.GetBytes(body, src.Path)
 		if !res.Exists() {
 			return ""
 		}
 		switch res.Type {
-		case gjson.String, gjson.Number, gjson.True, gjson.False:
+		case ojson.String, ojson.Number, ojson.True, ojson.False:
 			return strings.TrimSpace(res.String())
 		default:
 			return strings.TrimSpace(res.Raw)

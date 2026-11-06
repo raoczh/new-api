@@ -42,6 +42,7 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { AppHeader } from '../app-header'
 import { AppSidebar } from '../app-sidebar'
+import { AuthenticatedLayout } from '../authenticated-layout'
 
 let client: QueryClient
 let mediaEvents: EventTarget
@@ -125,6 +126,39 @@ async function renderNavigation(path = '/keys', role = 1) {
   )
   return router
 }
+
+it('unmounts workspace pages immediately when the user signs out', async () => {
+  useAuthStore
+    .getState()
+    .auth.setUser({ id: 1, username: 'navigation-fixture', role: 1 })
+  const rootRoute = createRootRoute({
+    component: () => (
+      <AuthenticatedLayout>
+        <div>Authenticated workspace fixture</div>
+      </AuthenticatedLayout>
+    ),
+  })
+  const router = createRouter({
+    routeTree: rootRoute,
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  })
+  await router.load()
+  render(
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  )
+  expect(
+    await screen.findByText('Authenticated workspace fixture')
+  ).toBeInTheDocument()
+
+  act(() => useAuthStore.getState().auth.reset())
+
+  expect(
+    screen.queryByText('Authenticated workspace fixture')
+  ).not.toBeInTheDocument()
+  expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
+})
 
 it('shows contact methods from system settings and confirms before signing out', async () => {
   client.setQueryData(['status'], {

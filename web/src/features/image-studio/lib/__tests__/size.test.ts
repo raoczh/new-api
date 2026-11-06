@@ -42,12 +42,21 @@ test('the 2K and 4K tiers pin the long side', () => {
 })
 
 test('every ratio-derived size is a multiple of 16', () => {
-  for (const ratio of ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4', '21:9']) {
+  for (const ratio of [
+    '1:1',
+    '3:2',
+    '2:3',
+    '16:9',
+    '9:16',
+    '4:3',
+    '3:4',
+    '21:9',
+  ]) {
     for (const tier of ['1K', '2K', '4K'] as const) {
       const parsed = parseImageSize(calculateImageSize(tier, ratio) ?? '')
-      expect(parsed).not.toBeNull()
-      expect(parsed?.width % 16).toBe(0)
-      expect(parsed?.height % 16).toBe(0)
+      if (parsed === null) throw new Error('Expected a valid image size')
+      expect(parsed.width % 16).toBe(0)
+      expect(parsed.height % 16).toBe(0)
     }
   }
 })
@@ -57,15 +66,16 @@ test('an unreadable ratio yields no size instead of a guess', () => {
   expect(calculateImageSize('1K', '0:9')).toBeNull()
 })
 
-test('custom sizes snap to multiples of 16 and report an adjustment', () => {
+test('custom sizes within bounds snap to multiples of 16 without a bounds adjustment', () => {
   const exact = clampImageSize(1024, 768)
   expect(exact).toEqual({ size: '1024x768', adjusted: false })
 
   const rounded = clampImageSize(1001, 769)
-  expect(rounded?.adjusted).toBe(true)
+  expect(rounded).toEqual({ size: '1008x768', adjusted: false })
   const parsed = parseImageSize(rounded?.size ?? '')
-  expect(parsed?.width % 16).toBe(0)
-  expect(parsed?.height % 16).toBe(0)
+  if (parsed === null) throw new Error('Expected a valid image size')
+  expect(parsed.width % 16).toBe(0)
+  expect(parsed.height % 16).toBe(0)
 })
 
 test('a huge or extreme custom size is pulled back into range', () => {
@@ -74,18 +84,21 @@ test('a huge or extreme custom size is pulled back into range', () => {
 
   const panoramic = clampImageSize(4000, 500)
   const parsed = parseImageSize(panoramic?.size ?? '')
-  expect(parsed).not.toBeNull()
+  if (parsed === null) throw new Error('Expected a valid image size')
   expect(
-    Math.max(parsed!.width, parsed!.height) / Math.min(parsed!.width, parsed!.height)
+    Math.max(parsed.width, parsed.height) /
+      Math.min(parsed.width, parsed.height)
   ).toBeLessThanOrEqual(3)
-  expect(parsed!.width * parsed!.height).toBeLessThanOrEqual(8_294_400)
+  expect(parsed.width * parsed.height).toBeLessThanOrEqual(8_294_400)
 })
 
 test('a custom size below the minimum is scaled up', () => {
   const tiny = clampImageSize(100, 100)
   const parsed = parseImageSize(tiny?.size ?? '')
   expect(parsed?.width).toBe(parsed?.height)
-  expect((parsed?.width ?? 0) * (parsed?.height ?? 0)).toBeGreaterThanOrEqual(655_360)
+  expect((parsed?.width ?? 0) * (parsed?.height ?? 0)).toBeGreaterThanOrEqual(
+    655_360
+  )
   expect(tiny?.adjusted).toBe(true)
 })
 
@@ -95,9 +108,10 @@ test('unusable custom input returns null', () => {
 })
 
 test('a preset size is recognised together with its tier and ratio', () => {
-  expect(
-    findSizePreset('2048x1152', ['1K', '2K', '4K'], ['16:9'])
-  ).toEqual({ tier: '2K', ratio: '16:9' })
+  expect(findSizePreset('2048x1152', ['1K', '2K', '4K'], ['16:9'])).toEqual({
+    tier: '2K',
+    ratio: '16:9',
+  })
   expect(findSizePreset('1000x1000', ['1K', '2K', '4K'], ['1:1'])).toBeNull()
   expect(findSizePreset('auto', ['1K'], ['1:1'])).toBeNull()
 })

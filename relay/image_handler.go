@@ -293,6 +293,11 @@ func useImageReferenceURLs(c *gin.Context, info *relaycommon.RelayInfo, request 
 				return nil, invalid(fmt.Sprintf("failed to parse image edit form request: %s", err.Error()))
 			}
 		}
+		if len(form.File["markup"]) > 0 {
+			// Keep main's native multipart support until the URL-based provider's
+			// markup contract is known; never silently discard an uploaded file.
+			return func() {}, nil
+		}
 		readFile := func(header *multipart.FileHeader) (string, *types.NewAPIError) {
 			file, err := header.Open()
 			if err != nil {
@@ -337,11 +342,16 @@ func useImageReferenceURLs(c *gin.Context, info *relaycommon.RelayInfo, request 
 		request.ResponseFormat = cmp.Or(values.Get("response_format"), request.ResponseFormat)
 		for field, target := range map[string]*json.RawMessage{
 			"background":         &request.Background,
+			"complexity":         &request.Complexity,
+			"frame_count":        &request.FrameCount,
+			"frame_duration_ms":  &request.FrameDurationMs,
 			"input_fidelity":     &request.InputFidelity,
+			"markup":             &request.Markup,
 			"moderation":         &request.Moderation,
 			"output_compression": &request.OutputCompression,
 			"output_format":      &request.OutputFormat,
 			"partial_images":     &request.PartialImages,
+			"svg":                &request.Svg,
 			"user":               &request.User,
 		} {
 			value := values.Get(field)
@@ -354,6 +364,13 @@ func useImageReferenceURLs(c *gin.Context, info *relaycommon.RelayInfo, request 
 				}
 				*target = json.RawMessage(value)
 				continue
+			}
+			if field == "complexity" || field == "frame_count" || field == "frame_duration_ms" || field == "markup" || field == "svg" {
+				var parsedValue any
+				if common.UnmarshalJsonStr(value, &parsedValue) == nil {
+					*target = json.RawMessage(value)
+					continue
+				}
 			}
 			*target, _ = common.Marshal(value)
 		}

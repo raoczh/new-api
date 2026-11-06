@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/MoeForge/moego/ojson"
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -27,7 +28,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tidwall/gjson"
 )
 
 type imageReservation struct {
@@ -116,7 +116,7 @@ func TestImageRequestReservesFinalQuantityBeforeUpstream(t *testing.T) {
 			assert.Equal(t, http.StatusBadGateway, apiErr.StatusCode)
 			require.Len(t, received, 1)
 			body := <-received
-			assert.Equal(t, int64(tc.count), gjson.GetBytes(body, "n").Int())
+			assert.Equal(t, int64(tc.count), ojson.GetBytes(body, "n").Int())
 			assert.Equal(t, tc.count*20000, info.PriceData.QuotaToPreConsume)
 			assert.GreaterOrEqual(t, reservation.held, info.PriceData.QuotaToPreConsume)
 			assert.Nil(t, info.BillingImageCount)
@@ -329,13 +329,23 @@ func TestImageHelperSendsReferenceImagesAsURLsWhenChannelRequiresThem(t *testing
 	settings.StorageDir, settings.PublicBaseURL = t.TempDir(), "https://img.example.com"
 	// Minimal PNG signature plus IHDR chunk is enough for content sniffing.
 	png := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R', 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0}
-	editForm := func() (string, string) {
+	editForm := func(withMarkup bool) (string, string) {
 		var body bytes.Buffer
 		writer := multipart.NewWriter(&body)
 		require.NoError(t, writer.WriteField("model", "gpt-image-2"))
 		require.NoError(t, writer.WriteField("prompt", "a cat"))
 		require.NoError(t, writer.WriteField("output_format", "webp"))
-		for _, field := range []string{"image[]", "image[]", "mask"} {
+		require.NoError(t, writer.WriteField("complexity", "high"))
+		require.NoError(t, writer.WriteField("svg", "false"))
+		require.NoError(t, writer.WriteField("frame_count", "0"))
+		require.NoError(t, writer.WriteField("frame_duration_ms", "100"))
+		fileFields := []string{"image[]", "image[]", "mask"}
+		if withMarkup {
+			fileFields = append(fileFields, "markup")
+		} else {
+			require.NoError(t, writer.WriteField("markup", `{"regions":[]}`))
+		}
+		for _, field := range fileFields {
 			part, err := writer.CreateFormFile(field, "ref.png")
 			require.NoError(t, err)
 			_, err = part.Write(png)
@@ -348,6 +358,7 @@ func TestImageHelperSendsReferenceImagesAsURLsWhenChannelRequiresThem(t *testing
 	for _, tc := range []struct {
 		name, path   string
 		asURL, json  bool
+		markup       bool
 		wantPath     string
 		wantImages   int
 		wantKeptURLs []string
@@ -355,6 +366,7 @@ func TestImageHelperSendsReferenceImagesAsURLsWhenChannelRequiresThem(t *testing
 		{name: "multipart edit becomes JSON generation", path: "/v1/images/edits", asURL: true, wantPath: "/v1/images/generations", wantImages: 2},
 		{name: "inline references are published", path: "/v1/images/generations", asURL: true, json: true, wantPath: "/v1/images/generations", wantImages: 2, wantKeptURLs: []string{"https://cdn.example.com/a.png"}},
 		{name: "switch off keeps the multipart edit", path: "/v1/images/edits", wantPath: "/v1/images/edits"},
+		{name: "markup file retains native edit support with URL mode enabled", path: "/v1/images/edits", asURL: true, markup: true, wantPath: "/v1/images/edits"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			type upstreamRequest struct {
@@ -373,7 +385,7 @@ func TestImageHelperSendsReferenceImagesAsURLsWhenChannelRequiresThem(t *testing
 			}))
 			t.Cleanup(upstream.Close)
 
-			body, contentType := editForm()
+			body, contentType := editForm(tc.markup)
 			relayMode := relayconstant.RelayModeImagesEdits
 			if tc.json {
 				body = `{"model":"gpt-image-2","prompt":"a cat","image":["https://cdn.example.com/a.png","data:image/png;base64,` +
@@ -403,14 +415,27 @@ func TestImageHelperSendsReferenceImagesAsURLsWhenChannelRequiresThem(t *testing
 			// A retry on another channel must see the client's request again.
 			assert.Equal(t, relayMode, info.RelayMode)
 			assert.Equal(t, tc.path, info.RequestURLPath)
-			if !tc.asURL {
+			if !tc.asURL || tc.markup {
 				assert.True(t, strings.HasPrefix(got.contentType, "multipart/form-data"))
+				if tc.markup {
+					upstreamForm := httptest.NewRequest(http.MethodPost, got.path, bytes.NewReader(got.body))
+					upstreamForm.Header.Set("Content-Type", got.contentType)
+					require.NoError(t, upstreamForm.ParseMultipartForm(1<<20))
+					t.Cleanup(func() { require.NoError(t, upstreamForm.MultipartForm.RemoveAll()) })
+					require.Len(t, upstreamForm.MultipartForm.File["markup"], 1)
+					markupFile, openErr := upstreamForm.MultipartForm.File["markup"][0].Open()
+					require.NoError(t, openErr)
+					markupBytes, readErr := io.ReadAll(markupFile)
+					require.NoError(t, markupFile.Close())
+					require.NoError(t, readErr)
+					assert.Equal(t, png, markupBytes)
+				}
 				return
 			}
 			assert.Equal(t, contentType, c.Request.Header.Get("Content-Type"))
 			assert.Equal(t, "application/json", got.contentType)
 			var images []string
-			require.NoError(t, common.Unmarshal([]byte(gjson.GetBytes(got.body, "image").Raw), &images))
+			require.NoError(t, common.Unmarshal([]byte(ojson.GetBytes(got.body, "image").Raw), &images))
 			require.Len(t, images, tc.wantImages)
 			for _, kept := range tc.wantKeptURLs {
 				assert.Contains(t, images, kept)
@@ -419,9 +444,14 @@ func TestImageHelperSendsReferenceImagesAsURLsWhenChannelRequiresThem(t *testing
 				assert.True(t, strings.HasPrefix(image, "https://img.example.com/img/"), image)
 			}
 			if !tc.json {
-				assert.True(t, strings.HasPrefix(gjson.GetBytes(got.body, "mask").String(), "https://img.example.com/img/"))
-				assert.Equal(t, "webp", gjson.GetBytes(got.body, "output_format").String())
-				assert.Equal(t, "a cat", gjson.GetBytes(got.body, "prompt").String())
+				assert.True(t, strings.HasPrefix(ojson.GetBytes(got.body, "mask").String(), "https://img.example.com/img/"))
+				assert.Equal(t, "webp", ojson.GetBytes(got.body, "output_format").String())
+				assert.Equal(t, "a cat", ojson.GetBytes(got.body, "prompt").String())
+				assert.Equal(t, "high", ojson.GetBytes(got.body, "complexity").String())
+				assert.Equal(t, "false", ojson.GetBytes(got.body, "svg").Raw)
+				assert.Equal(t, "0", ojson.GetBytes(got.body, "frame_count").Raw)
+				assert.Equal(t, "100", ojson.GetBytes(got.body, "frame_duration_ms").Raw)
+				assert.JSONEq(t, `{"regions":[]}`, ojson.GetBytes(got.body, "markup").Raw)
 			}
 		})
 	}

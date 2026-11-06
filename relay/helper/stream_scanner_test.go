@@ -216,15 +216,36 @@ func TestStreamScannerHandler_OrderPreserved(t *testing.T) {
 func TestStreamScannerHandler_DoneStopsScanner(t *testing.T) {
 	t.Parallel()
 
-	body := buildSSEBody(50) + "data: should_not_appear\n"
-	c, resp, info := setupStreamTest(t, strings.NewReader(body))
+	for _, test := range []struct {
+		name string
+		line string
+		want []string
+	}{
+		{name: "bare", line: "[DONE]", want: []string{"before"}},
+		{name: "bare with whitespace", line: " \t[DONE] \t\r", want: []string{"before"}},
+		{name: "data prefixed", line: "data: [DONE]", want: []string{"before"}},
+		{name: "data without space", line: "data:[DONE]", want: []string{"before"}},
+		{name: "data with whitespace", line: "data: \t[DONE] \t\r", want: []string{"before"}},
+		{name: "bare prefix is not done", line: "[DONE]extra", want: []string{"before", "after"}},
+		{name: "data prefix is not done", line: "data: [DONE]extra", want: []string{"before", "[DONE]extra", "after"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			body := "data: before\n" + test.line + "\ndata: after\ndata: [DONE]\n"
+			c, resp, info := setupStreamTest(t, strings.NewReader(body))
+			info.DisablePing = true
 
-	var count atomic.Int64
-	StreamScannerHandler(c, resp, info, func(data string, sr *StreamResult) {
-		count.Add(1)
-	})
+			var received []string
+			StreamScannerHandler(c, resp, info, func(data string, _ *StreamResult) {
+				received = append(received, data)
+			})
 
-	assert.Equal(t, int64(50), count.Load(), "data after [DONE] must not be processed")
+			assert.Equal(t, test.want, received)
+			require.NotNil(t, info.StreamStatus)
+			assert.Equal(t, relaycommon.StreamEndReasonDone, info.StreamStatus.EndReason)
+			assert.NoError(t, info.StreamStatus.EndError)
+			assert.Equal(t, len(test.want), info.ReceivedResponseCount)
+		})
+	}
 }
 
 func TestStreamScannerHandler_StopStopsStream(t *testing.T) {
@@ -286,12 +307,9 @@ func TestStreamScannerHandler_DataWithExtraSpaces(t *testing.T) {
 	assert.Equal(t, "{\"trimmed\":true}", got)
 }
 
-// TestStreamScannerHandler_ClientCancelAbortsUpstreamAndReturns pins the
-// disconnect contract: when the client goes away, the handler must return
-// promptly (all goroutines joined, so the gin.Context can never leak into a
-// pooled reuse), the upstream body must be closed to stop token generation,
-// and no data received after the disconnect may be processed or written.
-func TestStreamScannerHandler_ClientCancelAbortsUpstreamAndReturns(t *testing.T) {
+// Cancellation stops client output, not the parsing of already-started work.
+// The handler still joins every goroutine before releasing its Gin context.
+func TestStreamScannerHandler_ClientCancelDrainsWithoutWriting(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -317,7 +335,7 @@ func TestStreamScannerHandler_ClientCancelAbortsUpstreamAndReturns(t *testing.T)
 	go func() {
 		StreamScannerHandler(c, resp, info, func(data string, sr *StreamResult) {
 			count.Add(1)
-			_ = StringData(c, data)
+			assert.NoError(t, StringData(c, data))
 			if data == "first" {
 				close(firstHandled)
 			}
@@ -336,20 +354,18 @@ func TestStreamScannerHandler_ClientCancelAbortsUpstreamAndReturns(t *testing.T)
 
 	cancel()
 
-	// The handler must return without any further upstream input: cleanup
-	// closes resp.Body, which unblocks the scanner goroutine.
+	_, err = fmt.Fprint(pw, "data: second\n\ndata: [DONE]\n\n")
+	require.NoError(t, err, "upstream must remain readable after cancellation")
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("handler did not return after client disconnect")
+		t.Fatal("handler did not return after upstream completion")
 	}
 
-	// Upstream read side must be closed so the provider stops generating
-	// (and billing) for a request nobody is listening to.
-	_, err = fmt.Fprint(pw, "data: second\n")
-	require.ErrorIs(t, err, io.ErrClosedPipe, "upstream body should be closed after client disconnect")
+	_, err = fmt.Fprint(pw, "data: after_done\n")
+	require.ErrorIs(t, err, io.ErrClosedPipe, "upstream body must be closed after completion")
 
-	assert.Equal(t, int64(1), count.Load(), "no chunk after disconnect should be processed")
+	assert.Equal(t, int64(2), count.Load(), "usage callbacks must continue after disconnect")
 	require.NotNil(t, info.StreamStatus)
 	assert.Equal(t, relaycommon.StreamEndReasonClientGone, info.StreamStatus.EndReason)
 
@@ -360,7 +376,7 @@ func TestStreamScannerHandler_ClientCancelAbortsUpstreamAndReturns(t *testing.T)
 
 // ---------- Ping tests ----------
 
-func TestStreamScannerHandler_PingSentDuringSlowUpstream(t *testing.T) {
+func TestStreamScannerHandler_NoPingDuringActiveUpstream(t *testing.T) {
 	setting := operation_setting.GetGeneralSetting()
 	oldEnabled := setting.PingIntervalEnabled
 	oldSeconds := setting.PingIntervalSeconds
@@ -407,8 +423,43 @@ func TestStreamScannerHandler_PingSentDuringSlowUpstream(t *testing.T) {
 
 	body := recorder.Body.String()
 	pingCount := strings.Count(body, ": PING")
-	assert.GreaterOrEqual(t, pingCount, 1,
-		"expected at least 1 ping during slow stream with 1s interval; got %d", pingCount)
+	assert.Zero(t, pingCount, "400ms upstream activity must postpone the 1s idle ping")
+}
+
+func TestStreamScannerHandler_PingDuringUpstreamIdle(t *testing.T) {
+	settings := operation_setting.GetGeneralSetting()
+	previousEnabled, previousInterval := settings.PingIntervalEnabled, settings.PingIntervalSeconds
+	settings.PingIntervalEnabled, settings.PingIntervalSeconds = true, 1
+	t.Cleanup(func() {
+		settings.PingIntervalEnabled, settings.PingIntervalSeconds = previousEnabled, previousInterval
+	})
+	reader, writer := io.Pipe()
+	defer reader.Close()
+	defer writer.Close()
+	recorder := &headerCommitWriter{ResponseRecorder: httptest.NewRecorder(), headerStarted: make(chan struct{})}
+	requestContext, _ := gin.CreateTestContext(recorder)
+	requestContext.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{}}
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		StreamScannerHandler(requestContext, &http.Response{Body: reader}, info, func(string, *StreamResult) {})
+	}()
+	_, err := fmt.Fprint(writer, "data: initial\n")
+	require.NoError(t, err)
+	select {
+	case <-recorder.headerStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("idle upstream did not trigger a ping")
+	}
+	_, err = fmt.Fprint(writer, "data: [DONE]\n")
+	require.NoError(t, err)
+	select {
+	case <-finished:
+	case <-time.After(3 * time.Second):
+		t.Fatal("scanner did not finish")
+	}
+	assert.Contains(t, recorder.Body.String(), ": PING\n\n")
 }
 
 func TestStreamScannerHandler_PingDisabledByRelayInfo(t *testing.T) {

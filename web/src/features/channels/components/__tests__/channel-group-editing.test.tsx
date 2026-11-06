@@ -214,7 +214,7 @@ it('shows the server reason when the group change is refused', async () => {
 
 it('keeps tag aggregate rows read-only', async () => {
   localStorage.setItem('enable-tag-mode', 'true')
-  await renderChannelsPage(channel({ tag: 'batch', children: [] }), 'batch')
+  await renderChannelsPage(channel({ tag: 'batch' }), 'batch')
 
   expect(
     screen.queryByRole('combobox', { name: 'Change group for batch' })

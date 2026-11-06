@@ -1,14 +1,17 @@
 package channel
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	common2 "github.com/QuantumNous/new-api/common"
@@ -341,7 +344,7 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	if err = ApplyHeaderOverride(info, c, req); err != nil {
 		return nil, err
 	}
-	resp, err := doRequest(c, req, info)
+	resp, err := doOrdinaryRequest(c, req, info)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed: %w", err)
 	}
@@ -371,7 +374,7 @@ func DoFormRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBod
 	if err = ApplyHeaderOverride(info, c, req); err != nil {
 		return nil, err
 	}
-	resp, err := doRequest(c, req, info)
+	resp, err := doOrdinaryRequest(c, req, info)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed: %w", err)
 	}
@@ -445,7 +448,60 @@ func toWebSocketURL(raw string) string {
 }
 
 func DoRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http.Response, error) {
-	return doRequest(c, req, info)
+	return doOrdinaryRequest(c, req, info)
+}
+
+type drainingResponseBody struct {
+	io.ReadCloser
+	release  context.CancelFunc
+	once     sync.Once
+	closeErr error
+}
+
+func (body *drainingResponseBody) Close() error {
+	body.once.Do(func() {
+		body.release()
+		body.closeErr = body.ReadCloser.Close()
+	})
+	return body.closeErr
+}
+
+// Task submissions call doRequest directly and retain their own lifecycle.
+// Ordinary non-stream requests and WebSocket handshakes are unchanged.
+func doOrdinaryRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http.Response, error) {
+	if !info.IsStream || info.RelayMode == constant.RelayModeRealtime || common2.GetContextKeyBool(c, appconstant.ContextKeyIsWebSocket) {
+		return doRequest(c, req, info)
+	}
+	if err := c.Request.Context().Err(); err != nil {
+		if req.Body != nil {
+			_ = req.Body.Close()
+		}
+		return nil, types.NewError(err, types.ErrorCodeDoRequestFailed, types.ErrOptionWithSkipRetry())
+	}
+	upstreamContext, release := helper.NewStreamDrainContext(c.Request.Context())
+	responseOwnsContext := false
+	defer func() {
+		if !responseOwnsContext {
+			release()
+		}
+	}()
+	var requestSent atomic.Bool
+	upstreamContext = httptrace.WithClientTrace(upstreamContext, &httptrace.ClientTrace{
+		WroteHeaders: func() {
+			requestSent.Store(true)
+		},
+	})
+	resp, err := doRequest(c, req.WithContext(upstreamContext), info)
+	if err != nil {
+		if requestSent.Load() {
+			// A missing response is not evidence that the vendor did no work.
+			return nil, types.NewError(err, types.ErrorCodeDoRequestFailed, types.ErrOptionWithSkipRetry())
+		}
+		return nil, err
+	}
+	resp.Body = &drainingResponseBody{ReadCloser: resp.Body, release: release}
+	responseOwnsContext = true
+	return resp, nil
 }
 
 // keepUpstreamRedirectResponse stops net/http from following redirects while
@@ -508,8 +564,12 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		c.Set(common2.UpstreamRequestIdKey, upID)
 	}
 
-	_ = req.Body.Close()
-	_ = c.Request.Body.Close()
+	if req.Body != nil {
+		_ = req.Body.Close()
+	}
+	if c.Request.Body != nil {
+		_ = c.Request.Body.Close()
+	}
 	return resp, nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -35,6 +36,60 @@ const (
 	streamWriteTimeout  = 30 * time.Second
 	streamMinClientRate = 8 << 10 // bytes per second
 )
+
+type streamDrainContextKey struct{}
+
+type streamDrainState struct {
+	clientContext context.Context
+	droppedOutput atomic.Bool
+}
+
+func streamIdleTimeout() time.Duration {
+	timeout := time.Duration(constant.StreamingTimeout) * time.Second
+	if timeout <= 0 {
+		return 30 * time.Second
+	}
+	return timeout
+}
+
+// NewStreamDrainContext keeps an issued HTTP stream alive after its client
+// leaves. The existing streaming timeout also bounds the entire post-cancel
+// drain, starting even before response headers arrive. Heartbeats cannot extend
+// this budget. The response body owner must release the context on every exit.
+func NewStreamDrainContext(clientContext context.Context) (context.Context, context.CancelFunc) {
+	upstreamContext, cancel := context.WithCancelCause(context.WithoutCancel(clientContext))
+	state := &streamDrainState{clientContext: clientContext}
+	upstreamContext = context.WithValue(upstreamContext, streamDrainContextKey{}, state)
+	drainTimeout := streamIdleTimeout()
+	watcherDone := make(chan struct{})
+	go func() {
+		defer close(watcherDone)
+		select {
+		case <-upstreamContext.Done():
+			return
+		case <-clientContext.Done():
+		}
+		timer := time.NewTimer(drainTimeout)
+		defer timer.Stop()
+		select {
+		case <-upstreamContext.Done():
+		case <-timer.C:
+			cancel(context.DeadlineExceeded)
+		}
+	}()
+	return upstreamContext, func() {
+		cancel(context.Canceled)
+		<-watcherDone
+	}
+}
+
+func (state *streamDrainState) discardOutput() bool {
+	if state == nil || state.clientContext.Err() == nil {
+		return false
+	}
+	state.droppedOutput.Store(true)
+	return true
+}
 
 func getScannerBufferSize() int {
 	if constant.StreamScannerMaxBufferMB > 0 {
@@ -100,16 +155,49 @@ func (b *StreamWriteBudget) Deadline(now time.Time, n int) time.Time {
 type streamResponseWriter struct {
 	gin.ResponseWriter
 	budget StreamWriteBudget
+	drain  *streamDrainState
 }
 
 func (w *streamResponseWriter) Write(p []byte) (int, error) {
+	if w.drain.discardOutput() {
+		return len(p), nil
+	}
 	_ = http.NewResponseController(w.ResponseWriter).SetWriteDeadline(w.budget.Deadline(time.Now(), len(p)))
-	return w.ResponseWriter.Write(p)
+	written, err := w.ResponseWriter.Write(p)
+	if err != nil && w.drain.discardOutput() {
+		return len(p), nil
+	}
+	return written, err
 }
 
 func (w *streamResponseWriter) WriteString(s string) (int, error) {
+	if w.drain.discardOutput() {
+		return len(s), nil
+	}
 	_ = http.NewResponseController(w.ResponseWriter).SetWriteDeadline(w.budget.Deadline(time.Now(), len(s)))
-	return w.ResponseWriter.WriteString(s)
+	written, err := w.ResponseWriter.WriteString(s)
+	if err != nil && w.drain.discardOutput() {
+		return len(s), nil
+	}
+	return written, err
+}
+
+func (w *streamResponseWriter) WriteHeader(status int) {
+	if !w.drain.discardOutput() {
+		w.ResponseWriter.WriteHeader(status)
+	}
+}
+
+func (w *streamResponseWriter) WriteHeaderNow() {
+	if !w.drain.discardOutput() {
+		w.ResponseWriter.WriteHeaderNow()
+	}
+}
+
+func (w *streamResponseWriter) Flush() {
+	if !w.drain.discardOutput() {
+		w.ResponseWriter.Flush()
+	}
 }
 
 // Unwrap lets http.ResponseController reach the connection.
@@ -132,9 +220,21 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 	// 无条件新建 StreamStatus
 	info.StreamStatus = relaycommon.NewStreamStatus()
 
-	ctx, cancel := context.WithCancel(context.Background())
-
-	streamingTimeout := time.Duration(constant.StreamingTimeout) * time.Second
+	upstreamContext := context.Background()
+	if resp.Request != nil {
+		upstreamContext = resp.Request.Context()
+	}
+	drain, hasDrain := upstreamContext.Value(streamDrainContextKey{}).(*streamDrainState)
+	if !hasDrain {
+		// Direct scanner callers still get a bounded drain. The shared HTTP
+		// transport installs this earlier, before it waits for response headers.
+		var release context.CancelFunc
+		upstreamContext, release = NewStreamDrainContext(c.Request.Context())
+		defer release()
+		drain = upstreamContext.Value(streamDrainContextKey{}).(*streamDrainState)
+	}
+	ctx, cancel := context.WithCancel(upstreamContext)
+	streamingTimeout := streamIdleTimeout()
 
 	var (
 		stopChan    = make(chan bool, 3) // 增加缓冲区避免阻塞
@@ -196,6 +296,10 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 	scanner.Split(bufio.ScanLines)
 	copyCodexSSEHeaders(c, resp)
 	SetEventStreamHeaders(c)
+	// Only this scanner opts into discard-on-cancel. Non-stream responses,
+	// task presentation, and WebSockets retain their existing error handling.
+	c.Set("stream_drain_state", drain)
+	c.Writer = &streamResponseWriter{ResponseWriter: c.Writer, drain: drain}
 
 	ctx = context.WithValue(ctx, "stop_chan", stopChan)
 
@@ -233,6 +337,9 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 						err = PingData(c)
 					}()
 					if err != nil {
+						if c.Request.Context().Err() != nil {
+							return
+						}
 						logger.LogError(c, common.LogText("ping data error: %s", err.Error()))
 						info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonPingFail, err)
 						return
@@ -311,18 +418,15 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			data := scanner.Text()
 			logger.LogDebug(c, "stream scanner data: %s", data)
 
-			if len(data) < 6 {
-				continue
-			}
-			if data[:5] != "data:" && data[:6] != "[DONE]" {
-				continue
-			}
-			data = data[5:]
+			data, hasDataPrefix := strings.CutPrefix(data, "data:")
 			data = strings.TrimSpace(data)
+			if !hasDataPrefix && data != "[DONE]" {
+				continue
+			}
 			if data == "" {
 				continue
 			}
-			if !strings.HasPrefix(data, "[DONE]") {
+			if data != "[DONE]" {
 				info.SetFirstResponseTime()
 				info.ReceivedResponseCount++
 
@@ -360,25 +464,32 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonTimeout, nil)
 	case <-stopChan:
 		// EndReason already set by the goroutine that triggered stopChan
+	case <-upstreamContext.Done():
+		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonTimeout, context.Cause(upstreamContext))
 	case <-c.Request.Context().Done():
-		// 客户端断开：继续 drain 上游直到流结束或超时，以捕获完整的 usage 数据用于计费。
-		// 不立即关闭 resp.Body，让 scanner goroutine 自然读完上游内容。
-		// 使用与 StreamingTimeout 相同的超时防止无限等待。
+		// Keep the original client context cancelled so retry policy continues
+		// to reject replay. Output is discarded while usage parsing continues.
 		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, c.Request.Context().Err())
+		_ = http.NewResponseController(c.Writer).SetWriteDeadline(time.Now())
 		logger.LogInfo(c, common.LogText("client disconnected, draining upstream for billing (timeout=%ds)", int64(streamingTimeout.Seconds())))
 		select {
 		case <-stopChan:
-			// scanner goroutine 已结束，可能已收到 [DONE] 或 EOF
 		case <-ticker.C:
-			// drain 超时，仍以 ClientGone 结束
+		case <-upstreamContext.Done():
 		}
 	}
 
 	cleanup()
+	// The scanner may have reached EOF before the main select observed client
+	// cancellation. Drained completion is billable, not successful delivery.
+	if drain.droppedOutput.Load() && (info.StreamStatus.EndReason == relaycommon.StreamEndReasonDone || info.StreamStatus.EndReason == relaycommon.StreamEndReasonEOF) {
+		info.StreamStatus.EndReason = relaycommon.StreamEndReasonClientGone
+		info.StreamStatus.EndError = c.Request.Context().Err()
+	}
 	// All stream goroutines have joined. Done from a successfully delivered
 	// protocol completion can now correct a cancellation that won while its
 	// callback was still running. Bare EOF and failed writes never qualify.
-	if sr.done && info.StreamStatus.ResponseOutcome() == string(relaycommon.ResponseOutcomeCompleted) &&
+	if sr.done && !drain.droppedOutput.Load() && info.StreamStatus.ResponseOutcome() == string(relaycommon.ResponseOutcomeCompleted) &&
 		info.StreamStatus.EndReason == relaycommon.StreamEndReasonClientGone &&
 		errors.Is(info.StreamStatus.EndError, context.Canceled) && !info.StreamStatus.HasErrors() {
 		info.StreamStatus.EndReason = relaycommon.StreamEndReasonDone
