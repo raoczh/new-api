@@ -50,7 +50,10 @@ import { api } from '@/lib/api'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { useSidebarConfig } from '../use-sidebar-config'
+import {
+  useIsSidebarModuleVisible,
+  useSidebarConfig,
+} from '../use-sidebar-config'
 import { useSidebarData } from '../use-sidebar-data'
 import { useSidebarView } from '../use-sidebar-view'
 
@@ -235,6 +238,88 @@ describe('profile and security sidebar visibility', () => {
         .flatMap((group) => group.items)
         .find((item) => item.url === '/profile')
     ).toMatchObject({ title: 'Profile', url: '/profile' })
+  })
+})
+
+describe('redemption store sidebar entry', () => {
+  it('keeps the store toggle in the admin sidebar settings and preserves it when saved', () => {
+    const config = parseSidebarModulesAdmin(
+      '{"personal":{"enabled":true,"topup":true}}'
+    )
+    expect(config.personal.store).toBe(true)
+    config.personal.store = false
+    expect(
+      parseSidebarModulesAdmin(serializeSidebarModulesAdmin(config)).personal
+        .store
+    ).toBe(false)
+  })
+
+  it('shows the store entry by default and hides it when the admin disables it', () => {
+    const enabled = sidebarFor(undefined)
+    expect(
+      enabled.result.current
+        .flatMap((group) => group.items)
+        .find((item) => item.url === '/wallet/store')
+    ).toMatchObject({ title: 'Buy Redemption Codes' })
+
+    const disabled = sidebarFor({ personal: { enabled: true, store: false } })
+    expect(
+      disabled.result.current
+        .flatMap((group) => group.items)
+        .some((item) => item.url === '/wallet/store')
+    ).toBe(false)
+  })
+
+  it('keeps the store entry hidden when the user hides it in personal settings', () => {
+    const { result } = sidebarFor(
+      { personal: { enabled: true, topup: true, store: true } },
+      { personal: { enabled: true, store: false } }
+    )
+    const urls = result.current
+      .flatMap((group) => group.items)
+      .map((item) => item.url)
+    expect(urls).toContain('/wallet')
+    expect(urls).not.toContain('/wallet/store')
+  })
+
+  it('reports store visibility for entries outside the sidebar', () => {
+    function visibility(admin?: object, user?: object) {
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      })
+      client.setQueryData(['status'], {
+        SidebarModulesAdmin: admin ? JSON.stringify(admin) : '',
+      })
+      useAuthStore.getState().auth.setUser({
+        id: 1,
+        username: 'alice',
+        role: 1,
+        permissions: { sidebar_settings: true },
+        sidebar_modules: user ? JSON.stringify(user) : '',
+      })
+      function Wrapper(props: { children: ReactNode }) {
+        return (
+          <QueryClientProvider client={client}>
+            {props.children}
+          </QueryClientProvider>
+        )
+      }
+      return renderHook(() => useIsSidebarModuleVisible('/wallet/store'), {
+        wrapper: Wrapper,
+      }).result.current
+    }
+
+    expect(visibility()).toBe(true)
+    expect(visibility({ personal: { enabled: true, store: false } })).toBe(
+      false
+    )
+    expect(visibility(undefined, { personal: { store: false } })).toBe(false)
+    expect(
+      visibility(
+        { personal: { enabled: false, store: true } },
+        { personal: { enabled: true, store: true } }
+      )
+    ).toBe(false)
   })
 })
 

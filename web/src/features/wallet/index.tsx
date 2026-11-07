@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
+import { useIsSidebarModuleVisible } from '@/hooks/use-sidebar-config'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
@@ -90,6 +91,7 @@ export function Wallet(props: WalletProps) {
   const { status } = useStatus()
   const { currency } = useSystemConfig()
   const { topupInfo, presetAmounts, loading: topupLoading } = useTopupInfo()
+  const redemptionStoreVisible = useIsSidebarModuleVisible('/wallet/store')
 
   // Calculate effective exchange rate - when display type is USD, use rate of 1
   const effectiveUsdExchangeRate = useMemo(() => {
@@ -342,14 +344,16 @@ export function Wallet(props: WalletProps) {
                 redeeming={redeeming}
                 loading={topupLoading}
                 action={
-                  <Button
-                    size='sm'
-                    className='w-full sm:w-auto'
-                    render={<Link to='/wallet/store' />}
-                  >
-                    <ShoppingBag className='size-4' aria-hidden='true' />
-                    {t('Buy Redemption Codes')}
-                  </Button>
+                  redemptionStoreVisible ? (
+                    <Button
+                      size='sm'
+                      className='w-full sm:w-auto'
+                      render={<Link to='/wallet/store' />}
+                    >
+                      <ShoppingBag className='size-4' aria-hidden='true' />
+                      {t('Buy Redemption Codes')}
+                    </Button>
+                  ) : undefined
                 }
               />
 

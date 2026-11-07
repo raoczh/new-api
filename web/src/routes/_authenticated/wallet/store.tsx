@@ -16,10 +16,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
 import { RedemptionStorePage } from '@/features/wallet/components/redemption-store-page'
+import { isSidebarModuleEnabledForGuard } from '@/lib/nav-modules'
 
 export const Route = createFileRoute('/_authenticated/wallet/store')({
+  beforeLoad: async ({ context }) => {
+    if (
+      !(await isSidebarModuleEnabledForGuard(
+        context.queryClient,
+        'personal',
+        'store'
+      ))
+    ) {
+      throw redirect({ to: '/wallet' })
+    }
+  },
   component: RedemptionStorePage,
 })

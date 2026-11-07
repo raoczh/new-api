@@ -123,7 +123,6 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
           {
             title: t('Buy Redemption Codes'),
             url: '/wallet/store',
-            configUrls: ['/wallet'],
             icon: ShoppingBag,
           },
           {

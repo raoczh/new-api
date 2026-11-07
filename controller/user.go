@@ -600,6 +600,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 	defaultConfig["personal"] = map[string]any{
 		"enabled":  true,
 		"topup":    true,
+		"store":    true,
 		"personal": true,
 	}
 

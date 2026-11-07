@@ -132,6 +132,10 @@ export function SidebarModulesSection({
         title: t('Wallet'),
         description: t('Top up balance and view billing history.'),
       },
+      store: {
+        title: t('Buy Redemption Codes'),
+        description: t('Purchase redemption codes from the store.'),
+      },
       personal: {
         title: t('Profile'),
         description: t('Personal settings and profile management.'),

@@ -130,6 +130,11 @@ export function SidebarModulesCard() {
           description: t('Balance and top-up management'),
         },
         {
+          key: 'store',
+          title: t('Buy Redemption Codes'),
+          description: t('Purchase redemption codes from the store.'),
+        },
+        {
           key: 'personal',
           title: t('Personal Settings'),
           description: t('Personal info settings'),
