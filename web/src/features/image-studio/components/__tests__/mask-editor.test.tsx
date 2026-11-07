@@ -82,60 +82,38 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals())
 
-test.each([true, false])(
-  'painting with transparentAreas=%s exports the correct mask contract',
-  async (transparentAreas) => {
-    const onUploaded = vi.fn()
-    render(
-      <ImageStudioMaskEditor
-        open
-        imageUrl='/reference.jpg'
-        transparentAreas={transparentAreas}
-        onOpenChange={() => {}}
-        onUploaded={onUploaded}
-      />
-    )
-    act(() => image.dispatchEvent(new Event('load')))
-    const canvas = screen.getByLabelText('Mask painting area')
-    Object.defineProperty(canvas, 'setPointerCapture', { value: vi.fn() })
-    fireEvent.pointerDown(canvas, { clientX: 100, clientY: 100, pointerId: 1 })
-    fireEvent.pointerUp(canvas, { pointerId: 1 })
-    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled()
-    await userEvent.click(screen.getByRole('button', { name: 'Apply mask' }))
-    await waitFor(() => expect(onUploaded).toHaveBeenCalled())
-    expect(exported[0]).toEqual({
-      width: 1024,
-      height: 768,
-      type: 'image/png',
-      composite: transparentAreas ? 'destination-out' : 'source-over',
-    })
-    if (transparentAreas) {
-      expect(exported[1]).toEqual({
-        width: 1024,
-        height: 768,
-        type: 'image/png',
-        composite: 'source-over',
-      })
-      expect(onUploaded).toHaveBeenCalledWith({
-        key: 'mask.png',
-        url: '/api/image-studio/files/mask.png',
-        reference: {
-          key: 'reference.png',
-          url: '/api/image-studio/files/reference.png',
-        },
-      })
-    } else {
-      expect(exported).toHaveLength(1)
-      expect(onUploaded).toHaveBeenCalledWith({
-        key: 'mask.png',
-        url: '/api/image-studio/files/mask.png',
-        reference: undefined,
-      })
-    }
-  }
-)
+test('painting exports a same-size PNG using the ordinary black and white mask contract', async () => {
+  const onUploaded = vi.fn()
+  render(
+    <ImageStudioMaskEditor
+      open
+      imageUrl='/reference.jpg'
+      onOpenChange={() => {}}
+      onUploaded={onUploaded}
+    />
+  )
+  act(() => image.dispatchEvent(new Event('load')))
+  const canvas = screen.getByLabelText('Mask painting area')
+  Object.defineProperty(canvas, 'setPointerCapture', { value: vi.fn() })
+  fireEvent.pointerDown(canvas, { clientX: 100, clientY: 100, pointerId: 1 })
+  fireEvent.pointerUp(canvas, { pointerId: 1 })
+  expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled()
+  await userEvent.click(screen.getByRole('button', { name: 'Apply mask' }))
+  await waitFor(() => expect(onUploaded).toHaveBeenCalled())
+  expect(exported[0]).toEqual({
+    width: 1024,
+    height: 768,
+    type: 'image/png',
+    composite: 'source-over',
+  })
+  expect(exported).toHaveLength(1)
+  expect(onUploaded).toHaveBeenCalledWith({
+    key: 'mask.png',
+    url: '/api/image-studio/files/mask.png',
+  })
+})
 
-test('only the first Zhiqi reference offers an enabled mask action', async () => {
+test('only the first ready reference offers an enabled mask action', async () => {
   const onEditMask = vi.fn()
   const references = [
     { uid: 'first', key: 'first.png', url: '/first.png', uploading: false },
@@ -144,7 +122,6 @@ test('only the first Zhiqi reference offers an enabled mask action', async () =>
   render(
     <ImageStudioReferenceStrip
       references={references}
-      firstImageMaskOnly
       maxReferences={2}
       onAddFiles={() => {}}
       onRemove={() => {}}
@@ -159,4 +136,33 @@ test('only the first Zhiqi reference offers an enabled mask action', async () =>
   expect(buttons[1]).toBeDisabled()
   await userEvent.click(buttons[0])
   expect(onEditMask).toHaveBeenCalledWith('first')
+})
+
+test('closing the mask editor before upload completes prevents applying it to another reference', async () => {
+  let finishUpload = () => {}
+  const upload = new Promise<void>((resolve) => {
+    finishUpload = resolve
+  })
+  vi.mocked(api.post).mockImplementationOnce(async () => {
+    await upload
+    return {
+      data: { success: true, data: { key: 'mask.png', url: '/mask.png' } },
+    }
+  })
+  const onUploaded = vi.fn()
+  const props = { imageUrl: '/first.jpg', onOpenChange: vi.fn(), onUploaded }
+  const view = render(<ImageStudioMaskEditor {...props} open />)
+  act(() => image.dispatchEvent(new Event('load')))
+  const canvas = screen.getByLabelText('Mask painting area')
+  Object.defineProperty(canvas, 'setPointerCapture', { value: vi.fn() })
+  fireEvent.pointerDown(canvas, { clientX: 100, clientY: 100, pointerId: 1 })
+  fireEvent.pointerUp(canvas, { pointerId: 1 })
+  await userEvent.click(screen.getByRole('button', { name: 'Apply mask' }))
+  await waitFor(() => expect(api.post).toHaveBeenCalled())
+  view.rerender(<ImageStudioMaskEditor {...props} open={false} />)
+  await act(async () => {
+    finishUpload()
+    await upload
+  })
+  expect(onUploaded).not.toHaveBeenCalled()
 })

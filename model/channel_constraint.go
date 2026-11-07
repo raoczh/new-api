@@ -15,25 +15,6 @@ var filterEvalOrder = []dto.ChannelFilterKind{
 	dto.FilterExcludeChannels,
 }
 
-// BindsTaskPlugin includes built-in engine bindings without claiming a legacy
-// channel type: the same OpenAI channel can still serve ordinary image/chat
-// traffic and other task plugins. An explicit disabled engine always wins.
-func (channel *Channel) BindsTaskPlugin(key string) bool {
-	if channel == nil {
-		return false
-	}
-	settings := channel.GetSetting()
-	if key == "zhiqi" {
-		switch channel.Type {
-		case constant.ChannelTypeOpenAI, constant.ChannelTypeNewAPI, constant.ChannelTypeCustom, constant.ChannelTypeAdvancedCustom:
-			return settings.IsZhiqiEngine()
-		default:
-			return false
-		}
-	}
-	return (channel.Type == constant.ChannelTypeTaskPlugin || channel.Type == constant.ChannelTypeNewAPI) && settings.BindsTaskPlugin(key)
-}
-
 // ChannelSatisfiesFilters reports whether ch passes every filter.
 // On false, it returns the first violated filter in filterEvalOrder for error
 // attribution.
@@ -114,14 +95,6 @@ func channelMatchesFilter(ch *Channel, modelName string, filter dto.ChannelFilte
 		if filter.RequestPath == "" {
 			return true
 		}
-		if ch.BindsTaskPlugin("zhiqi") {
-			// The engine flag selects the documented image contract instead of
-			// an Advanced Custom channel's legacy route/converter table.
-			switch filter.RequestPath {
-			case "/v1/images/generations", "/v1/images/edits", "/v1/images/generations/async", "/zhiqi/v1/images/generations/async":
-				return true
-			}
-		}
 		if !constant.IsAdvancedCustomChannel(ch.Type) {
 			return true
 		}
@@ -131,19 +104,17 @@ func channelMatchesFilter(ch *Channel, modelName string, filter dto.ChannelFilte
 		if filter.TaskPluginKey == "" {
 			return ch.Type != constant.ChannelTypeTaskPlugin
 		}
-		if ch.BindsTaskPlugin(filter.TaskPluginKey) || slices.ContainsFunc(filter.TaskPluginKeys, ch.BindsTaskPlugin) {
-			return true
-		}
 		if ch.Type == constant.ChannelTypeTaskPlugin || ch.Type == constant.ChannelTypeNewAPI {
 			// A New API channel serves every plugin it is extended with; the
 			// pinned plugin or any shared-model candidate may execute there.
-			return false
+			setting := ch.GetSetting()
+			return setting.BindsTaskPlugin(filter.TaskPluginKey) || slices.ContainsFunc(filter.TaskPluginKeys, setting.BindsTaskPlugin)
 		}
 		return slices.Contains(filter.TaskPluginChannelTypes, ch.Type)
 	case dto.FilterTaskPluginEndpoint:
-		pluginChannel := slices.Contains(filter.TaskPluginChannelTypes, ch.Type) || slices.ContainsFunc(filter.TaskPluginKeys, ch.BindsTaskPlugin)
+		pluginChannel := slices.Contains(filter.TaskPluginChannelTypes, ch.Type)
 		if ch.Type == constant.ChannelTypeTaskPlugin || ch.Type == constant.ChannelTypeNewAPI {
-			pluginChannel = slices.ContainsFunc(filter.TaskPluginKeys, ch.BindsTaskPlugin)
+			pluginChannel = slices.ContainsFunc(filter.TaskPluginKeys, ch.GetSetting().BindsTaskPlugin)
 		}
 		if filter.TaskPluginRelayOnly {
 			return ch.Type != constant.ChannelTypeTaskPlugin && !pluginChannel

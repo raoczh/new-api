@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -198,7 +197,7 @@ func ApplyOriginTaskAffinity(c *gin.Context, info *relaycommon.RelayInfo) *dto.T
 // 估算计费(EstimateBilling) → 计算价格 → 预扣费（重试时补足差额）→
 // 构建/发送/解析上游请求 → 提交后计费调整(AdjustBillingOnSubmit)。
 // 共享控制器编排负责未落库退款、最终额度预留、落库和结算。
-func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (outcome *TaskSubmitResult, taskErr *dto.TaskError) {
+func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitResult, *dto.TaskError) {
 	info.InitChannelMeta(c)
 
 	// 1. 确定 platform → 创建适配器 → 验证请求
@@ -264,14 +263,6 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (outcome *Task
 	useTiered := exists || billing_setting.GetBillingMode(modelName) == billing_setting.BillingModeTieredExpr
 	if useTiered {
 		provider, supported := adaptor.(channel.TaskUsageFactsProvider)
-		if pluginKey == "zhiqi" {
-			_, clientOverride := billing_setting.GetPluginBillingExpr(pluginKey, modelName)
-			_, upstreamOverride := billing_setting.GetPluginBillingExpr(pluginKey, info.UpstreamModelName)
-			usedVariables := billingexpr.UsedVarsByHash(exprStr, billingexpr.ExprHashString(exprStr))
-			if !clientOverride && !upstreamOverride && !usedVariables["u"] {
-				return nil, service.TaskErrorWrapperLocal(fmt.Errorf("configure a USD task usage expression at zhiqi::%s; ordinary image pricing cannot be inherited by asynchronous tasks", modelName), "model_price_error", http.StatusBadRequest)
-			}
-		}
 		if billingexpr.UsesFixedPricing(exprStr) {
 			return nil, service.TaskErrorWrapper(fmt.Errorf("fixed pricing is not supported for task usage expressions"), "model_price_error", http.StatusBadRequest, common.UpstreamAddresses(c)...)
 		}
@@ -358,26 +349,6 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (outcome *Task
 	}
 
 	// 9. 发送请求
-	if pluginKey == "zhiqi" {
-		// A submission may have created paid work even if its reply is lost or
-		// malformed. Poll known IDs; never automatically POST it a second time.
-		detached := c.Request.WithContext(context.WithoutCancel(c.Request.Context()))
-		timeout := time.Duration(constant.TaskPluginProtocolTimeoutSeconds) * time.Second
-		if timeout <= 0 {
-			timeout = 10 * time.Minute
-		}
-		upstreamContext, cancel := context.WithTimeout(detached.Context(), timeout)
-		c.Request = detached.WithContext(upstreamContext)
-		defer func() {
-			cancel()
-			// The short persistence/settlement barrier must still run after the
-			// downstream disconnects, just as it does for relayed task SSE.
-			c.Request = detached
-			if taskErr != nil {
-				taskErr.NoRetry = true
-			}
-		}()
-	}
 	resp, err := adaptor.DoRequest(c, info, requestBody)
 	if err != nil {
 		return nil, service.TaskErrorWrapper(err, "do_request_failed", http.StatusInternalServerError, common.UpstreamAddresses(c)...)

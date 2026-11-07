@@ -18,7 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { expect, test } from 'vitest'
 
-import type { ImageStudioTask } from '../../types'
 import { describeTaskParams, describeTaskTime } from '../task-view'
 
 test('describeTaskTime accepts the interface language codes', () => {
@@ -37,7 +36,7 @@ test('describeTaskTime falls back to the runtime locale for unknown codes', () =
   expect(() => describeTaskTime(timestamp, 'not a locale')).not.toThrow()
 })
 
-test('Zhiqi history summaries display direct resolution, ratio and compression zero', () => {
+test('legacy history summaries display stored resolution, ratio and compression zero without pixel conversion', () => {
   const task = {
     params: {
       resolution: '1080p',
@@ -46,13 +45,13 @@ test('Zhiqi history summaries display direct resolution, ratio and compression z
       output_format: 'webp',
       output_compression: 0,
     },
-  } as ImageStudioTask
+  }
   expect(describeTaskParams(task)).toBe('max · 1080p · 4:5 · WEBP · 0%')
 })
 
 test('GIF history summaries include frame count and unrounded duration', () => {
   const task = {
     params: { output_format: 'gif', frame_count: 2, frame_duration_ms: 84 },
-  } as ImageStudioTask
+  }
   expect(describeTaskParams(task)).toBe('GIF · 2f · 84ms')
 })

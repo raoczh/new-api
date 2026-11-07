@@ -18,13 +18,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
-	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
@@ -116,17 +116,8 @@ func CreateImageStudioTask(c *gin.Context) {
 		return
 	}
 
-	engines, err := loadImageStudioEngines()
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	engine := engines[req.Group][req.Model]
-	promptLimit := 8000
-	if engine.ZhiqiEngine {
-		promptLimit = helper.ZhiqiMaxPromptRunes
-	}
-	if len([]rune(req.Prompt)) > promptLimit {
+	const promptLimit = 8000
+	if utf8.RuneCountInString(req.Prompt) > promptLimit {
 		common.ApiErrorT(c, "The prompt is longer than {{max}} characters.", map[string]any{"max": promptLimit})
 		return
 	}
@@ -158,44 +149,6 @@ func CreateImageStudioTask(c *gin.Context) {
 	if err != nil {
 		common.ApiErrorMsg(c, err.Error())
 		return
-	}
-	if engine.ZhiqiEngine {
-		var parameters map[string]json.RawMessage
-		if err := common.Unmarshal(params, &parameters); err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		parameters["model"], _ = common.Marshal(req.Model)
-		parameters["prompt"], _ = common.Marshal(req.Prompt)
-		zhiqiRequest, err := helper.DecodeZhiqiImageRequest(parameters)
-		if err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		for _, key := range req.ReferenceKeys {
-			publicURL, err := service.ImageStudioFileAbsoluteURL(key)
-			if err != nil {
-				common.ApiError(c, err)
-				return
-			}
-			zhiqiRequest.References = append(zhiqiRequest.References, helper.ZhiqiImageReference{Value: publicURL})
-		}
-		if req.MaskKey != "" {
-			publicURL, err := service.ImageStudioFileAbsoluteURL(req.MaskKey)
-			if err != nil {
-				common.ApiError(c, err)
-				return
-			}
-			zhiqiRequest.Mask = &helper.ZhiqiImageReference{Value: publicURL}
-		}
-		if err := zhiqiRequest.Validate(len(req.ReferenceKeys) > 0); err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		if zhiqiRequest.Stream != nil && *zhiqiRequest.Stream {
-			common.ApiErrorT(c, "Image Studio uses background tasks; stream is only available on the Images API")
-			return
-		}
 	}
 
 	activeCount, err := model.CountActiveUserImageStudioTasks(userId)
@@ -570,51 +523,6 @@ type imageStudioModelOption struct {
 	PriceUnit   string   `json:"price_unit,omitempty"`
 	InputPrice  *float64 `json:"input_price,omitempty"`
 	OutputPrice *float64 `json:"output_price,omitempty"`
-	imageStudioEngine
-}
-
-type imageStudioEngine struct {
-	ZhiqiEngine        bool `json:"zhiqi_engine,omitempty"`
-	ZhiqiMixedChannels bool `json:"zhiqi_mixed_channels,omitempty"`
-	ordinaryChannel    bool
-}
-
-// A model/group can fail over between several channels. Dedicated controls
-// are safe only when every eligible channel uses the same image contract.
-func loadImageStudioEngines() (map[string]map[string]imageStudioEngine, error) {
-	channels, err := model.GetAllChannels(0, -1, false, true)
-	if err != nil {
-		return nil, err
-	}
-	engines := make(map[string]map[string]imageStudioEngine)
-	for _, channel := range channels {
-		if channel.Status != common.ChannelStatusEnabled {
-			continue
-		}
-		isZhiqi := channel.GetSetting().IsZhiqiEngine()
-		if !isZhiqi && channel.Type == constant.ChannelTypeTaskPlugin {
-			continue
-		}
-		for group := range strings.SplitSeq(channel.Group, ",") {
-			if engines[group] == nil {
-				engines[group] = make(map[string]imageStudioEngine)
-			}
-			for _, modelName := range channel.GetModels() {
-				if !isZhiqi && constant.IsAdvancedCustomChannel(channel.Type) {
-					config := channel.GetOtherSettings().AdvancedCustom
-					if config == nil || !config.SupportsPathForModel(imageStudioGenerationPath, modelName) {
-						continue
-					}
-				}
-				engine := engines[group][modelName]
-				engine.ordinaryChannel = engine.ordinaryChannel || !isZhiqi
-				engine.ZhiqiMixedChannels = engine.ZhiqiMixedChannels || (isZhiqi || engine.ZhiqiEngine) && engine.ordinaryChannel
-				engine.ZhiqiEngine = (engine.ZhiqiEngine || isZhiqi) && !engine.ZhiqiMixedChannels
-				engines[group][modelName] = engine
-			}
-		}
-	}
-	return engines, nil
 }
 
 type imageStudioGroupOption struct {
@@ -642,11 +550,6 @@ func ListImageStudioModels(c *gin.Context) {
 	pricing := model.GetPricing()
 	userSetting := userCache.GetSetting()
 	usableGroups := service.GetUserUsableGroups(userCache.Group, userSetting)
-	engines, err := loadImageStudioEngines()
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
 
 	groups := make([]imageStudioGroupOption, 0, len(usableGroups))
 	for _, group := range setting.OrderedGroupNames(slices.Collect(maps.Keys(usableGroups))) {
@@ -663,10 +566,9 @@ func ListImageStudioModels(c *gin.Context) {
 				continue
 			}
 			option := imageStudioModelOption{
-				Model:             item.ModelName,
-				Description:       item.Description,
-				QuotaType:         item.QuotaType,
-				imageStudioEngine: engines[group][item.ModelName],
+				Model:       item.ModelName,
+				Description: item.Description,
+				QuotaType:   item.QuotaType,
 			}
 			if item.BillingMode == billing_setting.BillingModeTieredExpr && strings.TrimSpace(item.BillingExpr) != "" {
 				// A tiered model may still carry a legacy per-call price; the
@@ -966,6 +868,7 @@ func runImageStudioRelay(ctx context.Context, input service.ImageStudioRunInput)
 	c.Request.ContentLength = int64(len(body))
 	c.Set(common.RequestIdKey, requestId)
 	c.Set("specific_channel_version", "")
+	common.SetContextKey(c, constant.ContextKeyImageStudioPaintedMask, input.MaskKey != "")
 
 	userCache, err := model.GetUserCache(input.UserId)
 	if err != nil {

@@ -2,15 +2,18 @@ package controller
 
 import (
 	"bytes"
+	"image"
+	"image/color"
+	"image/png"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -152,7 +155,7 @@ func TestBuildImageStudioBodySendsReferenceFilesByDefault(t *testing.T) {
 	assert.NotContains(t, string(body), "http://")
 }
 
-func TestBuildImageStudioBodyKeepsFilesForPerAttemptEngineConversion(t *testing.T) {
+func TestBuildImageStudioBodySendsFilesForRelayConversion(t *testing.T) {
 	withImageStudioStorage(t)
 	referenceKey := saveImageStudioTestImage(t)
 	maskKey := saveImageStudioTestImage(t)
@@ -160,27 +163,23 @@ func TestBuildImageStudioBodyKeepsFilesForPerAttemptEngineConversion(t *testing.
 	body, contentType, requestPath, err := buildImageStudioBody(service.ImageStudioRunInput{
 		Model:         "gpt-image-2.6",
 		Prompt:        "a cat",
-		Params:        `{"resolution":"2k","aspect_ratio":"4:3","output_format":"webp","output_compression":0}`,
+		Params:        `{"size":"2048x1152","quality":"high","n":3,"background":"transparent","output_format":"webp","output_compression":0}`,
 		ReferenceKeys: []string{referenceKey, referenceKey},
 		MaskKey:       maskKey,
 	})
 	require.NoError(t, err)
 
 	assert.Equal(t, imageStudioEditPath, requestPath)
-	context, _ := gin.CreateTestContext(httptest.NewRecorder())
-	context.Request = httptest.NewRequest(http.MethodPost, requestPath, bytes.NewReader(body))
-	context.Request.Header.Set("Content-Type", contentType)
-	t.Cleanup(func() { common.CleanupBodyStorage(context) })
-	request, err := helper.ReadZhiqiImageRequest(context)
+	_, parameters, err := mime.ParseMediaType(contentType)
 	require.NoError(t, err)
-	require.Len(t, request.References, 2)
-	assert.NotEmpty(t, request.References[0].Data)
-	require.NotNil(t, request.Mask)
-	assert.NotEmpty(t, request.Mask.Data)
-	assert.Equal(t, "2k", *request.Resolution)
-	assert.Equal(t, "4:3", *request.AspectRatio)
-	require.NotNil(t, request.OutputCompression)
-	assert.Zero(t, *request.OutputCompression)
+	form, err := multipart.NewReader(bytes.NewReader(body), parameters["boundary"]).ReadForm(1 << 20)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = form.RemoveAll() })
+	assert.Len(t, form.File["image[]"], 2)
+	assert.Len(t, form.File["mask"], 1)
+	assert.Equal(t, []string{"2048x1152"}, form.Value["size"])
+	assert.Equal(t, []string{"3"}, form.Value["n"])
+	assert.Equal(t, []string{"0"}, form.Value["output_compression"])
 }
 
 func TestImageStudioReferenceURLsUseTheConfiguredPublicAddress(t *testing.T) {
@@ -215,32 +214,6 @@ func TestImageStudioReferenceURLsRequireAnAbsoluteAddress(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestImageStudioEngineSelectionDoesNotMixChannelContracts(t *testing.T) {
-	database, dialect := openTaskDialectDatabase(t, &model.Channel{})
-	originalDatabase := model.DB
-	originalMain, originalLog := common.MainDatabaseType(), common.LogDatabaseType()
-	model.DB = database
-	common.SetDatabaseTypes(dialect, dialect)
-	t.Cleanup(func() {
-		model.DB = originalDatabase
-		common.SetDatabaseTypes(originalMain, originalLog)
-	})
-	channels := []model.Channel{
-		{Name: "legacy zhiqi", Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Group: "default", Models: "zhiqi-image,mixed-image", Setting: common.GetPointer(`{"image_reference_as_url":true}`)},
-		{Name: "ordinary", Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Group: "default", Models: "mixed-image,ordinary-image"},
-		{Name: "explicit opt out", Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Group: "default", Models: "optout-image", Setting: common.GetPointer(`{"image_reference_as_url":true,"zhiqi_engine":false}`)},
-		{Name: "disabled ordinary", Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusManuallyDisabled, Group: "default", Models: "zhiqi-image"},
-	}
-	require.NoError(t, database.Create(&channels).Error)
-	engines, err := loadImageStudioEngines()
-	require.NoError(t, err)
-	assert.True(t, engines["default"]["zhiqi-image"].ZhiqiEngine)
-	assert.False(t, engines["default"]["mixed-image"].ZhiqiEngine)
-	assert.True(t, engines["default"]["mixed-image"].ZhiqiMixedChannels)
-	assert.False(t, engines["default"]["ordinary-image"].ZhiqiEngine)
-	assert.False(t, engines["default"]["optout-image"].ZhiqiEngine)
-}
-
 // withImageStudioStorage points artifact storage at a temporary directory and
 // configures PublicBaseURL, restoring both afterwards.
 func withImageStudioStorage(t *testing.T) {
@@ -260,9 +233,12 @@ func withImageStudioStorage(t *testing.T) {
 func saveImageStudioTestImage(t *testing.T) string {
 	t.Helper()
 
-	// Minimal PNG signature plus IHDR chunk is enough for content sniffing.
-	png := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 13, 'I', 'H', 'D', 'R', 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0}
-	key, err := service.SaveImageStudioBytes(png)
+	pixels := image.NewNRGBA(image.Rect(0, 0, 2, 1))
+	pixels.SetNRGBA(0, 0, color.NRGBA{A: 255})
+	pixels.SetNRGBA(1, 0, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
+	var encoded bytes.Buffer
+	require.NoError(t, png.Encode(&encoded, pixels))
+	key, err := service.SaveImageStudioBytes(encoded.Bytes())
 	require.NoError(t, err)
 	return key
 }

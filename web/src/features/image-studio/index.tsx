@@ -36,7 +36,6 @@ import {
   useImageStudioModels,
 } from './hooks/use-image-studio-options'
 import { useImageStudioSubmit } from './hooks/use-image-studio-tasks'
-import { ZHIQI_MAX_REFERENCES } from './lib/zhiqi'
 import type { ImageStudioTask } from './types'
 
 /**
@@ -55,20 +54,10 @@ export function ImageStudioPage() {
 
   const [selection, setSelection] = useState({ group: '', model: '' })
   const topRef = useRef<HTMLDivElement | null>(null)
-  const selectedOption = modelsQuery.groups
-    .find((group) => group.group === selection.group)
-    ?.models.find((model) => model.model === selection.model)
-  const zhiqiEngine = selectedOption?.zhiqi_engine === true
-  const configuredMaxReferences = config?.max_reference_images ?? 4
 
   const draft = useImageStudioDraft({
-    maxReferences: zhiqiEngine
-      ? Math.min(configuredMaxReferences, ZHIQI_MAX_REFERENCES)
-      : configuredMaxReferences,
+    maxReferences: config?.max_reference_images ?? 4,
     uploadMaxMB: config?.upload_max_mb ?? 10,
-    zhiqiEngine,
-    model: selection.model,
-    group: selection.group,
   })
 
   // Adopt the server's suggestion until the user picks something themselves.
@@ -114,18 +103,10 @@ export function ImageStudioPage() {
 
   const handleReuse = useCallback(
     (task: ImageStudioTask) => {
-      const targetGroup = task.group || selection.group
-      const targetModel = task.model || selection.model
-      const targetOption = modelsQuery.groups
-        .find((group) => group.group === targetGroup)
-        ?.models.find((model) => model.model === targetModel)
       draft.applyPreset({
         prompt: task.prompt,
         params: task.params,
         referenceUrls: task.references,
-        zhiqiEngine: targetOption?.zhiqi_engine === true,
-        model: targetModel,
-        group: targetGroup,
       })
       setSelection((previous) => ({
         group: task.group || previous.group,
@@ -134,7 +115,7 @@ export function ImageStudioPage() {
       topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       toast.success(t('Settings loaded into the editor'))
     },
-    [draft, t, modelsQuery.groups, selection.group, selection.model]
+    [draft, t]
   )
 
   const polishModel = readPromptPolishModel(user?.setting)

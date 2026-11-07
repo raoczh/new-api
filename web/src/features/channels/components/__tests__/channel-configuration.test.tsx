@@ -1772,8 +1772,11 @@ test('a legacy URL setting enables Zhiqi and turning it off saves an explicit fa
   expect(requestTab).toHaveAccessibleName(/Configured/)
   await user.click(requestTab)
   const toggle = screen.getByRole('switch', {
-    name: 'Zhiqi Engine',
+    name: 'Zhiqi channel',
   })
+  expect(
+    screen.getByText(/Convert \/v1\/images requests to the Zhiqi image API/)
+  ).toBeVisible()
   expect(toggle).toBeChecked()
   await user.click(toggle)
   expect(toggle).not.toBeChecked()
@@ -1796,7 +1799,7 @@ test('turning on Zhiqi saves only the new channel setting', async () => {
   await screen.findByDisplayValue('Existing channel')
   await user.click(screen.getByRole('tab', { name: /Request & Response/ }))
   const toggle = screen.getByRole('switch', {
-    name: 'Zhiqi Engine',
+    name: 'Zhiqi channel',
   })
   expect(toggle).not.toBeChecked()
   await user.click(toggle)
@@ -1823,7 +1826,9 @@ test('explicitly disabled Zhiqi does not inherit a legacy true setting on load o
   render(<ConfigurationHarness currentRow={editingChannel} />)
   await screen.findByDisplayValue('Existing channel')
   await user.click(screen.getByRole('tab', { name: /Request & Response/ }))
-  expect(screen.getByRole('switch', { name: 'Zhiqi Engine' })).not.toBeChecked()
+  expect(
+    screen.getByRole('switch', { name: 'Zhiqi channel' })
+  ).not.toBeChecked()
   await user.click(screen.getByRole('button', { name: 'Update Channel' }))
   await waitFor(() => expect(put).toHaveBeenCalled())
   const payload = put.mock.calls[0]?.[1] as { setting: string }
@@ -2209,10 +2214,12 @@ test('an operator without sensitive write permission can discover saved models a
   expect(thinking).toHaveAttribute('aria-disabled', 'true')
   await user.click(thinking)
   expect(thinking).not.toBeChecked()
-  const zhiqi = screen.getByRole('switch', { name: 'Zhiqi Engine' })
-  expect(zhiqi).toHaveAttribute('aria-disabled', 'true')
-  await user.click(zhiqi)
-  expect(zhiqi).not.toBeChecked()
+  const imageProtocol = screen.getByRole('switch', {
+    name: 'Zhiqi channel',
+  })
+  expect(imageProtocol).toHaveAttribute('aria-disabled', 'true')
+  await user.click(imageProtocol)
+  expect(imageProtocol).not.toBeChecked()
   await user.click(screen.getByRole('tab', { name: /Other Settings/ }))
   expect(screen.getByLabelText('Proxy Address')).toBeDisabled()
   await user.click(screen.getByRole('tab', { name: /Routing & Mapping/ }))

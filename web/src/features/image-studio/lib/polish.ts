@@ -69,5 +69,5 @@ export async function polishPrompt(
     throw new Error('The model returned an empty prompt.')
   }
   // Models occasionally wrap the answer in quotes even when told not to.
-  return content.replace(/^["'“”]+|["'“”]+$/g, '').trim()
+  return content.replaceAll(/^["'“”]+|["'“”]+$/g, '').trim()
 }

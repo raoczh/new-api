@@ -3,7 +3,6 @@ package helper
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +16,6 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
@@ -401,9 +399,6 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			wg.Done()
 		}()
 
-		zhiqiImageStream := info.ChannelMeta != nil && info.ChannelSetting.IsZhiqiEngine() &&
-			(info.RelayMode == relayconstant.RelayModeImagesGenerations || info.RelayMode == relayconstant.RelayModeImagesEdits)
-		var imageEventName string
 		for scanner.Scan() {
 			// 检查是否需要停止
 			select {
@@ -422,27 +417,6 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			}
 			data := scanner.Text()
 			logger.LogDebug(c, "stream scanner data: %s", data)
-			if zhiqiImageStream {
-				if data == "" {
-					imageEventName = ""
-					continue
-				}
-				if eventName, found := strings.CutPrefix(data, "event:"); found {
-					imageEventName = strings.TrimSpace(eventName)
-					continue
-				}
-				if strings.HasPrefix(data, ":") {
-					writeMutex.Lock()
-					_, writeErr := c.Writer.WriteString(data + "\n\n")
-					c.Writer.Flush()
-					writeMutex.Unlock()
-					if writeErr != nil {
-						info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonHandlerStop, writeErr)
-						return
-					}
-					continue
-				}
-			}
 
 			data, hasDataPrefix := strings.CutPrefix(data, "data:")
 			data = strings.TrimSpace(data)
@@ -453,15 +427,6 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				continue
 			}
 			if data != "[DONE]" {
-				if zhiqiImageStream && imageEventName != "" {
-					var event map[string]json.RawMessage
-					if common.UnmarshalJsonStr(data, &event) == nil && event != nil && len(event["type"]) == 0 {
-						event["type"], _ = common.Marshal(imageEventName)
-						if encoded, err := common.Marshal(event); err == nil {
-							data = string(encoded)
-						}
-					}
-				}
 				info.SetFirstResponseTime()
 				info.ReceivedResponseCount++
 

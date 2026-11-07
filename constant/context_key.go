@@ -11,6 +11,10 @@ const (
 	ContextKeyRequestStartTime ContextKey = "request_start_time"
 	ContextKeyIsWebSocket      ContextKey = "is_websocket"
 
+	// Set only by the workbench runner; public API masks already use the
+	// client's format and must never be interpreted as painted grayscale masks.
+	ContextKeyImageStudioPaintedMask ContextKey = "image_studio_painted_mask"
+
 	/* token related keys */
 	ContextKeyTokenUnlimited         ContextKey = "token_unlimited_quota"
 	ContextKeyTokenKey               ContextKey = "token_key"

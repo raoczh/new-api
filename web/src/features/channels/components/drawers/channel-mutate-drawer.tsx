@@ -1908,17 +1908,17 @@ export function ChannelMutateDrawer({
     />
   )
 
-  const imageReferenceURLFields = (
+  const zhiqiEngineFields = (
     <FormField
       control={form.control}
       name='zhiqi_engine'
       render={({ field }) => (
         <FormItem className='flex items-center justify-between px-4 py-3'>
           <div className='space-y-0.5'>
-            <FormLabel>{t('Zhiqi Engine')}</FormLabel>
+            <FormLabel>{t('Zhiqi channel')}</FormLabel>
             <FormDescription>
               {t(
-                'Convert image parameters and public reference URLs using the Zhiqi image protocol. Enable only for compatible channels.'
+                'Convert /v1/images requests to the Zhiqi image API before sending. Reference images and masks are sent as public URLs, and only parameters Zhiqi supports are forwarded.'
               )}
             </FormDescription>
           </div>
@@ -4818,7 +4818,7 @@ export function ChannelMutateDrawer({
                 {formatFields}
                 {ollamaOpenAIChatFields}
                 {thinkingFields}
-                {imageReferenceURLFields}
+                {zhiqiEngineFields}
                 {passthroughFields}
                 {systemPromptFields}
                 {systemPromptOverrideFields}

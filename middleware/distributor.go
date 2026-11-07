@@ -173,11 +173,8 @@ func channelMatchesExpectedTaskPlugin(c *gin.Context, channel *model.Channel, ex
 	if expected == "" {
 		return channel.Type != constant.ChannelTypeTaskPlugin
 	}
-	if channel.BindsTaskPlugin(expected) {
-		return true
-	}
 	if channel.Type == constant.ChannelTypeTaskPlugin || channel.Type == constant.ChannelTypeNewAPI {
-		return false
+		return channel.GetSetting().BindsTaskPlugin(expected)
 	}
 
 	if c == nil {
@@ -235,6 +232,7 @@ func pinnedEndpointCandidateForChannel(c *gin.Context, channel *model.Channel, e
 	}
 	expectedOwned := false
 	selected := -1
+	setting := channel.GetSetting()
 	for index, candidate := range candidates {
 		if candidate == nil {
 			continue
@@ -242,18 +240,18 @@ func pinnedEndpointCandidateForChannel(c *gin.Context, channel *model.Channel, e
 		if candidate.Meta.Key == expected {
 			expectedOwned = true
 		}
-		if selected < 0 && channel.BindsTaskPlugin(candidate.Meta.Key) {
-			selected = index
-		}
 		if channel.Type == constant.ChannelTypeTaskPlugin || channel.Type == constant.ChannelTypeNewAPI {
 			// A New API channel may bind several candidates. The first bound
 			// candidate in generation order executes, so the billing provider
 			// depends only on the channel and the request, never on which
 			// channels an earlier retry attempt happened to try.
+			if selected < 0 && setting.BindsTaskPlugin(candidate.Meta.Key) {
+				selected = index
+			}
 			continue
 		}
 		plugin, indexed := generation.GetByChannelType(channel.Type)
-		if selected < 0 && indexed && plugin == candidate {
+		if indexed && plugin == candidate {
 			selected = index
 		}
 	}

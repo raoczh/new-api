@@ -305,10 +305,6 @@ func TaskResultTokens(result *relaycommon.TaskInfo) int {
 // 当异步任务失败时，退还资金与令牌额度，并回减用户和渠道用量。
 // 返回资金来源是否已成功退还；失败时保留 quota，供显式重试或人工对账。
 func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) bool {
-	if taskKeepsGeneratedImageCharge(task) {
-		logger.LogWarn(ctx, common.LogText("task %s media delivery failed after generation; keeping its reserved charge", task.TaskID))
-		return true
-	}
 	quota := task.Quota
 	if quota == 0 {
 		return true
@@ -351,20 +347,6 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) bool 
 		logger.LogError(ctx, common.LogText("refund succeeded but clearing the task quota failed, task %s: %s", task.TaskID, err.Error()))
 	}
 	return true
-}
-
-// The built-in Zhiqi driver persists evidence that generation already finished.
-// Delivery failure (including a polling timeout after 99%) cannot refund work
-// the upstream has charged. This provider-specific policy does not extend the
-// plugin API or turn a failed delivery into a successful task.
-func taskKeepsGeneratedImageCharge(task *model.Task) bool {
-	if task == nil || task.Platform != constant.TaskPlatform("zhiqi") {
-		return false
-	}
-	var state struct {
-		GenerationCompleted bool `json:"generationCompleted"`
-	}
-	return common.Unmarshal(task.PrivateData.PluginState, &state) == nil && state.GenerationCompleted
 }
 
 // RecalculateTaskQuota 通用的异步差额结算。

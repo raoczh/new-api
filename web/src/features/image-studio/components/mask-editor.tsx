@@ -37,15 +37,9 @@ export interface ImageStudioMaskEditorProps {
   open: boolean
   /** Reference image the mask is painted over. */
   imageUrl: string
-  /** Zhiqi redraws alpha-transparent pixels instead of a black/white mask. */
-  transparentAreas?: boolean
   disabled?: boolean
   onOpenChange: (open: boolean) => void
-  onUploaded: (mask: {
-    key: string
-    url: string
-    reference?: { key: string; url: string }
-  }) => void
+  onUploaded: (mask: { key: string; url: string }) => void
 }
 
 const MAX_STROKES = 40
@@ -53,8 +47,8 @@ const MAX_STROKES = 40
 /**
  * Inpainting mask painter.
  *
- * Ordinary channels retain the black/white mask. Zhiqi exports transparent
- * painted pixels and a matching PNG reference. Painting happens on an overlay
+ * Exports the workbench's black/white mask for server-side adaptation.
+ * Painting happens on an overlay
  * canvas tinted red so the user can see the selection, then the mask is rebuilt
  * from the stored strokes at export time — that keeps the tint out of the file.
  */
@@ -222,10 +216,6 @@ export function ImageStudioMaskEditor(props: ImageStudioMaskEditorProps) {
 
       context.fillStyle = '#000000'
       context.fillRect(0, 0, mask.width, mask.height)
-      // Erase the painted alpha channel; white paint would remain opaque.
-      if (props.transparentAreas) {
-        context.globalCompositeOperation = 'destination-out'
-      }
       context.strokeStyle = '#ffffff'
       context.fillStyle = '#ffffff'
       context.lineCap = 'round'
@@ -253,25 +243,9 @@ export function ImageStudioMaskEditor(props: ImageStudioMaskEditorProps) {
       })
       if (!blob) throw new Error(t('The browser could not prepare the mask.'))
       const file = new File([blob], 'mask.png', { type: 'image/png' })
-      let reference: { key: string; url: string } | undefined
-      if (props.transparentAreas) {
-        // A PNG mask must accompany a same-size PNG reference, even for JPEG inputs.
-        context.globalCompositeOperation = 'source-over'
-        context.clearRect(0, 0, mask.width, mask.height)
-        context.drawImage(image, 0, 0)
-        const referenceBlob = await new Promise<Blob | null>((resolve) =>
-          mask.toBlob(resolve, 'image/png')
-        )
-        if (!referenceBlob) {
-          throw new Error(t('The browser could not prepare the mask.'))
-        }
-        reference = await uploadImageStudioFile(
-          new File([referenceBlob], 'reference.png', { type: 'image/png' })
-        )
-      }
       const uploaded = await uploadImageStudioFile(file)
       if (saveGeneration !== saveGenerationRef.current) return
-      props.onUploaded({ key: uploaded.key, url: uploaded.url, reference })
+      props.onUploaded({ key: uploaded.key, url: uploaded.url })
       props.onOpenChange(false)
     } catch (caught) {
       setError(

@@ -35,8 +35,16 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 
-import { IMAGE_STUDIO_QUALITY_PRESETS } from '../constants'
-import type { ImageStudioParamDraft } from '../lib/params'
+import {
+  IMAGE_STUDIO_FORMATS,
+  IMAGE_STUDIO_GIF_FRAME_COUNT,
+  IMAGE_STUDIO_GIF_FRAME_DURATIONS,
+  IMAGE_STUDIO_QUALITY_PRESETS,
+} from '../constants'
+import type {
+  ImageModelCapabilities,
+  ImageStudioParamDraft,
+} from '../lib/params'
 import { ImageStudioSizePicker } from './size-picker'
 
 interface Choice {
@@ -44,14 +52,10 @@ interface Choice {
   value: string
 }
 
-const FORMAT_CHOICES: Choice[] = [
-  { label: 'PNG', value: 'png' },
-  { label: 'JPEG', value: 'jpeg' },
-  { label: 'WebP', value: 'webp' },
-]
-
 export interface ImageStudioParameterRowProps {
+  /** Already resolved against `capabilities`. */
   draft: ImageStudioParamDraft
+  capabilities: ImageModelCapabilities
   maxImages: number
   disabled?: boolean
   /** Prompt styles live beside the aspect ratio in the reference design. */
@@ -61,20 +65,53 @@ export interface ImageStudioParameterRowProps {
 export function ImageStudioParameterRow(props: ImageStudioParameterRowProps) {
   const { t } = useTranslation()
 
+  const qualities = props.capabilities.qualities
+  const formats = props.capabilities.formats
   const qualityChoices = useMemo<Choice[]>(
     () =>
-      IMAGE_STUDIO_QUALITY_PRESETS.map((preset) => ({
-        label: t(preset.labelKey),
-        value: preset.value,
-      })),
+      IMAGE_STUDIO_QUALITY_PRESETS.filter((preset) =>
+        qualities.includes(preset.value)
+      ).map((preset) => ({ label: t(preset.labelKey), value: preset.value })),
+    [qualities, t]
+  )
+  const formatChoices = useMemo<Choice[]>(
+    () =>
+      IMAGE_STUDIO_FORMATS.filter((format) =>
+        formats.includes(format.value)
+      ).map((format) => ({ label: format.labelKey, value: format.value })),
+    [formats]
+  )
+  const frameCountChoices = useMemo<Choice[]>(
+    () => [
+      { label: t('Auto'), value: '0' },
+      ...Array.from(
+        {
+          length:
+            IMAGE_STUDIO_GIF_FRAME_COUNT.max -
+            IMAGE_STUDIO_GIF_FRAME_COUNT.min +
+            1,
+        },
+        (_, index) => {
+          const count = String(IMAGE_STUDIO_GIF_FRAME_COUNT.min + index)
+          return { label: count, value: count }
+        }
+      ),
+    ],
     [t]
   )
-  const qualityLabel =
-    qualityChoices.find((choice) => choice.value === props.draft.quality)
-      ?.label ?? props.draft.quality
-  const formatLabel =
-    FORMAT_CHOICES.find((choice) => choice.value === props.draft.outputFormat)
-      ?.label ?? props.draft.outputFormat.toUpperCase()
+  const frameDurationChoices = useMemo<Choice[]>(
+    () => [
+      { label: t('Auto'), value: '0' },
+      ...IMAGE_STUDIO_GIF_FRAME_DURATIONS.map((duration) => ({
+        label: `${duration} ms`,
+        value: String(duration),
+      })),
+    ],
+    [t]
+  )
+  const labelOf = (choices: Choice[], value: string) =>
+    choices.find((choice) => choice.value === value)?.label ?? value
+  const gif = props.draft.outputFormat === 'gif'
 
   return (
     <div className='flex flex-wrap items-center gap-1.5'>
@@ -85,7 +122,8 @@ export function ImageStudioParameterRow(props: ImageStudioParameterRowProps) {
       />
       <ParameterChip
         label={t('Quality')}
-        value={qualityLabel}
+        value={labelOf(qualityChoices, props.draft.quality)}
+        selectedValue={props.draft.quality}
         disabled={props.disabled}
         options={qualityChoices}
         onSelect={(value) => props.onChange({ quality: value })}
@@ -105,11 +143,37 @@ export function ImageStudioParameterRow(props: ImageStudioParameterRowProps) {
       />
       <ParameterChip
         label={t('Format')}
-        value={formatLabel}
+        value={labelOf(formatChoices, props.draft.outputFormat)}
+        selectedValue={props.draft.outputFormat}
         disabled={props.disabled}
-        options={FORMAT_CHOICES}
+        options={formatChoices}
         onSelect={(value) => props.onChange({ outputFormat: value })}
       />
+      {gif && (
+        <>
+          <ParameterChip
+            label={t('Frames')}
+            value={labelOf(frameCountChoices, String(props.draft.frameCount))}
+            selectedValue={String(props.draft.frameCount)}
+            disabled={props.disabled}
+            options={frameCountChoices}
+            onSelect={(value) => props.onChange({ frameCount: Number(value) })}
+          />
+          <ParameterChip
+            label={t('Frame duration')}
+            value={labelOf(
+              frameDurationChoices,
+              String(props.draft.frameDurationMs)
+            )}
+            selectedValue={String(props.draft.frameDurationMs)}
+            disabled={props.disabled}
+            options={frameDurationChoices}
+            onSelect={(value) =>
+              props.onChange({ frameDurationMs: Number(value) })
+            }
+          />
+        </>
+      )}
 
       <label
         className={cn(

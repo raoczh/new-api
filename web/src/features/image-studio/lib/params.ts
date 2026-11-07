@@ -16,14 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { DEFAULT_IMAGE_STUDIO_PARAMS } from '../constants'
+import {
+  DEFAULT_IMAGE_STUDIO_PARAMS,
+  IMAGE_STUDIO_FORMATS,
+  IMAGE_STUDIO_GIF_FRAME_COUNT,
+  IMAGE_STUDIO_QUALITY_PRESETS,
+} from '../constants'
 import type { ImageStudioTaskParams } from '../types'
+import { parseImageSize } from './size'
 
 /**
- * The editable parameter draft. It is a superset of what providers accept:
- * every field is optional so a model that ignores, say, `background` does not
- * break the request, and booleans are kept as booleans here and translated on
- * submit.
+ * Common workbench parameters. Provider-specific translation stays on the
+ * server, so selecting a different model never changes this draft's shape.
  */
 export interface ImageStudioParamDraft {
   size: string
@@ -31,164 +35,132 @@ export interface ImageStudioParamDraft {
   n: number
   transparent: boolean
   outputFormat: string
-  sizeMode?: 'exact' | 'resolution'
-  resolution?: string
-  aspectRatio?: string
-  outputCompression?: number
-  frameCount?: number
-  frameDurationMs?: number
+  /** GIF only; 0 lets the provider choose. */
+  frameCount: number
+  /** GIF only, in milliseconds; 0 lets the provider choose. */
+  frameDurationMs: number
 }
 
-/** Sentinels meaning "do not forward this field; let the model decide". */
-export const AUTO_IMAGE_STUDIO_SIZE = 'auto'
-export const AUTO_IMAGE_STUDIO_QUALITY = 'auto'
+/** Options a model offers beyond the common png/jpeg/webp and auto–high set. */
+export interface ImageModelCapabilities {
+  qualities: string[]
+  formats: string[]
+}
 
-export function createDefaultParamDraft(
-  zhiqiEngine = false
+const COMMON_QUALITIES = ['auto', 'low', 'medium', 'high']
+const COMMON_FORMATS = ['png', 'jpeg', 'webp']
+
+/**
+ * gpt-image-2 adds SVG output, 2.5 adds the xhigh/max quality tiers, and 2.6
+ * adds animated GIF. Their -flare / -sunburst variants share the capabilities.
+ */
+export function getImageModelCapabilities(
+  model: string
+): ImageModelCapabilities {
+  const match = /(?:^|[/:])gpt-image-(\d+(?:\.\d+)?)(?:-|$)/i.exec(model.trim())
+  const version = match ? Number(match[1]) : 0
+  const qualities = [...COMMON_QUALITIES]
+  const formats = [...COMMON_FORMATS]
+  if (version >= 2) formats.push('svg')
+  if (version >= 2.5) qualities.push('xhigh', 'max')
+  if (version >= 2.6) formats.push('gif')
+  return { qualities, formats }
+}
+
+/** Fall back to defaults when the selected model lacks a drafted option. */
+export function resolveParamDraft(
+  draft: ImageStudioParamDraft,
+  capabilities: ImageModelCapabilities
 ): ImageStudioParamDraft {
-  if (zhiqiEngine) {
-    return {
-      size: '',
-      sizeMode: 'resolution',
-      resolution: '',
-      aspectRatio: '',
-      quality: '',
-      n: 1,
-      transparent: false,
-      outputFormat: '',
-    }
+  return {
+    ...draft,
+    quality: capabilities.qualities.includes(draft.quality)
+      ? draft.quality
+      : DEFAULT_IMAGE_STUDIO_PARAMS.quality,
+    outputFormat: capabilities.formats.includes(draft.outputFormat)
+      ? draft.outputFormat
+      : DEFAULT_IMAGE_STUDIO_PARAMS.output_format,
   }
+}
+
+export function createDefaultParamDraft(): ImageStudioParamDraft {
   return {
     size: DEFAULT_IMAGE_STUDIO_PARAMS.size,
     quality: DEFAULT_IMAGE_STUDIO_PARAMS.quality,
     n: DEFAULT_IMAGE_STUDIO_PARAMS.n,
     transparent: false,
     outputFormat: DEFAULT_IMAGE_STUDIO_PARAMS.output_format,
+    frameCount: 0,
+    frameDurationMs: 0,
   }
 }
 
-/**
- * Translate the draft into the provider payload.
- *
- * `auto` means "let the model decide", so the key is omitted rather than sent
- * as the literal string. That matters twice: an older DALL·E endpoint rejects
- * `size: "auto"`, and quality only exists on the newer image models. If a user
- * picked an explicit value, it is forwarded untouched.
- *
- * `transparent` maps onto `background: "transparent"` because that is the name
- * every OpenAI-compatible image API understands; leaving it blank is the same
- * as omitting the field, so providers keep their own default.
- */
-export function draftToParams(
-  draft: ImageStudioParamDraft
-): ImageStudioTaskParams {
-  const params: ImageStudioTaskParams = {
-    n: draft.n,
-    output_format: draft.outputFormat,
-  }
-  if (draft.size && draft.size !== AUTO_IMAGE_STUDIO_SIZE) {
-    params.size = draft.size
-  }
-  if (draft.quality && draft.quality !== AUTO_IMAGE_STUDIO_QUALITY) {
-    params.quality = draft.quality
-  }
-  if (draft.transparent) {
-    params.background = 'transparent'
-  }
-  return params
-}
-
-/** Stored records may predate the sentinel; treat them as auto too. */
+/** Reuse supported settings without inferring pixels from private metadata. */
 export function paramsToDraft(
-  params?: ImageStudioTaskParams | null,
-  zhiqiEngine = false
+  params?: ImageStudioTaskParams | null
 ): ImageStudioParamDraft {
-  const draft = createDefaultParamDraft(zhiqiEngine)
+  const draft = createDefaultParamDraft()
   if (!params) return draft
-  if (typeof params.size === 'string' && params.size) draft.size = params.size
-  if (typeof params.quality === 'string' && params.quality) {
+  const size =
+    typeof params.size === 'string' ? parseImageSize(params.size) : null
+  if (size) draft.size = `${size.width}x${size.height}`
+  if (
+    typeof params.quality === 'string' &&
+    IMAGE_STUDIO_QUALITY_PRESETS.some(
+      (preset) => preset.value === params.quality
+    )
+  ) {
     draft.quality = params.quality
   }
   if (typeof params.n === 'number' && Number.isFinite(params.n)) {
     draft.n = Math.max(1, Math.trunc(params.n))
   }
-  if (typeof params.output_format === 'string' && params.output_format) {
+  if (
+    typeof params.output_format === 'string' &&
+    IMAGE_STUDIO_FORMATS.some((format) => format.value === params.output_format)
+  ) {
     draft.outputFormat = params.output_format
   }
+  if (
+    typeof params.frame_count === 'number' &&
+    Number.isInteger(params.frame_count) &&
+    params.frame_count >= IMAGE_STUDIO_GIF_FRAME_COUNT.min &&
+    params.frame_count <= IMAGE_STUDIO_GIF_FRAME_COUNT.max
+  ) {
+    draft.frameCount = params.frame_count
+  }
+  if (
+    typeof params.frame_duration_ms === 'number' &&
+    Number.isInteger(params.frame_duration_ms) &&
+    params.frame_duration_ms >= 20 &&
+    params.frame_duration_ms <= 655350
+  ) {
+    draft.frameDurationMs = params.frame_duration_ms
+  }
   draft.transparent = params.background === 'transparent'
-  if (!zhiqiEngine) {
-    if (['svg', 'gif'].includes(draft.outputFormat)) {
-      draft.outputFormat = DEFAULT_IMAGE_STUDIO_PARAMS.output_format
-    }
-    if (['xhigh', 'max'].includes(draft.quality)) {
-      draft.quality = DEFAULT_IMAGE_STUDIO_PARAMS.quality
-    }
-  }
-  if (zhiqiEngine) {
-    draft.n = 1
-    draft.transparent = false
-    draft.resolution =
-      typeof params.resolution === 'string' ? params.resolution : ''
-    draft.aspectRatio =
-      typeof params.aspect_ratio === 'string' ? params.aspect_ratio : ''
-    draft.sizeMode =
-      draft.resolution || draft.aspectRatio || !draft.size
-        ? 'resolution'
-        : 'exact'
-    if (draft.outputFormat === 'jpeg' || draft.outputFormat === 'webp') {
-      if (typeof params.output_compression === 'number') {
-        draft.outputCompression = params.output_compression
-      }
-    }
-    if (draft.outputFormat === 'gif') {
-      if (typeof params.frame_count === 'number') {
-        draft.frameCount = params.frame_count
-      }
-      if (typeof params.frame_duration_ms === 'number') {
-        draft.frameDurationMs = params.frame_duration_ms
-      }
-    }
-  }
   return draft
 }
 
-/** Preserve the workbench's existing ordinary-channel request semantics. */
+/**
+ * Build the submitted parameters from a draft already resolved for the model.
+ * Frame settings are sent only with GIF, the only format that accepts them.
+ */
 export function buildComposerParams(
   draft: ImageStudioParamDraft,
-  maxImages: number,
-  zhiqiEngine: boolean
+  maxImages: number
 ): ImageStudioTaskParams {
-  if (!zhiqiEngine) {
-    return {
-      n: clampImageCount(draft.n, maxImages),
-      size: draft.size,
-      quality: draft.quality,
-      output_format: draft.outputFormat,
-      ...(draft.transparent ? { background: 'transparent' } : {}),
-    }
+  const gif = draft.outputFormat === 'gif'
+  return {
+    n: clampImageCount(draft.n, maxImages),
+    size: draft.size,
+    quality: draft.quality,
+    output_format: draft.outputFormat,
+    ...(draft.transparent ? { background: 'transparent' } : {}),
+    ...(gif && draft.frameCount > 0 ? { frame_count: draft.frameCount } : {}),
+    ...(gif && draft.frameDurationMs > 0
+      ? { frame_duration_ms: draft.frameDurationMs }
+      : {}),
   }
-  const params: ImageStudioTaskParams = { n: 1, response_format: 'url' }
-  if (draft.sizeMode === 'exact') {
-    if (draft.size) params.size = draft.size
-  } else {
-    // Pixel mappings belong to the channel, never to the workbench.
-    if (draft.resolution) params.resolution = draft.resolution
-    if (draft.aspectRatio) params.aspect_ratio = draft.aspectRatio
-  }
-  if (draft.quality) params.quality = draft.quality
-  if (draft.outputFormat) params.output_format = draft.outputFormat
-  if (draft.outputFormat === 'jpeg' || draft.outputFormat === 'webp') {
-    if (draft.outputCompression !== undefined) {
-      params.output_compression = draft.outputCompression
-    }
-  }
-  if (draft.outputFormat === 'gif') {
-    if (draft.frameCount !== undefined) params.frame_count = draft.frameCount
-    if (draft.frameDurationMs !== undefined) {
-      params.frame_duration_ms = draft.frameDurationMs
-    }
-  }
-  return params
 }
 
 /** Clamp a requested count to what the server is willing to accept. */

@@ -1423,15 +1423,6 @@ func renderTaskPluginQuery(
 	views := make([]dto.TaskView, 0, len(taskIDs))
 	for _, taskID := range taskIDs {
 		task := tasksByID[taskID]
-		if task != nil && pinned.Plugin.Meta.Key == "zhiqi" {
-			c.Header("Cache-Control", "private, no-store")
-			if common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled) {
-				limits, _ := common.GetContextKeyType[map[string]bool](c, constant.ContextKeyTokenModelLimit)
-				if !TokenModelLimitAllows(limits, task.Properties.OriginModelName) {
-					task = nil
-				}
-			}
-		}
 		if task == nil || !task.ResultRetrievable() {
 			logger.LogDebug(
 				c,
@@ -1593,9 +1584,6 @@ func RespondTaskPluginError(c *gin.Context, taskErr *dto.TaskError) bool {
 		return false
 	}
 	sanitized := sanitizedTaskPluginError(taskErr.StatusCode, taskErr.Message)
-	if pinned.Plugin.Meta.Key == "zhiqi" && taskErr.Code == "model_price_error" && taskErr.StatusCode == http.StatusBadRequest {
-		sanitized.Code = taskErr.Code
-	}
 	requestID := c.GetString(common.RequestIdKey)
 	hasRenderer, err := pinned.Plugin.Engine.HasCallablePath(c.Request.Context(), "native", "error")
 	requestValue, exists := c.Get(pluginruntime.ContextKeyRouteRequest)

@@ -164,18 +164,6 @@ func RunTaskPollingOnce(ctx context.Context, report func(processed, total int)) 
 			continue
 		}
 		summary.PlatformsScanned++
-		if platform == constant.TaskPlatform("zhiqi") {
-			// Upstream IDs are only unique within the original channel's
-			// permission domain, never across independent providers/accounts.
-			for _, task := range tasks {
-				if ctx.Err() != nil {
-					break
-				}
-				upstreamID := task.GetUpstreamTaskID()
-				DispatchPlatformUpdate(ctx, platform, map[int][]string{task.ChannelId: {upstreamID}}, map[string]*model.Task{upstreamID: task})
-			}
-			continue
-		}
 		taskChannelM := make(map[int][]string)
 		taskM := make(map[string]*model.Task)
 		nullTaskIds := make([]int64, 0)
@@ -712,13 +700,6 @@ func truncateBase64(s string) string {
 //
 // 表达式求值失败会保留预扣额度，因此也视为已接管，避免错误全退。
 func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, taskResult *relaycommon.TaskInfo) bool {
-	if SettlePendingZhiqiImageTask(ctx, task, taskResult) {
-		return true
-	}
-	if task.Status == model.TaskStatusFailure && taskKeepsGeneratedImageCharge(task) {
-		logger.LogWarn(ctx, common.LogText("task %s media delivery failed after generation; keeping its reserved charge", task.TaskID))
-		return true
-	}
 	if bc := task.PrivateData.BillingContext; bc != nil && bc.TieredSnapshot != nil {
 		// 用量表达式结算只适用于成功任务；失败任务由调用方全额退款。
 		if task.Status == model.TaskStatusFailure {

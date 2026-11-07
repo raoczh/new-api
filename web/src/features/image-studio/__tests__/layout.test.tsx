@@ -158,12 +158,14 @@ test('splits the workbench into an editor column and a gallery column', async ()
   expect(grid).toHaveClass('flex-col')
 })
 
-test('reusing Zhiqi history switches model and keeps its parameters through the real page submit', async () => {
+test('reusing history with a legacy provider flag restores ordinary parameters through the real page submit', async () => {
   const zhiqiTask = {
     ...task,
     model: 'custom-zhiqi',
     group: 'vip',
     params: {
+      n: 3,
+      background: 'transparent',
       resolution: '4k',
       aspect_ratio: '21:9',
       output_format: 'jpeg',
@@ -209,23 +211,22 @@ test('reusing Zhiqi history switches model and keeps its parameters through the 
       screen.getByRole('combobox', { name: 'Select model' })
     ).toHaveTextContent('custom-zhiqi')
   )
-  expect(screen.getByRole('button', { name: 'Resolution: 4k' })).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Size: Auto' })).toBeVisible()
   expect(
-    screen.getByRole('spinbutton', { name: 'Output compression (0-100)' })
-  ).toHaveValue(0)
-  fireEvent.click(screen.getByRole('button', { name: 'Generate 1' }))
+    screen.getByRole('switch', { name: /Transparent background/ })
+  ).toBeChecked()
+  fireEvent.click(screen.getByRole('button', { name: 'Generate 3' }))
   await waitFor(() =>
     expect(api.submitImageStudioTask).toHaveBeenCalledWith({
       model: 'custom-zhiqi',
       group: 'vip',
       prompt: task.prompt,
       params: {
-        n: 1,
-        response_format: 'url',
-        resolution: '4k',
-        aspect_ratio: '21:9',
+        n: 3,
+        size: 'auto',
+        quality: 'auto',
+        background: 'transparent',
         output_format: 'jpeg',
-        output_compression: 0,
       },
       referenceKeys: [],
       maskKey: undefined,

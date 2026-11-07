@@ -46,19 +46,6 @@ func ResolveImageBillingRequestInput(c *gin.Context, info *relaycommon.RelayInfo
 		return input, err
 	}
 	body := map[string]any{"model": request.Model, "n": count, "size": request.Size, "quality": request.Quality}
-	if info.ChannelMeta != nil && info.ChannelSetting.IsZhiqiEngine() {
-		zhiqiRequest, err := ReadZhiqiImageRequest(c)
-		if err != nil {
-			return input, err
-		}
-		encoded, err := zhiqiRequest.BillingBody()
-		if err != nil {
-			return input, err
-		}
-		input.Body = encoded
-		input.ImageCount = &count
-		return input, nil
-	}
 	if request.BillingParameters != nil {
 		body["parameters"] = request.BillingParameters
 	}

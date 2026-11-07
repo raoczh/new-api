@@ -11,7 +11,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
@@ -37,22 +36,11 @@ func OpenaiImageHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
 
-	zhiqiResponse := info.ChannelMeta != nil && info.ChannelSetting.IsZhiqiEngine()
-	if oaiError := usageResp.GetOpenAIError(); oaiError != nil && (oaiError.Type != "" || zhiqiResponse) {
-		statusCode := resp.StatusCode
-		if zhiqiResponse && statusCode == http.StatusOK {
-			statusCode = http.StatusBadGateway
-		}
-		return nil, types.WithOpenAIError(*oaiError, statusCode)
+	if oaiError := usageResp.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
+		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
 
-	imageCount := openaiImageResponseCount(responseBody)
-	if zhiqiResponse && imageCount == 0 {
-		c.Set("zhiqi_keep_reservation", true)
-		return nil, types.NewError(fmt.Errorf("upstream image response contains no image payload"), types.ErrorCodeBadResponseBody,
-			types.ErrOptionWithStatusCode(http.StatusBadGateway), types.ErrOptionWithSkipRetry())
-	}
-	info.UpdateImageCount(imageCount)
+	info.UpdateImageCount(openaiImageResponseCount(responseBody))
 
 	// 写入新的 response body
 	service.IOCopyBytesGracefully(c, resp, responseBody)
@@ -153,8 +141,6 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 	usage := &dto.Usage{}
 	var lastStreamData []byte
 	var completedImages int64
-	zhiqiStream := info.ChannelMeta != nil && info.ChannelSetting.IsZhiqiEngine()
-	var streamError *types.NewAPIError
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 		raw := common.StringToByteSlice(data)
@@ -162,21 +148,7 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 		if isOpenAIImageStreamErrorEvent(raw) {
 			// Record the error as a soft error; the scanner drives the final
 			// EndReason. HasErrors() flags the failure for logging/handling.
-			if zhiqiStream {
-				var event struct {
-					Error types.OpenAIError `json:"error"`
-					Code  string            `json:"code"`
-				}
-				_ = common.Unmarshal(raw, &event)
-				if event.Error.Code == nil {
-					event.Error.Code = event.Code
-				}
-				event.Error.Message = extractOpenAIImageStreamErrorMessage(raw)
-				streamError = types.WithOpenAIError(event.Error, http.StatusBadGateway, types.ErrOptionWithSkipRetry())
-				sr.Error(streamError)
-			} else {
-				sr.Error(fmt.Errorf("%s", extractOpenAIImageStreamErrorMessage(raw)))
-			}
+			sr.Error(fmt.Errorf("%s", extractOpenAIImageStreamErrorMessage(raw)))
 		}
 		var chunk struct {
 			Type  string    `json:"type"`
@@ -188,32 +160,7 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 				usage = &chunk.Usage
 			}
 			if chunk.Type == "image_generation.completed" || chunk.Type == "image_edit.completed" {
-				if !zhiqiStream || openaiImageDataHasField(ojson.GetBytesNoCopy(raw, "@this"), "url") || openaiImageDataHasField(ojson.GetBytesNoCopy(raw, "@this"), "b64_json") {
-					completedImages++
-					if zhiqiStream {
-						info.StreamStatus.MarkCompleted()
-					}
-				}
-			}
-			if zhiqiStream && (chunk.Type == "image_generation.pending" || chunk.Type == "image_edit.pending") {
-				var event map[string]json.RawMessage
-				if err := common.Unmarshal(raw, &event); err != nil {
-					sr.Stop(err)
-					return
-				}
-				publicID, err := service.PersistZhiqiImagePending(c, info, event)
-				if err != nil {
-					c.Set("zhiqi_keep_reservation", true)
-					streamError = types.NewError(err, types.ErrorCodeBadResponseBody, types.ErrOptionWithSkipRetry())
-					sr.Stop(streamError)
-					return
-				}
-				event["id"], _ = common.Marshal(publicID)
-				raw, err = common.Marshal(event)
-				if err != nil {
-					sr.Stop(err)
-					return
-				}
+				completedImages++
 			}
 		}
 		if err := writeOpenaiImageStreamChunk(c, raw); err != nil {
@@ -240,17 +187,7 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 			info.StreamStatus.EndReason == relaycommon.StreamEndReasonEOF
 		if upstreamFinished || completedImages > int64(info.RequestedImageCount()) {
 			info.UpdateImageCount(completedImages)
-		} else if zhiqiStream && completedImages > 0 {
-			info.UpdateImageCount(max(completedImages, int64(info.RequestedImageCount())))
 		}
-	}
-	if zhiqiStream && streamError != nil {
-		return usage, streamError
-	}
-	if zhiqiStream && completedImages == 0 && !c.GetBool("zhiqi_image_pending") {
-		c.Set("zhiqi_keep_reservation", true)
-		return usage, types.NewError(fmt.Errorf("image stream ended before a completed image or pending task was received; do not resubmit automatically"),
-			types.ErrorCodeBadResponseBody, types.ErrOptionWithStatusCode(http.StatusBadGateway), types.ErrOptionWithSkipRetry())
 	}
 	return usage, nil
 }
@@ -334,30 +271,19 @@ func openaiImageJSONAsStreamHandler(c *gin.Context, info *relaycommon.RelayInfo,
 	if err := common.Unmarshal(responseBody, &usageResp); err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
-	zhiqiStream := info.ChannelMeta != nil && info.ChannelSetting.IsZhiqiEngine()
-	if oaiError := usageResp.GetOpenAIError(); oaiError != nil && (oaiError.Type != "" || zhiqiStream) {
-		statusCode := resp.StatusCode
-		if zhiqiStream && statusCode == http.StatusOK {
-			statusCode = http.StatusBadGateway
-		}
-		return nil, types.WithOpenAIError(*oaiError, statusCode)
+	if oaiError := usageResp.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
+		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
 	normalizeOpenAIUsage(&usageResp.Usage)
 	applyUsagePostProcessing(info, &usageResp.Usage, responseBody)
 
-	imageCount := openaiImageResponseCount(responseBody)
-	if zhiqiStream && imageCount == 0 {
-		c.Set("zhiqi_keep_reservation", true)
-		return nil, types.NewError(fmt.Errorf("upstream image response contains no image payload"), types.ErrorCodeBadResponseBody,
-			types.ErrOptionWithStatusCode(http.StatusBadGateway), types.ErrOptionWithSkipRetry())
-	}
-	info.UpdateImageCount(imageCount)
+	info.UpdateImageCount(openaiImageResponseCount(responseBody))
 
 	helper.SetEventStreamHeaders(c)
 	c.Status(http.StatusOK)
 
 	created := ojson.GetBytes(responseBody, "created").Int()
-	if created == 0 && !zhiqiStream {
+	if created == 0 {
 		created = time.Now().Unix()
 	}
 	if info != nil {
@@ -372,10 +298,6 @@ func openaiImageJSONAsStreamHandler(c *gin.Context, info *relaycommon.RelayInfo,
 			return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 		}
 	}
-	if zhiqiStream {
-		usageJSON = []byte(ojson.GetBytesNoCopy(responseBody, "usage").Raw)
-		validUsage = len(usageJSON) > 0 && string(usageJSON) != "null"
-	}
 
 	// ojson.Result.Array returns the element list for an array and a single
 	// element for an object-shaped data. The results share memory with
@@ -387,26 +309,8 @@ func openaiImageJSONAsStreamHandler(c *gin.Context, info *relaycommon.RelayInfo,
 		if !openaiImageDataHasField(image, "url") && !openaiImageDataHasField(image, "b64_json") {
 			continue
 		}
-		eventType := "image_generation.completed"
-		if zhiqiStream && info.RelayMode == relayconstant.RelayModeImagesEdits {
-			eventType = "image_edit.completed"
-		}
-		payload := ojson.NewDocString(`{}`)
-		if err := payload.Set("type", eventType); err != nil {
-			return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
-		}
-		if zhiqiStream {
-			if err := payload.Set("image_index", emitted); err != nil {
-				return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
-			}
-			for _, field := range []string{"created", "size", "quality", "output_format"} {
-				if value := ojson.GetBytesNoCopy(responseBody, field); value.Exists() {
-					if err := payload.SetRaw(field, value.Raw); err != nil {
-						return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
-					}
-				}
-			}
-		} else if err := payload.Set("created_at", created); err != nil {
+		payload := ojson.NewDocString(`{"type":"image_generation.completed"}`)
+		if err := payload.Set("created_at", created); err != nil {
 			return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 		}
 		if validUsage {
@@ -425,7 +329,7 @@ func openaiImageJSONAsStreamHandler(c *gin.Context, info *relaycommon.RelayInfo,
 				return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 			}
 		}
-		if writeErr := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: eventType}, payload.String()); writeErr != nil {
+		if writeErr := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: "image_generation.completed"}, payload.String()); writeErr != nil {
 			if info != nil && info.StreamStatus != nil {
 				info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, writeErr)
 			}

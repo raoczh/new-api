@@ -35,19 +35,19 @@ type ChannelSettings struct {
 	// TLSInsecureSkipVerify accepts upstream certificates that fail
 	// verification, such as self-signed ones, for this channel only.
 	TLSInsecureSkipVerify bool `json:"tls_insecure_skip_verify,omitempty"`
-	// ZhiqiEngine opts this channel into the Zhiqi Images contract. A pointer
-	// distinguishes an explicit opt-out from a saved legacy URL-reference flag.
-	ZhiqiEngine *bool `json:"zhiqi_engine,omitempty"`
-	// ImageReferenceAsURL is the legacy name of the Zhiqi opt-in. New channel
-	// settings write ZhiqiEngine instead; existing settings remain readable.
+	// ZhiqiEngine marks a Zhiqi image channel. Clients keep calling the
+	// unified /v1/images endpoints; each request is converted to the Zhiqi
+	// Images contract (reference images and masks as public URLs) before it
+	// is sent upstream.
+	ZhiqiEngine bool `json:"zhiqi_engine,omitempty"`
+	// ImageReferenceAsURL is the earlier name of ZhiqiEngine. Saved channels
+	// keep working; the channel form writes only the new key.
 	ImageReferenceAsURL bool `json:"image_reference_as_url,omitempty"`
 }
 
-func (settings ChannelSettings) IsZhiqiEngine() bool {
-	if settings.ZhiqiEngine != nil {
-		return *settings.ZhiqiEngine
-	}
-	return settings.ImageReferenceAsURL
+// IsZhiqiEngine reports whether /v1/images requests use the Zhiqi contract.
+func (s ChannelSettings) IsZhiqiEngine() bool {
+	return s.ZhiqiEngine || s.ImageReferenceAsURL
 }
 
 // BindsTaskPlugin reports whether the channel is bound to the task plugin,

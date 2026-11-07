@@ -11,7 +11,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
@@ -32,13 +31,6 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	if !ok {
 		return types.NewErrorWithStatusCode(fmt.Errorf("invalid request type, expected dto.ImageRequest, got %T", info.Request), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}
-	if !info.ChannelSetting.IsZhiqiEngine() && c.GetBool("zhiqi_image_ingress") {
-		var err error
-		imageReq, err = helper.GetAndValidOpenAIImageRequest(c, info.RelayMode)
-		if err != nil {
-			return types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
-		}
-	}
 
 	request, err := common.DeepCopy(imageReq)
 	if err != nil {
@@ -51,7 +43,8 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	}
 
 	adaptor := GetAdaptor(info.ApiType)
-	if info.ChannelSetting.IsZhiqiEngine() {
+	zhiqi := info.ChannelSetting.IsZhiqiEngine()
+	if zhiqi {
 		adaptor = &zhiqiImageAdaptor{}
 	}
 	if adaptor == nil {
@@ -67,41 +60,26 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	var jsonData []byte
 
 	passThrough := model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled
-	if info.ChannelSetting.IsZhiqiEngine() {
-		zhiqiRequest, payload, contentType, requestPath, err := buildZhiqiImageRequest(c, info, request.Model)
-		if err != nil {
-			return types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+	if zhiqi {
+		// Zhiqi only accepts URL references, so its conversion also replaces
+		// pass-through. The client request shape is restored for retries.
+		zhiqiRequest, apiErr := buildZhiqiImageRequest(c, info, request.Model)
+		if apiErr != nil {
+			return apiErr
 		}
-		request, err = zhiqiRequest.ToImageRequest()
-		if err != nil {
-			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
-		}
-		imageCount, err = request.ImageCount(false)
-		if err != nil {
-			return types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
-		}
-		billingBody, err := zhiqiRequest.BillingBody()
-		if err != nil {
-			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
-		}
-		originalContentType := c.Request.Header.Get("Content-Type")
-		originalPath, originalMode, originalStream := info.RequestURLPath, info.RelayMode, info.IsStream
-		originalBillingInput := info.BillingRequestInput
+		contentType := c.Request.Header.Get("Content-Type")
+		relayMode, requestURLPath, isStream := info.RelayMode, info.RequestURLPath, info.IsStream
 		defer func() {
-			c.Request.Header.Set("Content-Type", originalContentType)
-			info.RequestURLPath, info.RelayMode, info.IsStream = originalPath, originalMode, originalStream
-			info.BillingRequestInput = originalBillingInput
+			c.Request.Header.Set("Content-Type", contentType)
+			info.RelayMode, info.RequestURLPath, info.IsStream = relayMode, requestURLPath, isStream
 		}()
-		info.BillingRequestInput = &billingexpr.RequestInput{Body: billingBody, Headers: info.RequestHeaders, ImageCount: &imageCount}
-		c.Request.Header.Set("Content-Type", contentType)
-		info.RequestURLPath = requestPath
-		info.RelayMode = relayconstant.Path2RelayMode(requestPath)
-		info.IsStream = zhiqiRequest.Stream != nil && *zhiqiRequest.Stream
-		if strings.HasPrefix(contentType, "multipart/form-data") {
-			requestBody = bytes.NewReader(payload)
-		} else {
-			jsonData = payload
-		}
+		c.Request.Header.Set("Content-Type", zhiqiRequest.contentType)
+		info.RequestURLPath = zhiqiRequest.requestPath
+		info.RelayMode = relayconstant.Path2RelayMode(zhiqiRequest.requestPath)
+		info.IsStream = zhiqiRequest.stream
+		imageCount = zhiqiRequest.imageCount
+		logger.LogDebug(c, "zhiqi image request body: %s", zhiqiRequest.body)
+		requestBody = bytes.NewReader(zhiqiRequest.body)
 	} else if passThrough {
 		storage, err := common.GetBodyStorage(c)
 		if err != nil {
@@ -178,21 +156,6 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	}
 
 	statusCodeMappingStr := c.GetString("status_code_mapping")
-	if info.ChannelSetting.IsZhiqiEngine() {
-		defer func() {
-			if newAPIError == nil {
-				return
-			}
-			// Once sent, neither a lost response nor a delivery error proves the
-			// provider did no work. Never start a second paid generation here.
-			types.ErrOptionWithSkipRetry()(newAPIError)
-			if newAPIError.GetErrorCode() == "media_storage_failed" || c.GetBool("zhiqi_keep_reservation") {
-				if err := service.SettleZhiqiImageReservation(c, info, string(newAPIError.GetErrorCode())); err != nil {
-					logger.LogError(c, common.LogText("failed to retain Zhiqi image reservation: %s", err.Error()))
-				}
-			}
-		}()
-	}
 
 	resp, err := adaptor.DoRequest(c, info, requestBody)
 	if err != nil {
@@ -221,10 +184,6 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		service.ResetStatusCode(newAPIError, statusCodeMappingStr)
 		return newAPIError
 	}
-	if c.GetBool("zhiqi_image_pending") {
-		// The durable task owns the frozen reservation and terminal settlement.
-		return nil
-	}
 
 	// The log content shows the settled count: the count the handler derived
 	// from the upstream response when it did, otherwise the reserved quantity.
@@ -235,17 +194,15 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		imageN = common.QuotaRound(count)
 	}
 
-	if !info.ChannelSetting.IsZhiqiEngine() {
-		if usage.(*dto.Usage).TotalTokens == 0 {
-			usage.(*dto.Usage).TotalTokens = 1
-		}
-		if usage.(*dto.Usage).PromptTokens == 0 {
-			usage.(*dto.Usage).PromptTokens = 1
-		}
+	if usage.(*dto.Usage).TotalTokens == 0 {
+		usage.(*dto.Usage).TotalTokens = 1
+	}
+	if usage.(*dto.Usage).PromptTokens == 0 {
+		usage.(*dto.Usage).PromptTokens = 1
 	}
 
 	quality := request.Quality
-	if quality == "" && !info.ChannelSetting.IsZhiqiEngine() {
+	if quality == "" {
 		quality = "standard"
 	}
 

@@ -75,20 +75,33 @@ export const IMAGE_STUDIO_SIZE_RATIOS = [
 ] as const
 
 /**
- * Quality is a separate provider hint (`auto`/`low`/`medium`/`high`), not a
- * resolution. 2K and 4K live in the size picker instead.
+ * Quality is a separate provider hint, not a resolution. 2K and 4K live in the
+ * size picker instead. `xhigh` and `max` exist only on newer gpt-image models;
+ * `getImageModelCapabilities` decides which presets a model offers.
  */
 export const IMAGE_STUDIO_QUALITY_PRESETS = [
   { labelKey: 'Auto', value: 'auto' },
   { labelKey: 'Low quality', value: 'low' },
   { labelKey: 'Medium quality', value: 'medium' },
   { labelKey: 'High', value: 'high' },
+  { labelKey: 'Extra high', value: 'xhigh' },
+  { labelKey: 'Maximum', value: 'max' },
 ] as const
 
+/** Output formats; SVG and GIF are offered only to models that support them. */
 export const IMAGE_STUDIO_FORMATS = [
   { labelKey: 'PNG', value: 'png' },
   { labelKey: 'JPEG', value: 'jpeg' },
   { labelKey: 'WebP', value: 'webp' },
+  { labelKey: 'SVG', value: 'svg' },
+  { labelKey: 'GIF', value: 'gif' },
+] as const
+
+/** GIF frame count range accepted by gpt-image-2.6. */
+export const IMAGE_STUDIO_GIF_FRAME_COUNT = { min: 2, max: 16 } as const
+/** Per-frame duration presets (ms); the provider rounds to 10 ms. */
+export const IMAGE_STUDIO_GIF_FRAME_DURATIONS = [
+  80, 100, 200, 300, 500, 1000,
 ] as const
 
 /** Default parameter draft used by 重置 and by a fresh page load. */

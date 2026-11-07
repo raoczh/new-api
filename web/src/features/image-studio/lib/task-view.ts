@@ -72,12 +72,23 @@ export function describeElapsed(milliseconds: number): string {
 }
 
 /** One-line summary of the generation settings shown under a record. */
-export function describeTaskParams(task: ImageStudioTask): string {
+export function describeTaskParams(
+  task: Pick<ImageStudioTask, 'params'>
+): string {
   const parts: string[] = []
   if (task.params?.size) parts.push(String(task.params.size))
   if (task.params?.quality) parts.push(String(task.params.quality))
-  if (task.params?.resolution) parts.push(task.params.resolution)
-  if (task.params?.aspect_ratio) parts.push(task.params.aspect_ratio)
+  // Legacy records may contain extra metadata; displaying it does not make it
+  // part of the editable parameter contract.
+  if (typeof task.params?.resolution === 'string' && task.params.resolution) {
+    parts.push(task.params.resolution)
+  }
+  if (
+    typeof task.params?.aspect_ratio === 'string' &&
+    task.params.aspect_ratio
+  ) {
+    parts.push(task.params.aspect_ratio)
+  }
   if (task.params?.output_format) {
     parts.push(task.params.output_format.toUpperCase())
   }

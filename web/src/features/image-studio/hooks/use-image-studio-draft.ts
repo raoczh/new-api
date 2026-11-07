@@ -25,15 +25,11 @@ import {
   paramsToDraft,
   type ImageStudioParamDraft,
 } from '../lib/params'
-import { patchImageStudioParams } from '../lib/zhiqi'
 import type { ImageStudioReference } from '../types'
 
 export interface UseImageStudioDraftOptions {
   maxReferences: number
   uploadMaxMB: number
-  zhiqiEngine?: boolean
-  model?: string
-  group?: string
 }
 
 export interface DraftMask {
@@ -58,10 +54,6 @@ export interface UseImageStudioDraftResult {
   setReferenceError: (value: string | null) => void
   addFiles: (files: File[]) => void
   removeReference: (uid: string) => void
-  replaceReference: (
-    uid: string,
-    reference: { key: string; url: string }
-  ) => void
   moveReference: (uid: string, direction: -1 | 1) => void
   mask: DraftMask | null
   setMask: (mask: DraftMask | null) => void
@@ -70,9 +62,6 @@ export interface UseImageStudioDraftResult {
     prompt: string
     params?: Record<string, unknown> | null
     referenceUrls?: string[]
-    zhiqiEngine?: boolean
-    model?: string
-    group?: string
   }) => void
   reset: () => void
 }
@@ -95,25 +84,13 @@ export function useImageStudioDraft(
   options: UseImageStudioDraftOptions
 ): UseImageStudioDraftResult {
   const { t } = useTranslation()
-  const zhiqiEngine = options.zhiqiEngine === true
-  const parameterScope = zhiqiEngine
-    ? JSON.stringify([options.group ?? '', options.model ?? ''])
-    : 'ordinary'
   const [prompt, setPrompt] = useState('')
-  const [params, setParams] = useState<ImageStudioParamDraft>(() =>
-    createDefaultParamDraft(zhiqiEngine)
+  const [params, setParams] = useState<ImageStudioParamDraft>(
+    createDefaultParamDraft
   )
-  const [previousScope, setPreviousScope] = useState(parameterScope)
   const [references, setReferences] = useState<ImageStudioReference[]>([])
   const [mask, setMask] = useState<DraftMask | null>(null)
   const [referenceError, setReferenceError] = useState<string | null>(null)
-
-  // Reset before children render, so a new engine cannot submit old parameters.
-  if (previousScope !== parameterScope) {
-    setPreviousScope(parameterScope)
-    setParams(createDefaultParamDraft(zhiqiEngine))
-    setMask(null)
-  }
 
   // Object URLs must be revoked when they are dropped or the page unmounts.
   const objectUrls = useRef<Set<string>>(new Set())
@@ -138,7 +115,7 @@ export function useImageStudioDraft(
   }, [])
 
   const patchParams = useCallback((patch: Partial<ImageStudioParamDraft>) => {
-    setParams((previous) => patchImageStudioParams(previous, patch))
+    setParams((previous) => ({ ...previous, ...patch }))
   }, [])
 
   const updateReference = useCallback(
@@ -244,26 +221,15 @@ export function useImageStudioDraft(
     [releaseUrl]
   )
 
-  const replaceReference = useCallback(
-    (uid: string, reference: { key: string; url: string }) => {
-      setReferences((previous) =>
-        previous.map((item) => {
-          if (item.uid !== uid) return item
-          releaseUrl(item.url)
-          return { ...item, ...reference, uploading: false, error: undefined }
-        })
-      )
-    },
-    [releaseUrl]
-  )
-
   const moveReference = useCallback(
     (uid: string, direction: -1 | 1) => {
       const index = references.findIndex((item) => item.uid === uid)
+      const target = index + direction
       if (
-        zhiqiEngine &&
         index >= 0 &&
-        (index === 0 || index + direction === 0)
+        target >= 0 &&
+        target < references.length &&
+        (index === 0 || target === 0)
       ) {
         setMask(null)
       }
@@ -279,7 +245,7 @@ export function useImageStudioDraft(
         return next
       })
     },
-    [references, zhiqiEngine]
+    [references]
   )
 
   /** Reuse an existing record: the prompt, its settings and its references. */
@@ -288,21 +254,9 @@ export function useImageStudioDraft(
       prompt: string
       params?: Record<string, unknown> | null
       referenceUrls?: string[]
-      zhiqiEngine?: boolean
-      model?: string
-      group?: string
     }) => {
       setPrompt(preset.prompt)
-      const targetEngine = preset.zhiqiEngine ?? zhiqiEngine
-      setPreviousScope(
-        targetEngine
-          ? JSON.stringify([
-              preset.group ?? options.group ?? '',
-              preset.model ?? options.model ?? '',
-            ])
-          : 'ordinary'
-      )
-      setParams(paramsToDraft(preset.params, targetEngine))
+      setParams(paramsToDraft(preset.params))
       setReferenceError(null)
       setMask(null)
       setReferences((previous) => {
@@ -317,19 +271,19 @@ export function useImageStudioDraft(
         }))
       })
     },
-    [releaseUrl, zhiqiEngine, options.model, options.group]
+    [releaseUrl]
   )
 
   const reset = useCallback(() => {
     setPrompt('')
-    setParams(createDefaultParamDraft(zhiqiEngine))
+    setParams(createDefaultParamDraft())
     setReferenceError(null)
     setMask(null)
     setReferences((previous) => {
       for (const item of previous) releaseUrl(item.url)
       return []
     })
-  }, [releaseUrl, zhiqiEngine])
+  }, [releaseUrl])
 
   const uploading = references.some((item) => item.uploading)
   const readyReferences = useMemo(
@@ -352,7 +306,6 @@ export function useImageStudioDraft(
     setReferenceError,
     addFiles,
     removeReference,
-    replaceReference,
     moveReference,
     mask,
     setMask,

@@ -24,9 +24,8 @@ func PrepareImageBillingForRequest(c *gin.Context, info *relaycommon.RelayInfo, 
 	var quota int
 	var err error
 	if snap := info.TieredBillingSnapshot; snap != nil && snap.BillingMode == "tiered_expr" {
-		// Zhiqi parameter overrides can change a resolution/quality price even
-		// without image_count. Re-evaluate, without adding a token multiplier.
-		if snap.EstimatedImageCount == nil && (info.ChannelMeta == nil || !info.ChannelSetting.IsZhiqiEngine()) {
+		// Token-only image expressions must not acquire a quantity multiplier.
+		if snap.EstimatedImageCount == nil {
 			return nil
 		}
 		request := billingexpr.RequestInput{}

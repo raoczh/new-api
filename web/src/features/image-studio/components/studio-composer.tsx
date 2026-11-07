@@ -33,23 +33,23 @@ import {
   buildModelOptions,
   parseModelOptionValue,
 } from '../lib/model-option'
-import { buildComposerParams, clampImageCount } from '../lib/params'
-import { polishPrompt } from '../lib/polish'
 import {
-  getZhiqiInvalidFields,
-  ZHIQI_MAX_PROMPT_LENGTH,
-  ZHIQI_MAX_REFERENCES,
-} from '../lib/zhiqi'
+  buildComposerParams,
+  clampImageCount,
+  getImageModelCapabilities,
+  resolveParamDraft,
+} from '../lib/params'
+import { polishPrompt } from '../lib/polish'
 import type {
   ImageStudioConfig,
   ImageStudioGroupOption,
   ImageStudioTaskParams,
 } from '../types'
+import { ImageStudioApiDocsButton } from './api-docs-button'
 import { ImageStudioMaskEditor } from './mask-editor'
 import { ImageStudioParameterRow } from './parameter-row'
 import { ImageStudioReferenceStrip } from './reference-strip'
 import { ImageStudioStylePresets } from './style-presets'
-import { ImageStudioZhiqiParameters } from './zhiqi-parameters'
 
 /**
  * Count code points, which matches the server's rune budget. `Intl.Segmenter`
@@ -92,16 +92,8 @@ export function ImageStudioComposer(props: ImageStudioComposerProps) {
   const [polishing, setPolishing] = useState(false)
   const [maskTarget, setMaskTarget] = useState<string | null>(null)
   const { draft, config } = props
-  const selectedOption = props.groups
-    .find((group) => group.group === props.selectedGroup)
-    ?.models.find((model) => model.model === props.selectedModel)
-  const zhiqiEngine = selectedOption?.zhiqi_engine === true
-  const maxPromptLength = zhiqiEngine
-    ? ZHIQI_MAX_PROMPT_LENGTH
-    : IMAGE_STUDIO_MAX_PROMPT_LENGTH
-  const maxReferences = zhiqiEngine
-    ? Math.min(config.max_reference_images, ZHIQI_MAX_REFERENCES)
-    : config.max_reference_images
+  const maxPromptLength = IMAGE_STUDIO_MAX_PROMPT_LENGTH
+  const maxReferences = config.max_reference_images
 
   const modelOptions = buildModelOptions(
     props.groups.map((group) => ({ ...group, models: group.models })),
@@ -118,32 +110,38 @@ export function ImageStudioComposer(props: ImageStudioComposerProps) {
     [draft.prompt]
   )
   const overLimit = promptLength > maxPromptLength
-  const imageCount = zhiqiEngine
-    ? 1
-    : clampImageCount(draft.params.n, config.max_images_per_request)
+  const capabilities = useMemo(
+    () => getImageModelCapabilities(props.selectedModel),
+    [props.selectedModel]
+  )
+  // The draft keeps what the user picked; options the selected model lacks fall
+  // back to defaults for display and submission until a capable model returns.
+  const params = resolveParamDraft(draft.params, capabilities)
+  const imageCount = clampImageCount(params.n, config.max_images_per_request)
   const maskTargetReference = draft.references.find(
     (reference, index) =>
-      reference.uid === maskTarget && (!zhiqiEngine || index === 0)
+      reference.uid === maskTarget &&
+      index === 0 &&
+      Boolean(reference.key) &&
+      !reference.uploading &&
+      !reference.error
   )
   const activeMask =
-    !zhiqiEngine || draft.mask?.referenceUid === draft.references[0]?.uid
+    draft.mask?.referenceUid &&
+    draft.mask.referenceUid === draft.readyReferences[0]?.uid
       ? draft.mask
       : null
   const invalidReferences =
-    zhiqiEngine &&
-    (draft.references.length > maxReferences ||
-      draft.readyReferences.length !== draft.references.length)
-  const invalidParams =
-    zhiqiEngine &&
-    getZhiqiInvalidFields(draft.params, props.selectedModel).size > 0
+    draft.references.length > maxReferences ||
+    draft.readyReferences.length !== draft.references.length
   const blocked =
     props.submitting ||
     !props.selectedModel ||
     !draft.prompt.trim() ||
     draft.uploading ||
+    Boolean(activeMask?.uploading) ||
     overLimit ||
-    invalidReferences ||
-    invalidParams
+    invalidReferences
 
   const handleSubmit = () => {
     if (blocked) return
@@ -151,11 +149,7 @@ export function ImageStudioComposer(props: ImageStudioComposerProps) {
       model: props.selectedModel,
       group: props.selectedGroup,
       prompt: draft.prompt.trim(),
-      params: buildComposerParams(
-        draft.params,
-        config.max_images_per_request,
-        zhiqiEngine
-      ),
+      params: buildComposerParams(params, config.max_images_per_request),
       referenceKeys: draft.readyReferences.map((reference) => reference.key),
       maskKey: activeMask?.key,
     })
@@ -196,21 +190,17 @@ export function ImageStudioComposer(props: ImageStudioComposerProps) {
       return
     }
     const next = current ? `${current}, ${preset.text}` : preset.text
-    draft.setPrompt(
-      zhiqiEngine
-        ? [...next].slice(0, maxPromptLength).join('')
-        : next.slice(0, maxPromptLength)
-    )
+    draft.setPrompt(next.slice(0, maxPromptLength))
     toast.success(t('Style “{{style}}” applied', { style: preset.label }))
   }
 
   return (
     <section className='flex flex-col gap-4'>
-      <header className='flex items-start gap-3'>
+      <header className='flex flex-wrap items-start gap-3'>
         <span className='flex size-10 shrink-0 items-center justify-center rounded-xl bg-[image:var(--tc-gradient)] text-white shadow-[0_10px_24px_-12px_var(--tc-gradient-from)]'>
           <SparklesIcon className='size-5' aria-hidden='true' />
         </span>
-        <div className='flex min-w-0 flex-col gap-1'>
+        <div className='flex min-w-0 flex-1 basis-48 flex-col gap-1'>
           <h1 className='text-xl font-semibold tracking-tight'>
             {t('AI Image')}
           </h1>
@@ -220,6 +210,7 @@ export function ImageStudioComposer(props: ImageStudioComposerProps) {
             )}
           </p>
         </div>
+        <ImageStudioApiDocsButton />
       </header>
 
       <div className='bg-card/90 border-border/60 flex flex-col overflow-hidden rounded-3xl border shadow-(--tc-shadow-md) backdrop-blur'>
@@ -239,9 +230,7 @@ export function ImageStudioComposer(props: ImageStudioComposerProps) {
               'A cozy reading nook by a rainy window, warm lamp light, plants, soft bokeh…'
             )}
             className='min-h-32 resize-none border-0 bg-transparent px-1 py-1 text-sm leading-relaxed shadow-none focus-visible:ring-0 dark:bg-transparent'
-            maxLength={
-              zhiqiEngine ? maxPromptLength * 2 + 200 : maxPromptLength + 200
-            }
+            maxLength={maxPromptLength + 200}
             disabled={props.submitting}
             aria-label={t('Prompt')}
             aria-invalid={overLimit}
@@ -301,20 +290,17 @@ export function ImageStudioComposer(props: ImageStudioComposerProps) {
             <ImageStudioReferenceStrip
               references={draft.references}
               maxReferences={maxReferences}
-              firstImageMaskOnly={zhiqiEngine}
               disabled={props.submitting}
               onAddFiles={draft.addFiles}
               onRemove={draft.removeReference}
               onMove={draft.moveReference}
               onEditMask={setMaskTarget}
             />
-            {zhiqiEngine && (
-              <p className='text-muted-foreground text-xs'>
-                {t(
-                  'Masks redraw transparent areas of the first reference image only. Reordering or removing that image clears the mask; channel support is required.'
-                )}
-              </p>
-            )}
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'A mask edits the first reference image. Moving or removing that image clears the mask.'
+              )}
+            </p>
             {invalidReferences && !draft.uploading && (
               <p role='alert' className='text-destructive text-xs'>
                 {t(
@@ -359,28 +345,13 @@ export function ImageStudioComposer(props: ImageStudioComposerProps) {
           </ComposerSection>
 
           <ComposerSection title={t('Parameters')}>
-            {zhiqiEngine ? (
-              <ImageStudioZhiqiParameters
-                draft={draft.params}
-                model={props.selectedModel}
-                disabled={props.submitting}
-                onChange={draft.patchParams}
-              />
-            ) : (
-              <ImageStudioParameterRow
-                draft={draft.params}
-                maxImages={config.max_images_per_request}
-                disabled={props.submitting}
-                onChange={draft.patchParams}
-              />
-            )}
-            {selectedOption?.zhiqi_mixed_channels && (
-              <p className='text-muted-foreground text-xs'>
-                {t(
-                  'This model group mixes Zhiqi and other channels. Dedicated parameters cannot be guaranteed; ask the administrator for a separate group.'
-                )}
-              </p>
-            )}
+            <ImageStudioParameterRow
+              draft={params}
+              capabilities={capabilities}
+              maxImages={config.max_images_per_request}
+              disabled={props.submitting}
+              onChange={draft.patchParams}
+            />
           </ComposerSection>
         </div>
 
@@ -442,18 +413,14 @@ export function ImageStudioComposer(props: ImageStudioComposerProps) {
       </div>
 
       <ImageStudioMaskEditor
-        key={`${zhiqiEngine}:${maskTargetReference?.uid ?? ''}`}
+        key={maskTargetReference?.uid ?? ''}
         open={Boolean(maskTargetReference)}
         imageUrl={maskTargetReference?.url ?? ''}
-        transparentAreas={zhiqiEngine}
         disabled={props.submitting}
         onOpenChange={(open) => {
           if (!open) setMaskTarget(null)
         }}
         onUploaded={(mask) => {
-          if (mask.reference && maskTargetReference) {
-            draft.replaceReference(maskTargetReference.uid, mask.reference)
-          }
           draft.setMask({
             key: mask.key,
             url: mask.url,
