@@ -21,7 +21,9 @@ import { api } from '@/lib/api'
 import type {
   ConfirmPaymentComplianceResponse,
   FetchUpstreamRatiosRequest,
+  GroupRegistryResponse,
   LogCleanupTask,
+  RenameGroupsResponse,
   SystemOptionsResponse,
   SystemTaskListResponse,
   SystemTaskFilters,
@@ -41,6 +43,19 @@ export async function getSystemOptions() {
 
 export async function updateSystemOption(request: UpdateOptionRequest) {
   const res = await api.put<UpdateOptionResponse>('/api/option/', request)
+  return res.data
+}
+
+export async function getGroupRegistry() {
+  const res = await api.get<GroupRegistryResponse>('/api/option/groups')
+  return res.data
+}
+
+export async function renameGroups(renames: { id: number; name: string }[]) {
+  const res = await api.post<RenameGroupsResponse>(
+    '/api/option/groups/rename',
+    { renames }
+  )
   return res.data
 }
 

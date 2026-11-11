@@ -21,8 +21,9 @@ func (token Token) cacheMAC() (string, error) {
 	return authCacheMAC(key, struct {
 		Token          Token
 		AutoGroups     string
+		AutoGroupIds   string
 		CacheExpiresAt int64
-	}{token, token.AutoGroups, token.CacheExpiresAt})
+	}{token, token.AutoGroups, token.AutoGroupIds, token.CacheExpiresAt})
 }
 
 func getTokenCacheKey(key string) string {
@@ -109,6 +110,7 @@ redis.call('HSET', KEYS[1],
   'UnlimitedQuota', ARGV[8], 'ModelLimitsEnabled', ARGV[9], 'ModelLimits', ARGV[10],
   'AllowIps', ARGV[11], 'Group', ARGV[12], 'CrossGroupRetry', ARGV[13],
   'AutoGroups', ARGV[14], 'AllowUserQuotaQuery', ARGV[17],
+  'GroupId', ARGV[23], 'AutoGroupIds', ARGV[24],
   'CacheExpiresAt', ARGV[19], 'CacheMAC', ARGV[20])
 for _, counter in ipairs({{'AccessedTime', ARGV[6]}, {'RemainQuota', ARGV[15]}, {'UsedQuota', ARGV[16]}}) do
   if not string.match(redis.call('HGET', KEYS[1], counter[1]) or '', '^-?%d+$') then
@@ -132,6 +134,7 @@ return 1`
 		strconv.FormatBool(token.AllowUserQuotaQuery),
 		tokenCacheTTLSeconds(),
 		token.CacheExpiresAt, mac, strconv.FormatBool(repair), existing.CacheMAC,
+		token.GroupId, token.AutoGroupIds,
 	).Int()
 }
 
@@ -152,5 +155,6 @@ func cacheGetTokenByKey(key string) (*Token, error) {
 	if err != nil || !validAuthCacheMAC(mac, token.CacheMAC, token.CacheExpiresAt) {
 		return nil, fmt.Errorf("token cache integrity check failed")
 	}
+	token.resolveGroupNames()
 	return &token, nil
 }

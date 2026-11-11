@@ -53,6 +53,7 @@ func TestMain(m *testing.M) {
 		&model.Task{},
 		&model.User{},
 		&model.Token{},
+		&model.UserGroup{},
 		&model.Log{},
 		&model.Channel{},
 		&model.Midjourney{},

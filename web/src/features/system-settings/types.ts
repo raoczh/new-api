@@ -39,6 +39,18 @@ export type UpdateOptionResponse = {
   message: string
 }
 
+export type GroupRegistryResponse = {
+  success: boolean
+  message: string
+  data: Record<string, number>
+}
+
+export type RenameGroupsResponse = {
+  success: boolean
+  message: string
+  data?: Record<string, string>
+}
+
 export interface PasskeyDomainChange {
   rp_id: string
   legacy_rp_ids: string

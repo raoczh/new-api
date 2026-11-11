@@ -549,7 +549,7 @@ func TestTokenAuthRejectsGroupHiddenForUser(t *testing.T) {
 	previousLogType := common.LogDatabaseType()
 	t.Cleanup(func() { common.SetLogDatabaseType(previousLogType) })
 	require.NoError(t, model.InitLogDB())
-	require.NoError(t, model.DB.AutoMigrate(&model.Token{}))
+	require.NoError(t, model.DB.AutoMigrate(&model.Token{}, &model.UserGroup{}))
 	originalUsableGroups := setting.UserUsableGroups2JSONString()
 	originalGroupRatios := ratio_setting.GroupRatio2JSONString()
 	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default","vip":"VIP"}`))

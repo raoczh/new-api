@@ -12,24 +12,28 @@ import (
 )
 
 type Token struct {
-	Id                 int            `json:"id"`
-	UserId             int            `json:"user_id" gorm:"index"`
-	Key                string         `json:"key" gorm:"type:varchar(128);uniqueIndex"`
-	Status             int            `json:"status" gorm:"default:1"`
-	Name               string         `json:"name" gorm:"index" `
-	CreatedTime        int64          `json:"created_time" gorm:"bigint"`
-	AccessedTime       int64          `json:"accessed_time" gorm:"bigint"`
-	ExpiredTime        int64          `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
-	RemainQuota        int            `json:"remain_quota" gorm:"default:0"`
-	UnlimitedQuota     bool           `json:"unlimited_quota"`
-	ModelLimitsEnabled bool           `json:"model_limits_enabled"`
-	ModelLimits        string         `json:"model_limits" gorm:"type:text"`
-	AllowIps           *string        `json:"allow_ips" gorm:"default:''"`
-	UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
-	Group              string         `json:"group" gorm:"default:''"`
-	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
-	AutoGroups         string         `json:"-" gorm:"type:text"`
-	DeletedAt          gorm.DeletedAt `gorm:"index"`
+	Id                 int     `json:"id"`
+	UserId             int     `json:"user_id" gorm:"index"`
+	Key                string  `json:"key" gorm:"type:varchar(128);uniqueIndex"`
+	Status             int     `json:"status" gorm:"default:1"`
+	Name               string  `json:"name" gorm:"index" `
+	CreatedTime        int64   `json:"created_time" gorm:"bigint"`
+	AccessedTime       int64   `json:"accessed_time" gorm:"bigint"`
+	ExpiredTime        int64   `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
+	RemainQuota        int     `json:"remain_quota" gorm:"default:0"`
+	UnlimitedQuota     bool    `json:"unlimited_quota"`
+	ModelLimitsEnabled bool    `json:"model_limits_enabled"`
+	ModelLimits        string  `json:"model_limits" gorm:"type:text"`
+	AllowIps           *string `json:"allow_ips" gorm:"default:''"`
+	UsedQuota          int     `json:"used_quota" gorm:"default:0"` // used quota
+	Group              string  `json:"group" gorm:"default:''"`
+	// GroupId 和 AutoGroupIds 是令牌分组的绑定依据，读取时据此解析出当前分组名，
+	// 分组改名后令牌仍然可用。
+	GroupId         int            `json:"group_id" gorm:"default:0;index"`
+	CrossGroupRetry bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
+	AutoGroups      string         `json:"-" gorm:"type:text"`
+	AutoGroupIds    string         `json:"-" gorm:"type:text"`
+	DeletedAt       gorm.DeletedAt `gorm:"index"`
 	// 允许用此令牌查询所属用户的额度；新建令牌默认开启，已有令牌升级后保持关闭
 	AllowUserQuotaQuery bool   `json:"allow_user_quota_query"`
 	CacheExpiresAt      int64  `json:"-" gorm:"-"`
@@ -58,6 +62,81 @@ func (token *Token) SetAutoGroups(groups []string) error {
 	}
 	token.AutoGroups = string(data)
 	return nil
+}
+
+// AfterFind replaces the stored group names with the current names of the
+// bound groups.
+func (token *Token) AfterFind(tx *gorm.DB) error {
+	token.resolveGroupNames()
+	return nil
+}
+
+func (token *Token) resolveGroupNames() {
+	if token.GroupId > 0 {
+		if name, ok := GroupNameById(token.GroupId); ok {
+			token.Group = name
+		}
+	}
+	if token.AutoGroupIds == "" {
+		return
+	}
+	var ids []int
+	if err := common.UnmarshalJsonStr(token.AutoGroupIds, &ids); err != nil {
+		common.SysError(common.LogText("failed to parse auto group ids for token %d: %v", token.Id, err))
+		return
+	}
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		name, ok := GroupNameById(id)
+		if !ok {
+			// 本节点尚未同步到该分组，沿用写入时保存的分组名。
+			return
+		}
+		names = append(names, name)
+	}
+	_ = token.SetAutoGroups(names)
+}
+
+// bindGroupIds records the ids of the token's groups before it is written.
+func (token *Token) bindGroupIds() error {
+	token.GroupId = 0
+	if isRegistrableGroupName(token.Group) {
+		id, err := EnsureGroupId(token.Group)
+		if err != nil {
+			return err
+		}
+		token.GroupId = id
+	}
+	groups, err := token.GetAutoGroups()
+	if err != nil {
+		// 无法解析的旧数据保持按名字保存，鉴权时会按空列表处理。
+		common.SysError(common.LogText("failed to parse auto groups for token %d: %v", token.Id, err))
+		token.AutoGroupIds = ""
+		return nil
+	}
+	token.AutoGroupIds, err = groupIdsJSON(groups)
+	return err
+}
+
+// groupIdsJSON encodes the registry ids of an ordered group list, or returns
+// an empty string for an empty list.
+func groupIdsJSON(groups []string) (string, error) {
+	if len(groups) == 0 {
+		return "", nil
+	}
+	ids := make([]int, 0, len(groups))
+	for _, group := range groups {
+		id, err := EnsureGroupId(group)
+		if err != nil {
+			return "", err
+		}
+		ids = append(ids, id)
+	}
+	data, err := common.Marshal(ids)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func (token *Token) Clean() {
@@ -305,9 +384,10 @@ func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
 }
 
 func (token *Token) Insert() error {
-	var err error
-	err = DB.Create(token).Error
-	return err
+	if err := token.bindGroupIds(); err != nil {
+		return err
+	}
+	return DB.Create(token).Error
 }
 
 // Update Make sure your token's fields is completed, because this will update non-zero values
@@ -316,9 +396,12 @@ func (token *Token) Update() (err error) {
 	if cacheErr := invalidateTokenCacheForMutation(token.Key); cacheErr != nil {
 		common.SysLog(common.LogText("failed to invalidate token cache before update: %s", cacheErr.Error()))
 	}
+	if err := token.bindGroupIds(); err != nil {
+		return err
+	}
 	return DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups",
-		"allow_user_quota_query").Updates(token).Error
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "group_id", "cross_group_retry",
+		"auto_groups", "auto_group_ids", "allow_user_quota_query").Updates(token).Error
 }
 
 func (token *Token) SelectUpdate() (err error) {

@@ -19,6 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 // Static translation keys that don't get picked up by the t('...') regex.
 // These cover dynamic labels (e.g. constants, configs) that are passed into t at runtime.
 export const STATIC_I18N_KEYS = [
+  // Group rename validation (features/system-settings/models/group-name.ts).
+  'Enter a group name',
+  'Invalid group name {{name}}. Use at most {{max}} characters without commas, and do not use auto or start with +: or -:',
+  'Group name {{name}} is already in use',
   'Automatic group probes',
   'The adjusted price is outside the supported range.',
   'This expression cannot be adjusted automatically. Keep the source price or edit it manually.',

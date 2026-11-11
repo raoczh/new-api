@@ -22,6 +22,7 @@ import {
   Search,
   X,
   Info,
+  PencilLine,
   Plus,
   Trash2,
 } from 'lucide-react'
@@ -87,6 +88,10 @@ import { formatNumber } from '@/lib/format'
 import { safeJsonParse } from '../utils/json-parser'
 import { GroupSpecialUsableRulesEditor } from './group-special-usable-editor'
 import { findInvalidIQModels, normalizeIQModelList } from './iq-group-models'
+import {
+  RenameGroupDialog,
+  type RenameGroupTarget,
+} from './rename-group-dialog'
 
 export type GroupSettingsSection =
   | 'pricing'
@@ -110,10 +115,17 @@ type GroupRatioVisualEditorProps = {
   maxTokenAutoGroupsField: ReactNode
   groupSpecialUsableGroup: string
   onChange: (field: string, value: string) => void
+  // Registered group ids by name. Registered groups are renamed through the
+  // server so existing API keys, users and channels follow the new name.
+  groupIds?: Record<string, number>
+  renameDisabled?: boolean
+  onGroupsRenamed?: () => Promise<void>
 }
 
 type GroupPricingRow = {
   _id: string
+  // Rows added in this session are new groups whose name is still editable.
+  isNew?: boolean
   name: string
   ratio: string
   topupRatio: string
@@ -128,6 +140,8 @@ type RegistryEntry = {
   name: string
   ratio: number
 }
+
+const NO_GROUP_IDS: Record<string, number> = {}
 
 const sectionCardClassName = 'min-w-0 shadow-none'
 const sectionHeaderClassName = 'gap-2 border-b'
@@ -324,6 +338,9 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   maxTokenAutoGroupsField,
   groupSpecialUsableGroup,
   onChange,
+  groupIds = NO_GROUP_IDS,
+  renameDisabled = false,
+  onGroupsRenamed,
 }: GroupRatioVisualEditorProps) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
@@ -422,6 +439,9 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
           topupGroupRatio={topupGroupRatio}
           onChange={onChange}
           onShowDetail={setDetailGroup}
+          groupIds={groupIds}
+          renameDisabled={renameDisabled}
+          onGroupsRenamed={onGroupsRenamed}
         />
       </TabsContent>
       <TabsContent value='overrides' keepMounted>
@@ -531,6 +551,9 @@ type GroupPricingTableProps = {
   topupGroupRatio: string
   onChange: (field: string, value: string) => void
   onShowDetail: (name: string) => void
+  groupIds: Record<string, number>
+  renameDisabled: boolean
+  onGroupsRenamed?: () => Promise<void>
 }
 
 function GroupPricingTable({
@@ -543,9 +566,15 @@ function GroupPricingTable({
   topupGroupRatio,
   onChange,
   onShowDetail,
+  groupIds,
+  renameDisabled,
+  onGroupsRenamed,
 }: GroupPricingTableProps) {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
+  const [renameTarget, setRenameTarget] = useState<RenameGroupTarget | null>(
+    null
+  )
   const [rows, setRows] = useState<GroupPricingRow[]>(() =>
     buildGroupPricingRows(
       groupRatio,
@@ -588,6 +617,21 @@ function GroupPricingTable({
     iqGroupModels,
   ])
 
+  useEffect(() => {
+    // Without unsaved changes every registered row name is a saved group, so
+    // rows added earlier are renamed through the server from now on.
+    if (renameDisabled) return
+    setRows((currentRows) =>
+      currentRows.some((row) => row.isNew && groupIds[row.name] !== undefined)
+        ? currentRows.map((row) =>
+            row.isNew && groupIds[row.name] !== undefined
+              ? { ...row, isNew: false }
+              : row
+          )
+        : currentRows
+    )
+  }, [groupIds, renameDisabled])
+
   const emitRows = useCallback(
     (nextRows: GroupPricingRow[]) => {
       setRows(nextRows)
@@ -627,6 +671,7 @@ function GroupPricingTable({
     emitRows([
       {
         _id: createGroupPricingId(),
+        isNew: true,
         name,
         ratio: '1',
         topupRatio: '',
@@ -671,6 +716,9 @@ function GroupPricingTable({
         .map((row) => row.name.trim() || '-'),
     [rows]
   )
+
+  const getRegisteredGroupId = (row: GroupPricingRow) =>
+    row.isNew ? undefined : groupIds[row.name]
 
   const query = search.trim().toLowerCase()
   const visibleRows = rows.filter(
@@ -764,16 +812,24 @@ function GroupPricingTable({
                 id: 'group',
                 header: t('Group name'),
                 className: 'min-w-40',
-                cell: (row) => (
-                  <Input
-                    value={row.name}
-                    aria-label={t('Group name')}
-                    onChange={(event) =>
-                      updateRow(row._id, 'name', event.target.value)
-                    }
-                    aria-invalid={duplicateNames.includes(row.name.trim())}
-                  />
-                ),
+                cell: (row) =>
+                  getRegisteredGroupId(row) === undefined ? (
+                    <Input
+                      value={row.name}
+                      aria-label={t('Group name')}
+                      onChange={(event) =>
+                        updateRow(row._id, 'name', event.target.value)
+                      }
+                      aria-invalid={duplicateNames.includes(row.name.trim())}
+                    />
+                  ) : (
+                    <Input
+                      value={row.name}
+                      aria-label={t('Group name')}
+                      title={t('Use the rename action to rename this group')}
+                      readOnly
+                    />
+                  ),
               },
               {
                 id: 'ratio',
@@ -912,30 +968,65 @@ function GroupPricingTable({
                 header: t('Actions'),
                 className: 'text-right',
                 cellClassName: 'text-right',
-                cell: (row) => (
-                  <div className='flex justify-end gap-1'>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      onClick={() => onShowDetail(row.name.trim())}
-                      disabled={!row.name.trim()}
-                      aria-label={t('Details')}
-                    >
-                      <Info className='h-4 w-4' />
-                    </Button>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      onClick={() => removeRow(row._id)}
-                      aria-label={t('Delete')}
-                    >
-                      <Trash2 className='h-4 w-4' />
-                    </Button>
-                  </div>
-                ),
+                cell: (row) => {
+                  const groupId = getRegisteredGroupId(row)
+                  return (
+                    <div className='flex justify-end gap-1'>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        onClick={() => onShowDetail(row.name.trim())}
+                        disabled={!row.name.trim()}
+                        aria-label={t('Details')}
+                      >
+                        <Info className='h-4 w-4' />
+                      </Button>
+                      {groupId !== undefined && row.name !== 'default' ? (
+                        <Button
+                          variant='ghost'
+                          size='sm'
+                          onClick={() =>
+                            setRenameTarget({ id: groupId, name: row.name })
+                          }
+                          disabled={renameDisabled || !onGroupsRenamed}
+                          aria-label={t('Rename')}
+                          title={
+                            renameDisabled
+                              ? t(
+                                  'Save or discard your changes before renaming a group'
+                                )
+                              : t('Rename')
+                          }
+                        >
+                          <PencilLine className='h-4 w-4' />
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        onClick={() => removeRow(row._id)}
+                        aria-label={t('Delete')}
+                      >
+                        <Trash2 className='h-4 w-4' />
+                      </Button>
+                    </div>
+                  )
+                },
               },
             ]}
           />
+          {onGroupsRenamed ? (
+            <RenameGroupDialog
+              target={renameTarget}
+              existingNames={rows
+                .map((row) => row.name.trim())
+                .filter((name) => name !== renameTarget?.name)}
+              onOpenChange={(open) => {
+                if (!open) setRenameTarget(null)
+              }}
+              onRenamed={onGroupsRenamed}
+            />
+          ) : null}
 
           {duplicateNames.length > 0 && (
             <p className='text-destructive text-sm'>

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
+	"github.com/samber/lo"
 )
 
 const userCacheSchemaVersion = 2
@@ -77,6 +80,26 @@ func invalidateUserCache(userId int) error {
 		return nil
 	}
 	return common.RedisDelKey(getUserCacheKey(userId))
+}
+
+// invalidateUserCaches clears the caches of many users after a bulk update;
+// the next read hydrates each one from the database.
+func invalidateUserCaches(userIds []int) error {
+	if !common.RedisEnabled || len(userIds) == 0 {
+		return nil
+	}
+	for _, chunk := range lo.Chunk(userIds, 500) {
+		_, err := common.RDB.Pipelined(context.Background(), func(pipe redis.Pipeliner) error {
+			for _, userId := range chunk {
+				pipe.Del(context.Background(), getUserCacheKey(userId))
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func populateUserCache(user User) error {

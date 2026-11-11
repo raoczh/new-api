@@ -2,7 +2,10 @@ package controller
 
 import (
 	"net/http"
+	"slices"
+	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
@@ -56,4 +59,35 @@ func GetUserGroups(c *gin.Context) {
 		"message": "",
 		"data":    usableGroups,
 	})
+}
+
+// GetGroupRegistry returns the stable id of every registered group name.
+func GetGroupRegistry(c *gin.Context) {
+	common.ApiSuccess(c, model.GetGroupRegistry())
+}
+
+// RenameGroups renames groups by id and rewrites every stored reference to
+// the old names, so existing users, channels and API keys keep their groups.
+func RenameGroups(c *gin.Context) {
+	var request struct {
+		Renames []model.GroupRename `json:"renames"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Invalid parameters"))
+		return
+	}
+	renamed, err := model.RenameGroups(request.Renames)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if len(renamed) > 0 {
+		changes := make([]string, 0, len(renamed))
+		for oldName, newName := range renamed {
+			changes = append(changes, oldName+" -> "+newName)
+		}
+		slices.Sort(changes)
+		recordManageAudit(c, "group.rename", map[string]any{"renames": strings.Join(changes, ", ")})
+	}
+	common.ApiSuccess(c, renamed)
 }

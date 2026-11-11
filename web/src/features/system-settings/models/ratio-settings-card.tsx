@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -39,7 +39,9 @@ import { pricingOptions } from '@/features/model-pricing/pricing'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 import { useMediaQuery } from '@/hooks'
 import { handleServerError } from '@/lib/handle-server-error'
+import { requireServerSuccess } from '@/lib/server-error-message'
 
+import { getGroupRegistry } from '../api'
 import { SettingsPageTitleStatusPortal } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
@@ -201,7 +203,21 @@ export function RatioSettingsCard({
   const { t } = useTranslation()
   const isMobile = useMediaQuery('(max-width: 639px)')
   const updateOption = useUpdateOption()
+  const queryClient = useQueryClient()
   const { vendors } = usePricingData(visibleTabs.includes('groups'))
+  const groupRegistryQuery = useQuery({
+    queryKey: ['group-registry'],
+    queryFn: async () => requireServerSuccess(await getGroupRegistry()).data,
+    enabled: visibleTabs.includes('groups'),
+  })
+  const handleGroupsRenamed = useCallback(async () => {
+    // The registry must carry the new names before the reloaded settings
+    // rebuild the group rows.
+    await queryClient.invalidateQueries({ queryKey: ['group-registry'] })
+    await queryClient.invalidateQueries({ queryKey: ['system-options'] })
+    queryClient.invalidateQueries({ queryKey: ['pricing'] })
+    queryClient.invalidateQueries({ queryKey: ['status-monitor'] })
+  }, [queryClient])
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   const pricingQuery = useModelPricing()
@@ -485,8 +501,10 @@ export function RatioSettingsCard({
       }
 
       groupNormalizedDefaults.current = normalized
+      // Saving GroupRatio registers new groups, which can then be renamed.
+      queryClient.invalidateQueries({ queryKey: ['group-registry'] })
     },
-    [updateOption]
+    [queryClient, updateOption]
   )
 
   const handleResetRatios = useCallback(() => {
@@ -560,6 +578,8 @@ export function RatioSettingsCard({
           form={groupForm}
           onSave={saveGroupRatios}
           isSaving={updateOption.isPending}
+          groupIds={groupRegistryQuery.data}
+          onGroupsRenamed={handleGroupsRenamed}
         />
       )
     }

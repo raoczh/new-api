@@ -235,6 +235,7 @@ func SyncOptions(frequency int) {
 		time.Sleep(time.Duration(frequency) * time.Second)
 		common.SysLog(common.LogText("syncing options from database"))
 		loadOptionsFromDatabase()
+		refreshGroupRegistryAfterOptionSync()
 	}
 }
 
@@ -327,7 +328,21 @@ func UpdateOption(key string, value string) error {
 	// otherwise it will execute Update (with all fields).
 	DB.Save(&option)
 	// Update OptionMap
-	return updateOptionMap(key, value)
+	if err := updateOptionMap(key, value); err != nil {
+		return err
+	}
+	if key == "GroupRatio" {
+		refreshGroupRegistryAfterOptionSync()
+	}
+	return nil
+}
+
+// refreshGroupRegistryAfterOptionSync registers groups added by saved or
+// synced options. A failure is retried by the next option sync.
+func refreshGroupRegistryAfterOptionSync() {
+	if err := RefreshGroupRegistry(); err != nil {
+		common.SysError(common.LogText("failed to refresh group registry: %s", err.Error()))
+	}
 }
 
 // UpdateOptionsBulk persists multiple key/value pairs in a single database
@@ -393,6 +408,9 @@ func UpdateOptionsBulk(values map[string]string) error {
 	}
 	if policySnapshot != nil {
 		requestPolicySnapshot.Store(policySnapshot)
+	}
+	if _, ok := values["GroupRatio"]; ok {
+		refreshGroupRegistryAfterOptionSync()
 	}
 	return nil
 }

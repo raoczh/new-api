@@ -91,6 +91,8 @@ type GroupRatioFormProps = {
   onSave: (values: GroupFormValues) => Promise<void>
   isSaving: boolean
   vendors?: PricingVendor[]
+  groupIds?: Record<string, number>
+  onGroupsRenamed?: () => Promise<void>
 }
 
 export const GroupRatioForm = memo(function GroupRatioForm({
@@ -98,6 +100,8 @@ export const GroupRatioForm = memo(function GroupRatioForm({
   onSave,
   isSaving,
   vendors,
+  groupIds,
+  onGroupsRenamed,
 }: GroupRatioFormProps) {
   const { t } = useTranslation()
   const values = useWatch({ control: form.control })
@@ -241,6 +245,9 @@ export const GroupRatioForm = memo(function GroupRatioForm({
               />
             }
             groupSpecialUsableGroup={values.GroupSpecialUsableGroup ?? ''}
+            groupIds={groupIds}
+            renameDisabled={form.formState.isDirty}
+            onGroupsRenamed={onGroupsRenamed}
             onChange={(field, value) =>
               handleFieldChange(field as keyof GroupFormValues, value)
             }
@@ -289,6 +296,9 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                   <FormDescription>
                     {t(
                       'JSON map of group → ratio applied when the user selects the group explicitly.'
+                    )}{' '}
+                    {t(
+                      'Changing a key here replaces the group with a new one. To keep existing API keys, rename groups in the visual editor.'
                     )}
                   </FormDescription>
                   <FormMessage />

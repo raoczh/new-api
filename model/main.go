@@ -383,6 +383,7 @@ func migrateDB() error {
 		&TicketAttachment{},
 		&UserAccessToken{},
 		&PromotionRecipient{},
+		&UserGroup{},
 	)
 	if err != nil {
 		return err

@@ -330,6 +330,9 @@ func InitResources() error {
 		}
 	}
 	model.InitOptionMap()
+	if err := model.InitGroupRegistry(); err != nil {
+		common.SysError(common.LogText("failed to initialize group registry: %s", err.Error()))
+	}
 
 	// 清理旧的磁盘缓存文件
 	common.CleanupOldCacheFiles()

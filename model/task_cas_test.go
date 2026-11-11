@@ -62,6 +62,11 @@ func TestMain(m *testing.M) {
 		&SystemTaskLock{},
 		&UserAccessToken{},
 		&PromotionRecipient{},
+		&UserGroup{},
+		&Option{},
+		&ImageStudioTask{},
+		&StatusProbe{},
+		&IQProbeResult{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}
@@ -96,6 +101,8 @@ func truncateTables(t *testing.T) {
 		DB.Exec("DELETE FROM system_instances")
 		DB.Exec("DELETE FROM system_task_locks")
 		DB.Exec("DELETE FROM system_tasks")
+		DB.Exec("DELETE FROM user_groups")
+		storeGroupRegistry(nil)
 	})
 }
 
