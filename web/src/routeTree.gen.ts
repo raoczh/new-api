@@ -49,6 +49,7 @@ import { Route as AuthenticatedChatChatIdRouteImport } from './routes/_authentic
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedDashboardSectionRouteImport } from './routes/_authenticated/dashboard/$section'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
+import { Route as AuthenticatedGroupManagementIndexRouteImport } from './routes/_authenticated/group-management/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
@@ -289,6 +290,12 @@ const AuthenticatedErrorsErrorRoute =
   AuthenticatedErrorsErrorRouteImport.update({
     id: '/errors/$error',
     path: '/errors/$error',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedGroupManagementIndexRoute =
+  AuthenticatedGroupManagementIndexRouteImport.update({
+    id: '/group-management/',
+    path: '/group-management/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
@@ -562,6 +569,7 @@ export interface FileRoutesByFullPath {
   '/workbench/video': typeof AuthenticatedWorkbenchVideoRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/group-management/': typeof AuthenticatedGroupManagementIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/open-source-promotion/': typeof AuthenticatedOpenSourcePromotionIndexRoute
@@ -639,6 +647,7 @@ export interface FileRoutesByTo {
   '/workbench/video': typeof AuthenticatedWorkbenchVideoRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
+  '/group-management': typeof AuthenticatedGroupManagementIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/open-source-promotion': typeof AuthenticatedOpenSourcePromotionIndexRoute
@@ -720,6 +729,7 @@ export interface FileRoutesById {
   '/_authenticated/workbench/video': typeof AuthenticatedWorkbenchVideoRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/_authenticated/group-management/': typeof AuthenticatedGroupManagementIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/open-source-promotion/': typeof AuthenticatedOpenSourcePromotionIndexRoute
@@ -800,6 +810,7 @@ export interface FileRouteTypes {
     | '/workbench/video'
     | '/channels/'
     | '/dashboard/'
+    | '/group-management/'
     | '/keys/'
     | '/models/'
     | '/open-source-promotion/'
@@ -877,6 +888,7 @@ export interface FileRouteTypes {
     | '/workbench/video'
     | '/channels'
     | '/dashboard'
+    | '/group-management'
     | '/keys'
     | '/models'
     | '/open-source-promotion'
@@ -957,6 +969,7 @@ export interface FileRouteTypes {
     | '/_authenticated/workbench/video'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
+    | '/_authenticated/group-management/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
     | '/_authenticated/open-source-promotion/'
@@ -1300,6 +1313,13 @@ declare module '@tanstack/react-router' {
       path: '/errors/$error'
       fullPath: '/errors/$error'
       preLoaderRoute: typeof AuthenticatedErrorsErrorRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/group-management/': {
+      id: '/_authenticated/group-management/'
+      path: '/group-management'
+      fullPath: '/group-management/'
+      preLoaderRoute: typeof AuthenticatedGroupManagementIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/keys/': {
@@ -1674,6 +1694,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedWorkbenchVideoRoute: typeof AuthenticatedWorkbenchVideoRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
+  AuthenticatedGroupManagementIndexRoute: typeof AuthenticatedGroupManagementIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedOpenSourcePromotionIndexRoute: typeof AuthenticatedOpenSourcePromotionIndexRoute
@@ -1705,6 +1726,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedWorkbenchVideoRoute: AuthenticatedWorkbenchVideoRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
+  AuthenticatedGroupManagementIndexRoute:
+    AuthenticatedGroupManagementIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedOpenSourcePromotionIndexRoute:

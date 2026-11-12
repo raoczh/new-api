@@ -25,6 +25,7 @@ import {
   FILTER_ALL,
   SORT_OPTIONS,
   DEFAULT_TOKEN_UNIT,
+  DEFAULT_VIEW_MODE,
   VIEW_MODES,
   type ViewMode,
 } from '../constants'
@@ -41,10 +42,10 @@ type FilterState = {
 }
 
 function normalizeViewMode(value: unknown): ViewMode {
-  if (value === VIEW_MODES.TABLE) {
-    return VIEW_MODES.TABLE
+  if (value === VIEW_MODES.TABLE || value === VIEW_MODES.CARD) {
+    return value
   }
-  return VIEW_MODES.CARD
+  return DEFAULT_VIEW_MODE
 }
 
 export function useFilters(models: PricingModel[], groupOrder: string[]) {
@@ -103,7 +104,7 @@ export function useFilters(models: PricingModel[], groupOrder: string[]) {
   )
   const setViewMode = useCallback(
     (v: ViewMode) =>
-      updateFilters({ view: v === VIEW_MODES.CARD ? undefined : v }),
+      updateFilters({ view: v === DEFAULT_VIEW_MODE ? undefined : v }),
     [updateFilters]
   )
 

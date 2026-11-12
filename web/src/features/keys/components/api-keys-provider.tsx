@@ -31,6 +31,9 @@ type ApiKeysContextType = {
   setOpen: (str: ApiKeysDialogType | null) => void
   currentRow: ApiKey | null
   setCurrentRow: React.Dispatch<React.SetStateAction<ApiKey | null>>
+  /** Id of the key the create dialog just made, shown by the ready dialog. */
+  createdKeyId: number | null
+  setCreatedKeyId: React.Dispatch<React.SetStateAction<number | null>>
   refreshTrigger: number
   triggerRefresh: () => void
   resolvedKey: string
@@ -49,6 +52,7 @@ export function ApiKeysProvider({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation()
   const [open, setOpen] = useDialogState<ApiKeysDialogType>(null)
   const [currentRow, setCurrentRow] = useState<ApiKey | null>(null)
+  const [createdKeyId, setCreatedKeyId] = useState<number | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [resolvedKey, setResolvedKey] = useState('')
 
@@ -161,6 +165,8 @@ export function ApiKeysProvider({ children }: { children: React.ReactNode }) {
         setOpen,
         currentRow,
         setCurrentRow,
+        createdKeyId,
+        setCreatedKeyId,
         refreshTrigger,
         triggerRefresh,
         resolvedKey,

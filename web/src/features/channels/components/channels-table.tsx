@@ -58,6 +58,7 @@ import {
   DEFAULT_PAGE_SIZE,
   CHANNEL_STATUS,
   CHANNEL_STATUS_OPTIONS,
+  isChannelStatusFilterValue,
 } from '../constants'
 import { useChannelPriorityDrag } from '../hooks/use-channel-priority-drag'
 import { useChannelPriorityOrder } from '../hooks/use-channel-priority-order'
@@ -144,7 +145,10 @@ export function ChannelsTable() {
           const stored = localStorage.getItem(
             CHANNELS_STATUS_FILTER_STORAGE_KEY
           )
-          return stored === 'enabled' || stored === 'disabled' ? [stored] : []
+          // Restore whatever the filter offers, so adding a status here does
+          // not silently drop the remembered choice.
+          if (!isChannelStatusFilterValue(stored) || stored === 'all') return []
+          return [stored]
         },
       },
       { columnId: 'type', searchKey: 'type', type: 'array' },

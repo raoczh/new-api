@@ -267,6 +267,44 @@ func (user *User) ApplyUserRelayLimitsToResponse() {
 	user.HiddenUsableGroups = setting.HiddenUsableGroups
 }
 
+// UpdateUserGroupOverrides 管理员专用：只更新用户分组与可见分组覆盖。
+// 与 UpdateUserBindColumn 同理，只写 group 与 setting 两列，避免“读快照 → 改一个
+// 字段 → 整体回写”覆盖读快照期间并发发生的额度、封禁等变化。
+// 分组变化会推进 auth_version 并返回 true，调用方据此注销旧会话并刷新认证缓存。
+func UpdateUserGroupOverrides(userId int, group string, extra, hidden []string) (bool, error) {
+	if userId <= 0 || group == "" {
+		return false, common.NewMessage("User ID or group name is empty")
+	}
+	authChanged := false
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		current := User{}
+		if err := tx.First(&current, userId).Error; err != nil {
+			return err
+		}
+		setting := current.GetSetting()
+		setting.ExtraUsableGroups = extra
+		setting.HiddenUsableGroups = hidden
+		settingBytes, err := common.Marshal(setting)
+		if err != nil {
+			return err
+		}
+		updates := map[string]any{
+			"group":   group,
+			"setting": string(settingBytes),
+		}
+		if current.Group != group {
+			authVersion, err := IncrementUserAuthVersionWithTx(tx, userId)
+			if err != nil {
+				return err
+			}
+			updates["auth_version"] = authVersion
+			authChanged = true
+		}
+		return tx.Model(&User{}).Where("id = ?", userId).Updates(updates).Error
+	})
+	return authChanged, err
+}
+
 // userBindColumns 允许通过 UpdateUserBindColumn 更新的第三方账号绑定列白名单。
 // 列名只可能来自代码内部的 provider 实现，白名单是防御纵深，不依赖调用方自律。
 var userBindColumns = map[string]bool{

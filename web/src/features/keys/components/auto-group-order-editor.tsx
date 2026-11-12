@@ -45,6 +45,15 @@ type AutoGroupOrderEditorProps = Omit<ComponentProps<'div'>, 'onChange'> & {
   globalOptions: ApiKeyGroupOption[]
   maxCount: number
   onChange: (value: { groups: string[]; mode: 'inherit' | 'custom' }) => void
+  /**
+   * Hides the summary line and the restore button when the surrounding form
+   * already offers its own switch between the default and a custom order.
+   */
+  hideModeHeader?: boolean
+  /** Placeholder of the picker that adds a group; defaults to the Auto wording. */
+  addPlaceholder?: string
+  /** Shows each custom entry's position, so the fallback order reads at a glance. */
+  numbered?: boolean
   'data-slot'?: string
   'data-form-root'?: string
 }
@@ -99,29 +108,31 @@ export function AutoGroupOrderEditor(props: AutoGroupOrderEditorProps) {
       aria-invalid={props['aria-invalid']}
       className={cn('flex flex-col gap-3', props.className)}
     >
-      <div className='flex items-center justify-between gap-3'>
-        <p className='text-muted-foreground text-xs' aria-live='polite'>
-          {isInheriting
-            ? t('Using the complete global Auto order ({{count}} groups)', {
-                count: props.globalOptions.length,
-              })
-            : t('{{count}} / {{max}} groups selected', {
-                count: props.value.length,
-                max: maxCount,
-              })}
-        </p>
-        <Button
-          type='button'
-          variant='outline'
-          size='sm'
-          disabled={isInheriting}
-          onClick={() => {
-            props.onChange({ groups: [], mode: 'inherit' })
-          }}
-        >
-          {t('Restore global Auto')}
-        </Button>
-      </div>
+      {!props.hideModeHeader && (
+        <div className='flex items-center justify-between gap-3'>
+          <p className='text-muted-foreground text-xs' aria-live='polite'>
+            {isInheriting
+              ? t('Using the complete global Auto order ({{count}} groups)', {
+                  count: props.globalOptions.length,
+                })
+              : t('{{count}} / {{max}} groups selected', {
+                  count: props.value.length,
+                  max: maxCount,
+                })}
+          </p>
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            disabled={isInheriting}
+            onClick={() => {
+              props.onChange({ groups: [], mode: 'inherit' })
+            }}
+          >
+            {t('Restore global Auto')}
+          </Button>
+        </div>
+      )}
 
       <ApiKeyGroupCombobox
         options={candidates}
@@ -130,7 +141,7 @@ export function AutoGroupOrderEditor(props: AutoGroupOrderEditorProps) {
         placeholder={
           atLimit
             ? t('Maximum {{max}} groups selected', { max: maxCount })
-            : t('Add Auto group')
+            : (props.addPlaceholder ?? t('Add Auto group'))
         }
         disabled={atLimit || candidates.length === 0}
       />
@@ -222,6 +233,16 @@ export function AutoGroupOrderEditor(props: AutoGroupOrderEditorProps) {
               group={group}
               index={index}
               count={props.value.length}
+              leading={
+                props.numbered ? (
+                  <span
+                    aria-hidden='true'
+                    className='bg-primary/10 text-primary flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums'
+                  >
+                    {index + 1}
+                  </span>
+                ) : undefined
+              }
               onMove={handleMove}
               onRemove={handleRemove}
             />

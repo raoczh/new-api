@@ -141,7 +141,7 @@ export function IQMonitor() {
       <EmptyState
         title={t('No group has joined IQ monitoring')}
         description={t(
-          'Administrators can add model pools to groups under System Settings > Group Pricing.'
+          'Administrators can add model pools to groups under Group Management.'
         )}
         bordered
       />

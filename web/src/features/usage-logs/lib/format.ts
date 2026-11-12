@@ -536,6 +536,10 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   'user.topup_complete': 'Completed top-up order for the user',
   'user.reset_passkey': 'Reset the user passkey',
   'user.oauth_unbind': 'Removed an OAuth binding for the user',
+  'user.groups_update': 'Changed the group of user {{username}}',
+  'user.token_status_update': 'Updated an API key of user {{username}}',
+  'user.token_delete': 'Deleted an API key of user {{username}}',
+  'user.token_key_view': 'Viewed an API key of user {{username}}',
   // System settings
   'option.update': 'Updated system setting {{key}}',
   'group.rename': 'Renamed groups {{renames}}',
@@ -622,8 +626,7 @@ const AUDIT_TEMPLATES: Record<string, string> = {
     'Queued invitation emails for all {{count}} sendable open-source promotion recipients',
   'promotion.regrant':
     'Regranted the open-source promotion bonus to {{granted}} of {{count}} recipients',
-  'promotion.delete':
-    'Deleted open-source promotion recipient (ID: {{id}})',
+  'promotion.delete': 'Deleted open-source promotion recipient (ID: {{id}})',
   'promotion.fetch': 'Triggered an open-source author harvest',
   // Logs
   'log.clear': 'Cleared historical logs',

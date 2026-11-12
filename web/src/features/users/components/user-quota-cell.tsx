@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next'
 
 import { QuotaDetailsPopover } from '@/components/quota-details-popover'
 import { StatusBadge } from '@/components/status-badge'
+import { Button } from '@/components/ui/button'
 import { formatQuotaWithCurrency, getCurrencyDisplay } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
@@ -27,6 +28,8 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 type UserQuotaCellProps = {
   remaining: number
   used: number
+  /** Opens the quota dialog for this user, when the reader may adjust it. */
+  onAdjust?: () => void
 }
 
 export function UserQuotaCell(props: UserQuotaCellProps) {
@@ -55,6 +58,18 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
         { label: t('Available Balance'), value: formattedRemaining },
         { label: t('Total Used'), value: formattedUsed },
       ]}
+      actions={
+        props.onAdjust && (
+          <Button
+            type='button'
+            size='sm'
+            variant='outline'
+            onClick={props.onAdjust}
+          >
+            {t('Adjust Quota')}
+          </Button>
+        )
+      }
     >
       {hasQuota ? (
         <span className='grid min-w-0 grid-cols-1 gap-y-1 text-sm tabular-nums'>

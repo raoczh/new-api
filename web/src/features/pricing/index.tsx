@@ -31,6 +31,8 @@ import {
   PricingToolbar,
   ModelCardGrid,
   ModelDetailsDrawer,
+  VendorModelList,
+  StartChatAction,
 } from './components'
 import { EXCLUDED_GROUPS, VIEW_MODES } from './constants'
 import { useFilters } from './hooks/use-filters'
@@ -114,6 +116,20 @@ export function Pricing() {
       return (
         <ModelCardGrid
           models={filteredModels}
+          onModelClick={handleModelClick}
+          priceRate={priceRate}
+          usdExchangeRate={usdExchangeRate}
+          tokenUnit={tokenUnit}
+          selectedGroup={groupFilter}
+        />
+      )
+    }
+
+    if (viewMode === VIEW_MODES.LIST) {
+      return (
+        <VendorModelList
+          models={filteredModels}
+          vendors={vendors || []}
           onModelClick={handleModelClick}
           priceRate={priceRate}
           usdExchangeRate={usdExchangeRate}
@@ -235,6 +251,9 @@ export function Pricing() {
               priceRate={priceRate ?? 1}
               usdExchangeRate={usdExchangeRate ?? 1}
               tokenUnit={tokenUnit}
+              headerAction={
+                <StartChatAction modelName={selectedModel.model_name} />
+              }
             />
           )}
         </PageTransition>

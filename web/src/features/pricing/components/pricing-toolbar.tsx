@@ -45,7 +45,12 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 
-import { getSortLabels, type SortOption, type ViewMode } from '../constants'
+import {
+  getSortLabels,
+  VIEW_MODES,
+  type SortOption,
+  type ViewMode,
+} from '../constants'
 import type { PricingModel, PricingVendor, TokenUnit } from '../types'
 import { PricingSidebar } from './pricing-sidebar'
 
@@ -164,6 +169,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
           <DataTableViewModeToggle
             value={props.viewMode}
             onChange={props.onViewModeChange}
+            modes={[VIEW_MODES.CARD, VIEW_MODES.LIST, VIEW_MODES.TABLE]}
           />
         </div>
       </div>

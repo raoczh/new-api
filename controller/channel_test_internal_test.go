@@ -1089,3 +1089,62 @@ func TestTestAllChannelsRejectsExistingActiveTask(t *testing.T) {
 	require.Contains(t, recorder.Body.String(), existing.TaskID)
 	require.Contains(t, recorder.Body.String(), "A channel test task is already running or queued")
 }
+
+// The channel list offers separate filters for "disabled" (every channel that
+// is not serving traffic) and "auto disabled" (the ones the gateway turned off
+// by itself). The second one is what an administrator works through after an
+// upstream outage, so the two must not collapse into the same set.
+func TestChannelListStatusFilterFollowsRequestedStatus(t *testing.T) {
+	for _, dialect := range []struct{ name, env string }{{"sqlite", ""}, {"mysql", "TEST_MYSQL_DSN"}, {"postgres", "TEST_POSTGRES_DSN"}} {
+		t.Run(dialect.name, func(t *testing.T) {
+			if dialect.env != "" && os.Getenv(dialect.env) == "" {
+				t.Skip("set " + dialect.env + " to run this database")
+			}
+			testChannelListStatusFilter(t, dialect.name, os.Getenv(dialect.env))
+		})
+	}
+}
+
+func testChannelListStatusFilter(t *testing.T, dialect, dsn string) {
+	t.Helper()
+	db := modelManagementDB(t, dialect, dsn)
+
+	channels := []model.Channel{
+		{Name: "on", Status: common.ChannelStatusEnabled, Group: "default"},
+		{Name: "off-manual", Status: common.ChannelStatusManuallyDisabled, Group: "default"},
+		{Name: "off-auto", Status: common.ChannelStatusAutoDisabled, Group: "default"},
+	}
+	require.NoError(t, db.Create(&channels).Error)
+
+	all := []string{"on", "off-manual", "off-auto"}
+	for _, tc := range []struct {
+		name   string
+		status string
+		want   []string
+	}{
+		{"no status asked keeps every channel", "", all},
+		{"enabled", "enabled", []string{"on"}},
+		{"auto disabled", "auto_disabled", []string{"off-auto"}},
+		{"disabled covers both ways of being off", "disabled", []string{"off-manual", "off-auto"}},
+		{"an unusable status keeps every channel", "not-a-status", all},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var found []model.Channel
+			require.NoError(t, buildChannelListQuery("", parseStatusFilter(tc.status), -1).Order("id").Find(&found).Error)
+
+			names := make([]string, 0, len(found))
+			for i := range found {
+				names = append(names, found[i].Name)
+			}
+			assert.Equal(t, tc.want, names)
+		})
+	}
+
+	// The search endpoint filters an already loaded page in memory and must
+	// agree with the query above for the same request.
+	assert.True(t, matchesChannelStatusFilter(common.ChannelStatusAutoDisabled, common.ChannelStatusAutoDisabled))
+	assert.False(t, matchesChannelStatusFilter(common.ChannelStatusEnabled, common.ChannelStatusAutoDisabled))
+	assert.False(t, matchesChannelStatusFilter(common.ChannelStatusAutoDisabled, common.ChannelStatusEnabled))
+	assert.True(t, matchesChannelStatusFilter(common.ChannelStatusManuallyDisabled, 0))
+	assert.True(t, matchesChannelStatusFilter(common.ChannelStatusEnabled, -1))
+}

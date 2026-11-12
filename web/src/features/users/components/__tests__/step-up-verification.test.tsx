@@ -169,10 +169,7 @@ it('disabling a user from the row menu binds the proof to the user and action', 
   renderInProvider(
     <DataTableRowActions row={{ original: target } as Row<User>} />
   )
-  await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
-  await userEvent.click(
-    await screen.findByRole('menuitem', { name: 'Disable' })
-  )
+  await userEvent.click(screen.getByRole('button', { name: 'Disable' }))
   expect(post).not.toHaveBeenCalledWith(
     '/api/user/manage',
     expect.anything(),

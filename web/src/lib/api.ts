@@ -60,7 +60,14 @@ export async function getUserModels(): Promise<{
 export async function getUserGroups(): Promise<{
   success: boolean
   message?: string
-  data?: Record<string, { desc: string; ratio: number | string }>
+  data?: Record<
+    string,
+    { desc: string; ratio: number | string; vendor_id?: number }
+  >
+  /** Vendors the administrator assigned to at least one of these groups. */
+  vendors?: { id: number; name: string; icon?: string; description?: string }[]
+  /** Group names in the administrator's display order. */
+  group_order?: string[]
 }> {
   const res = await api.get('/api/user/self/groups')
   return res.data

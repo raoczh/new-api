@@ -19,6 +19,7 @@ import (
 	"github.com/QuantumNous/new-api/service/authz"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/QuantumNous/new-api/constant"
 
@@ -399,6 +400,158 @@ func SearchUsers(c *gin.Context) {
 
 func canManageTargetRole(myRole int, targetRole int) bool {
 	return myRole == common.RoleRootUser || myRole > targetRole
+}
+
+// adminTargetUser 解析路径中的用户 ID 并校验当前管理员有权管理该用户。
+// ok 为 false 时错误响应已经写好，调用方直接 return 即可。
+func adminTargetUser(c *gin.Context) (user *model.User, ok bool) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		common.ApiErrorT(c, "Invalid parameters")
+		return nil, false
+	}
+	user, err = model.GetUserById(id, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return nil, false
+	}
+	if !canManageTargetRole(c.GetInt("role"), user.Role) {
+		common.ApiErrorT(c, "No permission to access users of same or higher level")
+		return nil, false
+	}
+	return user, true
+}
+
+// adminUserGroupOption 描述一个分组对该用户的样子：能否使用、说明与实际生效倍率。
+type adminUserGroupOption struct {
+	Name   string  `json:"name"`
+	Desc   string  `json:"desc"`
+	Ratio  float64 `json:"ratio"`
+	Usable bool    `json:"usable"`
+}
+
+type adminUserGroupsResponse struct {
+	Group              string                 `json:"group"`
+	Groups             []adminUserGroupOption `json:"groups"`
+	ExtraUsableGroups  []string               `json:"extra_usable_groups"`
+	HiddenUsableGroups []string               `json:"hidden_usable_groups"`
+}
+
+// groupNameExists 判断分组名是否真实存在：以分组倍率设置为准，同时兼容已登记但
+// 尚未出现在倍率设置里的历史分组。
+func groupNameExists(name string) bool {
+	if _, ok := ratio_setting.GetGroupRatioCopy()[name]; ok {
+		return true
+	}
+	_, ok := model.GetGroupRegistry()[name]
+	return ok
+}
+
+// AdminGetUserGroups 查看某个用户的分组：所属分组、可用分组（含实际倍率）与
+// 管理员设置的额外可见/隐藏覆盖，供管理员在一个弹窗里看清并直接调整。
+func AdminGetUserGroups(c *gin.Context) {
+	user, ok := adminTargetUser(c)
+	if !ok {
+		return
+	}
+	userSetting := user.GetSetting()
+	usableGroups := service.GetUserUsableGroups(user.Group, userSetting)
+	names := make([]string, 0, len(usableGroups)+1)
+	for name := range usableGroups {
+		names = append(names, name)
+	}
+	for name := range model.GetGroupRegistry() {
+		if _, exists := usableGroups[name]; !exists {
+			names = append(names, name)
+		}
+	}
+	names = setting.OrderedGroupNames(names)
+	options := make([]adminUserGroupOption, 0, len(names))
+	for _, name := range names {
+		desc, usable := usableGroups[name]
+		options = append(options, adminUserGroupOption{
+			Name:   name,
+			Desc:   desc,
+			Ratio:  service.GetUserGroupRatio(user.Group, name),
+			Usable: usable,
+		})
+	}
+	common.ApiSuccess(c, adminUserGroupsResponse{
+		Group:              user.Group,
+		Groups:             options,
+		ExtraUsableGroups:  userSetting.ExtraUsableGroups,
+		HiddenUsableGroups: userSetting.HiddenUsableGroups,
+	})
+}
+
+type adminUserGroupsRequest struct {
+	Group string `json:"group"`
+	// 指针区分“未传”与“显式清空”：未传时保留原覆盖，避免只改分组的请求顺带清掉它们。
+	ExtraUsableGroups  *[]string `json:"extra_usable_groups"`
+	HiddenUsableGroups *[]string `json:"hidden_usable_groups"`
+}
+
+// AdminUpdateUserGroups 管理员直接修改用户的分组与可见分组覆盖。
+// 只写这两类字段，不动额度、角色与状态；分组变化会推进 auth_version。
+func AdminUpdateUserGroups(c *gin.Context) {
+	user, ok := adminTargetUser(c)
+	if !ok {
+		return
+	}
+	var req adminUserGroupsRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	group := strings.TrimSpace(req.Group)
+	if group == "" {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	// 只有更换分组时才要求新分组真实存在：历史数据里的分组名即便已经不在
+	// 倍率设置中，也不该因为管理员顺手改一下可见分组而报错。
+	if group != user.Group && !groupNameExists(group) {
+		common.ApiErrorT(c, "Group {{group}} does not exist", map[string]any{"group": group})
+		return
+	}
+	currentSetting := user.GetSetting()
+	extra, hidden := currentSetting.ExtraUsableGroups, currentSetting.HiddenUsableGroups
+	if req.ExtraUsableGroups != nil {
+		extra = *req.ExtraUsableGroups
+	}
+	if req.HiddenUsableGroups != nil {
+		hidden = *req.HiddenUsableGroups
+	}
+	if err := model.ValidateUserUsableGroupOverrides(group, extra, hidden); err != nil {
+		common.ApiErrorT(c, "Invalid input {{error}}", map[string]any{"error": err.Error()})
+		return
+	}
+	authChanged, err := model.UpdateUserGroupOverrides(user.Id, group, extra, hidden)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.PublishUserAuthCache(user.Id); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	// 与管理员编辑表单改分组的行为保持一致：分组决定可用模型与计费倍率，
+	// 变化后旧会话不能继续沿用，因此注销浏览器会话（PAT 与密钥不受影响）。
+	if authChanged {
+		if _, err := model.RevokeAllUserSessions(user.Id, "admin_user_group_update"); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
+	recordManageAuditFor(c, user.Id, "user.groups_update", map[string]any{
+		"username":             user.Username,
+		"id":                   user.Id,
+		"group":                group,
+		"previous_group":       user.Group,
+		"extra_usable_groups":  extra,
+		"hidden_usable_groups": hidden,
+	})
+	common.ApiSuccess(c, nil)
 }
 
 func GetUser(c *gin.Context) {

@@ -201,3 +201,51 @@ func TestRenameGroupsDatabaseMatrix(t *testing.T) {
 		})
 	}
 }
+
+// TestGetUserGroupsReportsConfiguredVendors covers the vendor a group is
+// assigned to in the group settings, which the API key dialog uses to offer
+// routes by vendor.
+func TestGetUserGroupsReportsConfiguredVendors(t *testing.T) {
+	db := modelManagementDB(t, "sqlite", "")
+	previousRatios := ratio_setting.GroupRatio2JSONString()
+	previousUsable := setting.UserUsableGroups2JSONString()
+	previousVendors := setting.GroupVendorsJSONString()
+	previousOrder := setting.GroupOrderJSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousRatios))
+		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(previousUsable))
+		require.NoError(t, setting.UpdateGroupVendors(previousVendors))
+		require.NoError(t, setting.UpdateGroupOrder(previousOrder))
+		model.InvalidatePricingCache()
+	})
+	vendor := model.Vendor{Name: "Anthropic", Icon: "Claude.Color", Description: "Long-form writing", Status: 1}
+	require.NoError(t, db.Create(&vendor).Error)
+	model.InvalidatePricingCache()
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"claude-b":1.5,"claude-a":2,"internal":1}`))
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default","claude-a":"Stable","claude-b":"Budget"}`))
+	require.NoError(t, setting.UpdateGroupOrder(`["claude-a","claude-b","default"]`))
+	require.NoError(t, setting.UpdateGroupVendors(common.GetJsonString(map[string]int{
+		"claude-a": vendor.Id, "claude-b": vendor.Id, "internal": vendor.Id, "default": 0,
+	})))
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	GetUserGroups(ctx)
+
+	var response struct {
+		Success bool `json:"success"`
+		Data    map[string]struct {
+			VendorID int `json:"vendor_id"`
+		} `json:"data"`
+		Vendors    []model.PricingVendor `json:"vendors"`
+		GroupOrder []string              `json:"group_order"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response), recorder.Body.String())
+	require.True(t, response.Success)
+	assert.Equal(t, vendor.Id, response.Data["claude-a"].VendorID)
+	assert.Equal(t, vendor.Id, response.Data["claude-b"].VendorID)
+	assert.Zero(t, response.Data["default"].VendorID)
+	assert.NotContains(t, response.Data, "internal", "a group the user cannot use stays hidden")
+	assert.Equal(t, []string{"claude-a", "claude-b", "default"}, response.GroupOrder)
+	assert.Equal(t, []model.PricingVendor{{ID: vendor.Id, Name: "Anthropic", Description: "Long-form writing", Icon: "Claude.Color"}}, response.Vendors)
+}

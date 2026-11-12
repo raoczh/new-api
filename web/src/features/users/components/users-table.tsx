@@ -64,8 +64,13 @@ function isDisabledUserRow(user: User) {
 
 export function UsersTable() {
   const { t } = useTranslation()
-  const columns = useUsersColumns()
-  const { refreshTrigger } = useUsers()
+  const { refreshTrigger, setCurrentRow, setOpen } = useUsers()
+  const columns = useUsersColumns({
+    onAdjustQuota: (user) => {
+      setCurrentRow(user)
+      setOpen('quota')
+    },
+  })
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [sorting, setSorting] = useState<SortingState>([])
 

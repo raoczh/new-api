@@ -66,12 +66,18 @@ function upsertConversationSummary(
 /**
  * Main state management hook for playground.
  * Owns the conversation index and the messages of the active conversation.
+ *
+ * `initialModel` seeds the selected model, so a link from the model square
+ * ("start chatting with this model") opens the chat on that model instead of
+ * whatever was stored last. It is not written to storage: a one-off deep link
+ * should not silently change the model the user picked for themselves.
  */
-export function usePlaygroundState() {
+export function usePlaygroundState(initialModel?: string) {
   // Load initial state from localStorage
-  const [config, setConfig] = useState<PlaygroundConfig>(
-    getInitialPlaygroundConfig
-  )
+  const [config, setConfig] = useState<PlaygroundConfig>(() => {
+    const stored = getInitialPlaygroundConfig()
+    return initialModel ? { ...stored, model: initialModel } : stored
+  })
 
   const [parameterEnabled, setParameterEnabled] = useState<ParameterEnabled>(
     getInitialParameterEnabled

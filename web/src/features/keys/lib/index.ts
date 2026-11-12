@@ -27,3 +27,16 @@ export {
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from './api-key-form'
+
+// ============================================================================
+// Vendor Routes
+// ============================================================================
+export {
+  UNASSIGNED_VENDOR_ID,
+  type KeyVendor,
+  type KeyVendorChoice,
+  groupKeyVendors,
+  resolveVendorAutoRoute,
+  routeToKeyGroups,
+  suggestKeyName,
+} from './key-routes'

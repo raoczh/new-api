@@ -502,3 +502,31 @@ describe('model pricing badge', () => {
     expect(badgedEntries()).toHaveLength(0)
   })
 })
+
+describe('group management entry', () => {
+  function adminGroup(navGroups: ReturnType<typeof useSidebarConfig>) {
+    return navGroups.find((group) => group.id === 'admin')
+  }
+
+  it('sits next to system settings for super administrators', () => {
+    const { result } = sidebarFor()
+    const admin = adminGroup(result.current)
+    const entry = admin?.items.find((item) => item.url === '/group-management')
+
+    expect(entry?.title).toBe('Group Management')
+    expect(entry?.requiredRole).toBe(ROLE.SUPER_ADMIN)
+    expect(admin?.items.map((item) => item.url)).toContain(
+      '/system-settings/site'
+    )
+  })
+
+  it('follows the advanced settings toggle', () => {
+    const { result } = sidebarFor({
+      admin: { enabled: true, channel: true, user: true, setting: false },
+    })
+
+    const urls = adminGroup(result.current)?.items.map((item) => item.url) ?? []
+    expect(urls).not.toContain('/group-management')
+    expect(urls).toContain('/users')
+  })
+})

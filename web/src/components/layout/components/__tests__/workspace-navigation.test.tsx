@@ -36,6 +36,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { SidebarProvider } from '@/components/ui/sidebar'
+import { useOnboardingStore } from '@/features/onboarding/store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useNotificationStore } from '@/stores/notification-store'
 import { useSystemConfigStore } from '@/stores/system-config-store'
@@ -82,6 +83,7 @@ afterEach(() => {
   useAuthStore.setState(useAuthStore.getInitialState(), true)
   useNotificationStore.setState(useNotificationStore.getInitialState(), true)
   useSystemConfigStore.setState(useSystemConfigStore.getInitialState(), true)
+  useOnboardingStore.setState({ step: null })
   localStorage.clear()
 })
 
@@ -205,10 +207,22 @@ it('shows configured FAQ entries in the support popover', async () => {
   expect(await screen.findByText('Open the API Keys page.')).toBeVisible()
 })
 
-it('hides the support entry when no contact method or FAQ is configured', async () => {
+it('keeps the support entry for replaying the guide when no contact method or FAQ is configured', async () => {
+  const user = userEvent.setup()
   await renderNavigation()
+
+  await user.click(screen.getByRole('button', { name: 'Support' }))
   expect(
-    screen.queryByRole('button', { name: 'Support' })
+    screen.getByText('Not sure where to start? Replay the guide.')
+  ).toBeVisible()
+  expect(screen.queryByText('Contact support')).not.toBeInTheDocument()
+
+  await user.click(
+    screen.getByRole('button', { name: 'Show the getting started guide' })
+  )
+  expect(useOnboardingStore.getState().step).toBe(0)
+  expect(
+    screen.queryByRole('button', { name: 'Show the getting started guide' })
   ).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Log out' })).toBeVisible()
 })

@@ -167,7 +167,7 @@ it('opens the selected user history from the menu and keeps all-record totals wh
     .mockResolvedValue({ data: { success: true, data: history } })
   renderActions()
   expect(get).not.toHaveBeenCalled()
-  await interaction.click(screen.getByRole('button', { name: 'Open menu' }))
+  await interaction.click(screen.getByRole('button', { name: 'More actions' }))
   screen.getByRole('menuitem', { name: 'Recharge records' }).focus()
   await interaction.keyboard('{Enter}')
 
@@ -213,7 +213,7 @@ it('opens the selected user history from the menu and keeps all-record totals wh
   await waitFor(() =>
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   )
-  await interaction.click(screen.getByRole('button', { name: 'Open menu' }))
+  await interaction.click(screen.getByRole('button', { name: 'More actions' }))
   await interaction.click(
     screen.getByRole('menuitem', { name: 'Recharge records' })
   )
@@ -233,7 +233,7 @@ it('shows loading then a retryable error instead of a misleading zero total', as
   })
   const get = vi.spyOn(api, 'get').mockReturnValueOnce(pending)
   renderActions()
-  await interaction.click(screen.getByRole('button', { name: 'Open menu' }))
+  await interaction.click(screen.getByRole('button', { name: 'More actions' }))
   await interaction.click(
     screen.getByRole('menuitem', { name: 'Recharge records' })
   )
@@ -274,7 +274,7 @@ it('resets pagination for another user and responds to a language change', async
     .spyOn(api, 'get')
     .mockResolvedValue({ data: { success: true, data: history } })
   const view = renderActions()
-  await interaction.click(screen.getByRole('button', { name: 'Open menu' }))
+  await interaction.click(screen.getByRole('button', { name: 'More actions' }))
   await interaction.click(
     screen.getByRole('menuitem', { name: 'Recharge records' })
   )

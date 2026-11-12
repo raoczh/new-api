@@ -34,6 +34,8 @@ type QuotaDetailsPopoverProps = {
   description?: string
   children: ReactNode
   afterTrigger?: ReactNode
+  /** Extra controls for the popover body, e.g. adjusting the quota. */
+  actions?: ReactNode
   className?: string
   triggerClassName?: string
 }
@@ -75,6 +77,9 @@ export function QuotaDetailsPopover(props: QuotaDetailsPopoverProps) {
           <p className='text-muted-foreground text-xs leading-relaxed'>
             {props.description}
           </p>
+        )}
+        {props.actions && (
+          <div className='flex justify-end'>{props.actions}</div>
         )}
       </PopoverContent>
     </Popover>

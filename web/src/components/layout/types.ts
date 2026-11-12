@@ -27,6 +27,8 @@ type BaseNavItem = {
   badge?: string
   icon?: React.ElementType
   activeUrls?: (LinkProps['to'] | (string & {}))[]
+  /** Name the first-run tour uses to point at this entry. */
+  tourTarget?: string
   configUrls?: (LinkProps['to'] | (string & {}))[]
   /**
    * Minimum role required to see this item in the sidebar. When set, the item

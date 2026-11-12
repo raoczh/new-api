@@ -396,9 +396,11 @@ func AddToken(c *gin.Context) {
 	}
 	params["id"] = cleanToken.Id
 	common.SetContextKey(c, constant.ContextKeyTokenAuditSucceeded, true)
+	// 只返回 id：完整密钥仍须通过带审计与限流的 /api/token/:id/key 读取。
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
+		"data":    gin.H{"id": cleanToken.Id},
 	})
 }
 
@@ -597,4 +599,150 @@ func GetTokenKeysBatch(c *gin.Context) {
 	params["returned_ids"] = returnedIDs
 	common.SetContextKey(c, constant.ContextKeyTokenAuditSucceeded, true)
 	common.ApiSuccess(c, gin.H{"keys": keysMap})
+}
+
+// ---------------------------------------------------------------------------
+// 管理员查看与操作用户密钥
+//
+// 用户自己的密钥接口（/api/token/*）都以登录身份为范围，管理员无法通过它们
+// 处理用户报障。以下接口挂在 adminRoute 下，统一先校验管理员对该用户的管辖权，
+// 再按需做二次校验，并写审计日志。密钥列表只返回掩码，读取完整密钥单独走
+// AdminGetUserTokenKey 并要求二次校验。
+// ---------------------------------------------------------------------------
+
+// adminTargetToken 解析路径中的密钥 ID，并确认它确实属于目标用户。
+func adminTargetToken(c *gin.Context, userId int) (*model.Token, bool) {
+	tokenId, err := strconv.Atoi(c.Param("token_id"))
+	if err != nil || tokenId <= 0 {
+		common.ApiErrorT(c, "Invalid parameters")
+		return nil, false
+	}
+	token, err := model.GetTokenByIds(tokenId, userId)
+	if err != nil {
+		common.ApiErrorT(c, "Token does not exist")
+		return nil, false
+	}
+	return token, true
+}
+
+// AdminGetUserTokens 列出指定用户的密钥（密钥内容只返回掩码）。
+func AdminGetUserTokens(c *gin.Context) {
+	user, ok := adminTargetUser(c)
+	if !ok {
+		return
+	}
+	pageInfo := common.GetPageQuery(c)
+	tokens, err := model.GetAllUserTokens(user.Id, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	total, err := model.CountUserTokens(user.Id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(buildMaskedTokenResponses(tokens))
+	common.ApiSuccess(c, pageInfo)
+}
+
+type adminTokenStatusRequest struct {
+	Status int `json:"status"`
+}
+
+// AdminSetUserTokenStatus 启用或停用用户的一个密钥。
+// 过期与耗尽由用量推导，不允许手动设置，只接受启用与停用两种状态。
+func AdminSetUserTokenStatus(c *gin.Context) {
+	user, ok := adminTargetUser(c)
+	if !ok {
+		return
+	}
+	token, ok := adminTargetToken(c, user.Id)
+	if !ok {
+		return
+	}
+	var req adminTokenStatusRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	if req.Status != common.TokenStatusEnabled && req.Status != common.TokenStatusDisabled {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	if token.Status == req.Status {
+		common.ApiSuccess(c, nil)
+		return
+	}
+	token.Status = req.Status
+	if err := token.UpdateStatus(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAuditFor(c, user.Id, "user.token_status_update", map[string]any{
+		"username":   user.Username,
+		"token_id":   token.Id,
+		"token_name": token.Name,
+		"status":     req.Status,
+	})
+	common.ApiSuccess(c, nil)
+}
+
+// AdminDeleteUserToken 删除用户的一个密钥。删除不可恢复，会立即中断该密钥正在
+// 承载的调用，因此需要管理员完成一次二次校验。
+func AdminDeleteUserToken(c *gin.Context) {
+	user, ok := adminTargetUser(c)
+	if !ok {
+		return
+	}
+	token, ok := adminTargetToken(c, user.Id)
+	if !ok {
+		return
+	}
+	authorization := requireAdminUserProof(c, service.VerificationScopeAdminUserManage, service.AdminUserManageContext{
+		UserID: user.Id,
+		Action: service.AdminUserManageActionTokenDelete,
+	})
+	if authorization == nil {
+		return
+	}
+	if err := model.DeleteTokenById(token.Id, user.Id); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAuditFor(c, user.Id, "user.token_delete", map[string]any{
+		"username":            user.Username,
+		"token_id":            token.Id,
+		"token_name":          token.Name,
+		"verification_method": authorization.Method,
+	})
+	common.ApiSuccess(c, nil)
+}
+
+// AdminGetUserTokenKey 返回用户某个密钥的完整内容，用于“密钥丢失、填错”这类客服
+// 场景。凭据属于敏感信息，需要管理员完成一次二次校验，并写入审计日志。
+func AdminGetUserTokenKey(c *gin.Context) {
+	user, ok := adminTargetUser(c)
+	if !ok {
+		return
+	}
+	token, ok := adminTargetToken(c, user.Id)
+	if !ok {
+		return
+	}
+	authorization := requireAdminUserProof(c, service.VerificationScopeAdminUserManage, service.AdminUserManageContext{
+		UserID: user.Id,
+		Action: service.AdminUserManageActionTokenKeyRead,
+	})
+	if authorization == nil {
+		return
+	}
+	recordManageAuditFor(c, user.Id, "user.token_key_view", map[string]any{
+		"username":            user.Username,
+		"token_id":            token.Id,
+		"token_name":          token.Name,
+		"verification_method": authorization.Method,
+	})
+	common.ApiSuccess(c, gin.H{"key": token.GetFullKey()})
 }

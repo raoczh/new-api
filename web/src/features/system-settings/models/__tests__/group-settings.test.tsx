@@ -360,4 +360,28 @@ describe('group settings workspace', () => {
       screen.getAllByRole('textbox', { name: 'Group description' })[1]
     ).toHaveValue('Updated description')
   })
+
+  it('jumps from a group detail to the special ratio editor with that group prefilled', async () => {
+    const user = userEvent.setup()
+    render(<Fixture />)
+
+    // 分组按 GroupOrder 渲染，vip 排在第二位。
+    await user.click(screen.getAllByRole('button', { name: 'Details' })[1])
+    expect(
+      await screen.findByRole('heading', { name: 'Group details: vip' })
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Set special ratio' }))
+
+    // 详情侧拉框让位给专属倍率对话框，被点开的分组已作为“用户组”填好。
+    expect(await screen.findByText('Add ratio override')).toBeVisible()
+    expect(
+      screen.getByText(/Configure a custom ratio for "vip" users/)
+    ).toBeVisible()
+    expect(screen.queryByText('Group details: vip')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(
+      screen.getByRole('tab', { name: 'Special ratio rules' })
+    ).toHaveAttribute('aria-selected', 'true')
+  })
 })

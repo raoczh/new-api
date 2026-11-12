@@ -19,6 +19,15 @@ For commercial licensing, please contact support@quantumnous.com
 // Static translation keys that don't get picked up by the t('...') regex.
 // These cover dynamic labels (e.g. constants, configs) that are passed into t at runtime.
 export const STATIC_I18N_KEYS = [
+  // First-run tour steps (features/onboarding/lib/tour-steps.ts).
+  'Welcome! Let us get you started',
+  'It takes about a minute. You will create an API key, which is all you need to use every model here.',
+  'Open API Keys',
+  'An API key is your personal pass to the models. Click here to manage your keys.',
+  'Create your first key',
+  'Click here, pick the model vendor you want, and confirm. The defaults work for most people.',
+  'Try a model right away',
+  'No code needed: open the Playground and send a message with the key you just created. Calls are paid from your balance, so top up in Wallet if it is empty.',
   // Group rename validation (features/system-settings/models/group-name.ts).
   'Enter a group name',
   'Invalid group name {{name}}. Use at most {{max}} characters without commas, and do not use auto or start with +: or -:',

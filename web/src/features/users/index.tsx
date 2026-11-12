@@ -20,6 +20,9 @@ import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 
+import { UserApiKeysDialog } from './components/dialogs/user-api-keys-dialog'
+import { UserGroupsDialog } from './components/dialogs/user-groups-dialog'
+import { UserQuotaDialog } from './components/user-quota-dialog'
 import { UsersDeleteDialog } from './components/users-delete-dialog'
 import { UsersMutateDrawer } from './components/users-mutate-drawer'
 import { UsersPrimaryButtons } from './components/users-primary-buttons'
@@ -28,7 +31,8 @@ import { UsersTable } from './components/users-table'
 
 function UsersContent() {
   const { t } = useTranslation()
-  const { open, setOpen, currentRow } = useUsers()
+  const { open, setOpen, currentRow, triggerRefresh } = useUsers()
+  const closeDialog = (isOpen: boolean) => !isOpen && setOpen(null)
 
   return (
     <>
@@ -44,10 +48,33 @@ function UsersContent() {
 
       <UsersMutateDrawer
         open={open === 'create' || open === 'update'}
-        onOpenChange={(isOpen) => !isOpen && setOpen(null)}
+        onOpenChange={closeDialog}
         currentRow={open === 'update' ? currentRow || undefined : undefined}
       />
       <UsersDeleteDialog />
+      {currentRow && (
+        <>
+          <UserQuotaDialog
+            open={open === 'quota'}
+            onOpenChange={closeDialog}
+            userId={currentRow.id}
+            currentQuota={currentRow.quota}
+            onSuccess={triggerRefresh}
+          />
+          <UserGroupsDialog
+            open={open === 'groups'}
+            onOpenChange={closeDialog}
+            user={currentRow}
+            onSuccess={triggerRefresh}
+          />
+          <UserApiKeysDialog
+            open={open === 'api-keys'}
+            onOpenChange={closeDialog}
+            user={currentRow}
+            onSuccess={triggerRefresh}
+          />
+        </>
+      )}
     </>
   )
 }

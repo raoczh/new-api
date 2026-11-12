@@ -345,6 +345,11 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const [detailGroup, setDetailGroup] = useState<string | null>(null)
+  // 从分组详情直接设置专属倍率：切到规则分区并打开对话框，用户组已填好。
+  const [specialRatioRequest, setSpecialRatioRequest] = useState<{
+    userGroup: string
+    nonce: number
+  } | null>(null)
 
   const registry = useMemo<RegistryEntry[]>(() => {
     const ratioMap = parseRatioMap(groupRatio)
@@ -449,6 +454,9 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
           registry={registry}
           groupGroupRatio={groupGroupRatio}
           onChange={onChange}
+          requestedUserGroup={specialRatioRequest?.userGroup ?? null}
+          requestNonce={specialRatioRequest?.nonce ?? 0}
+          onRequestHandled={() => setSpecialRatioRequest(null)}
         />
       </TabsContent>
       <TabsContent value='visibility' keepMounted>
@@ -536,6 +544,11 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
         groupGroupRatio={groupGroupRatio}
         autoGroups={autoGroupsList}
         groupSpecialUsableGroup={groupSpecialUsableGroup}
+        onConfigureSpecialRatios={(group) => {
+          setDetailGroup(null)
+          onSectionChange('overrides')
+          setSpecialRatioRequest({ userGroup: group, nonce: Date.now() })
+        }}
       />
     </Tabs>
   )
@@ -1063,12 +1076,19 @@ type GroupOverrideRulesProps = {
   registry: RegistryEntry[]
   groupGroupRatio: string
   onChange: (field: string, value: string) => void
+  /** User group to open the add-rule dialog for, e.g. from a group's details. */
+  requestedUserGroup?: string | null
+  requestNonce?: number
+  onRequestHandled?: () => void
 }
 
 function GroupOverrideRules({
   registry,
   groupGroupRatio,
   onChange,
+  requestedUserGroup,
+  requestNonce = 0,
+  onRequestHandled,
 }: GroupOverrideRulesProps) {
   const { t } = useTranslation()
   const [userGroupDialogOpen, setUserGroupDialogOpen] = useState(false)
@@ -1134,6 +1154,13 @@ function GroupOverrideRules({
     setOverrideEditData(null)
     setOverrideDialogOpen(true)
   }, [])
+
+  // nonce 让同一个分组可以被再次请求：请求处理完就清空，避免重复弹窗。
+  useEffect(() => {
+    if (!requestedUserGroup) return
+    handleOverrideAdd(requestedUserGroup)
+    onRequestHandled?.()
+  }, [requestedUserGroup, requestNonce, handleOverrideAdd, onRequestHandled])
 
   const handleOverrideEdit = useCallback(
     (userGroup: string, override: GroupOverride) => {
@@ -1529,6 +1556,8 @@ function GroupOverrideDialog({
 type GroupDetailSheetProps = {
   groupName: string | null
   onOpenChange: (open: boolean) => void
+  /** Jumps to the special ratio editor with this group already selected. */
+  onConfigureSpecialRatios?: (group: string) => void
   registry: RegistryEntry[]
   topupGroupRatio: string
   userUsableGroups: string
@@ -1710,9 +1739,20 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
             </section>
 
             <section className='space-y-2'>
-              <h3 className='text-sm font-semibold'>
-                {t('Ratio overrides for users of this group')}
-              </h3>
+              <div className='flex flex-wrap items-center justify-between gap-2'>
+                <h3 className='text-sm font-semibold'>
+                  {t('Ratio overrides for users of this group')}
+                </h3>
+                {name && props.onConfigureSpecialRatios && (
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    onClick={() => props.onConfigureSpecialRatios?.(name)}
+                  >
+                    {t('Set special ratio')}
+                  </Button>
+                )}
+              </div>
               {detail.outgoingOverrides.length === 0 ? (
                 <p className='text-muted-foreground text-sm'>{t('None')}</p>
               ) : (

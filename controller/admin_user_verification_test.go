@@ -29,6 +29,24 @@ func setupAdminUserTest(t *testing.T) (*model.User, service.AuthIdentity, *model
 	return operator, identity, target
 }
 
+const managedTokenSecret = "managed-token-secret"
+
+// managedTokenID returns the id of the managed user's key fixture. The id is
+// read back from the database because it is auto-generated per test run.
+func managedTokenID(t *testing.T, userId int) int {
+	t.Helper()
+	var token model.Token
+	require.NoError(t, model.DB.Where("user_id = ?", userId).First(&token).Error)
+	return token.Id
+}
+
+func storedTokenKey(t *testing.T, userId int) string {
+	t.Helper()
+	var token model.Token
+	require.NoError(t, model.DB.Where("user_id = ?", userId).First(&token).Error)
+	return token.Key
+}
+
 // adminUserRequest drives an admin user-management handler with the operator
 // context that AdminAuth would have populated for a dashboard session.
 func adminUserRequest(method, path, body, proof string, identity service.AuthIdentity, role int, params gin.Params, handler gin.HandlerFunc) *httptest.ResponseRecorder {
@@ -57,6 +75,8 @@ func TestAdminUserRiskOperationsRequireProofBeforeMutation(t *testing.T) {
 		params             func(target *model.User) gin.Params
 		handler            gin.HandlerFunc
 		unchanged          func(t *testing.T, target *model.User)
+		// 有些操作的价值在于“不泄露”，泄露只出现在响应体里，因此单独留一个断言位。
+		responseMustNotContain string
 	}{
 		{
 			name: "hard delete", method: http.MethodDelete, path: "/api/user/:id", handler: DeleteUser,
@@ -162,12 +182,35 @@ func TestAdminUserRiskOperationsRequireProofBeforeMutation(t *testing.T) {
 				assert.Len(t, bindings, 1)
 			},
 		},
+		{
+			name: "token delete", method: http.MethodDelete, path: "/api/user/:id/tokens/:token_id", handler: AdminDeleteUserToken,
+			params: func(target *model.User) gin.Params {
+				return gin.Params{{Key: "id", Value: fmt.Sprint(target.Id)}, {Key: "token_id", Value: fmt.Sprint(managedTokenID(t, target.Id))}}
+			},
+			unchanged: func(t *testing.T, target *model.User) {
+				var count int64
+				require.NoError(t, model.DB.Model(&model.Token{}).Where("user_id = ?", target.Id).Count(&count).Error)
+				assert.EqualValues(t, 1, count)
+			},
+		},
+		{
+			name: "token key read", method: http.MethodGet, path: "/api/user/:id/tokens/:token_id/key", handler: AdminGetUserTokenKey,
+			params: func(target *model.User) gin.Params {
+				return gin.Params{{Key: "id", Value: fmt.Sprint(target.Id)}, {Key: "token_id", Value: fmt.Sprint(managedTokenID(t, target.Id))}}
+			},
+			responseMustNotContain: managedTokenSecret,
+			unchanged: func(t *testing.T, target *model.User) {
+				assert.Equal(t, managedTokenSecret, storedTokenKey(t, target.Id))
+			},
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, identity, target := setupAdminUserTest(t)
+			require.NoError(t, model.DB.AutoMigrate(&model.Token{}, &model.UserGroup{}))
 			require.NoError(t, model.DB.Create(&model.PasskeyCredential{UserID: target.Id, CredentialID: "managed-passkey", PublicKey: "public-key"}).Error)
 			require.NoError(t, model.DB.Create(&model.TwoFA{UserId: target.Id, Secret: "JBSWY3DPEHPK3PXP", IsEnabled: true}).Error)
 			require.NoError(t, model.DB.Create(&model.UserOAuthBinding{UserId: target.Id, ProviderId: 7, ProviderUserId: "provider-user"}).Error)
+			require.NoError(t, model.DB.Create(&model.Token{UserId: target.Id, Key: managedTokenSecret, Name: "managed-key", Status: common.TokenStatusEnabled, Group: "default"}).Error)
 			var body string
 			if test.body != nil {
 				body = test.body(target)
@@ -182,6 +225,9 @@ func TestAdminUserRiskOperationsRequireProofBeforeMutation(t *testing.T) {
 			assert.Equal(t, http.StatusForbidden, response.Code)
 			assert.Equal(t, "SECURITY_PROOF_REQUIRED", result.Code)
 			test.unchanged(t, target)
+			if test.responseMustNotContain != "" {
+				assert.NotContains(t, response.Body.String(), test.responseMustNotContain)
+			}
 			var flows int64
 			require.NoError(t, model.DB.Model(&model.AuthFlow{}).Count(&flows).Error)
 			assert.Zero(t, flows)
@@ -385,5 +431,238 @@ func TestAdminUserVerificationPolicy(t *testing.T) {
 		var flows int64
 		require.NoError(t, model.DB.Model(&model.AuthFlow{}).Count(&flows).Error)
 		assert.Zero(t, flows)
+	})
+}
+
+// adminUserGroupsPayload 是分组管理接口的响应形状，供测试断言使用。
+type adminUserGroupsPayload struct {
+	Group              string   `json:"group"`
+	ExtraUsableGroups  []string `json:"extra_usable_groups"`
+	HiddenUsableGroups []string `json:"hidden_usable_groups"`
+	Groups             []struct {
+		Name   string  `json:"name"`
+		Desc   string  `json:"desc"`
+		Ratio  float64 `json:"ratio"`
+		Usable bool    `json:"usable"`
+	} `json:"groups"`
+}
+
+func (payload adminUserGroupsPayload) usable(name string) (bool, bool) {
+	for _, group := range payload.Groups {
+		if group.Name == name {
+			return group.Usable, true
+		}
+	}
+	return false, false
+}
+
+// TestAdminUserGroupManagement 覆盖管理员查看与操作某个用户分组的接口：
+// 列表要说明哪些分组可用，更新只动分组相关字段，非法输入不得落库。
+func TestAdminUserGroupManagement(t *testing.T) {
+	params := func(target *model.User) gin.Params {
+		return gin.Params{{Key: "id", Value: fmt.Sprint(target.Id)}}
+	}
+	decodeGroups := func(t *testing.T, response *httptest.ResponseRecorder) adminUserGroupsPayload {
+		t.Helper()
+		var body securityEnrollmentResponse
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &body))
+		require.True(t, body.Success, response.Body.String())
+		var payload adminUserGroupsPayload
+		require.NoError(t, common.Unmarshal(body.Data, &payload))
+		return payload
+	}
+
+	t.Run("viewing a user reports their usable groups", func(t *testing.T) {
+		_, identity, target := setupAdminUserTest(t)
+		require.NoError(t, model.DB.AutoMigrate(&model.Token{}, &model.UserGroup{}))
+		_, err := model.EnsureGroupId("managed-group")
+		require.NoError(t, err)
+		response := adminUserRequest(http.MethodGet, "/api/user/:id/groups", "", "", identity, common.RoleAdminUser, params(target), AdminGetUserGroups)
+		payload := decodeGroups(t, response)
+		assert.Equal(t, "default", payload.Group)
+		usable, found := payload.usable("default")
+		require.True(t, found, "the own group of the user must be listed")
+		assert.True(t, usable, "the own group of the user is always usable")
+		usable, found = payload.usable("managed-group")
+		require.True(t, found, "registered groups are listed so an admin can grant them")
+		assert.False(t, usable)
+	})
+
+	t.Run("changing groups keeps unrelated fields and overrides", func(t *testing.T) {
+		_, identity, target := setupAdminUserTest(t)
+		require.NoError(t, model.DB.AutoMigrate(&model.UserGroup{}))
+		before, err := model.GetUserById(target.Id, false)
+		require.NoError(t, err)
+		_, err = model.EnsureGroupId("managed-group")
+		require.NoError(t, err)
+		body := `{"group":"managed-group","extra_usable_groups":["managed-group"],"hidden_usable_groups":[]}`
+		response := adminUserRequest(http.MethodPut, "/api/user/:id/groups", body, "", identity, common.RoleAdminUser, params(target), AdminUpdateUserGroups)
+		var result securityEnrollmentResponse
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+
+		stored, err := model.GetUserById(target.Id, false)
+		require.NoError(t, err)
+		assert.Equal(t, "managed-group", stored.Group)
+		assert.Equal(t, before.Quota, stored.Quota)
+		assert.Equal(t, before.Username, stored.Username)
+		assert.Greater(t, stored.AuthVersion, before.AuthVersion, "a group change must invalidate old sessions")
+
+		userSetting := stored.GetSetting()
+		assert.Equal(t, []string{"managed-group"}, userSetting.ExtraUsableGroups)
+		assert.Empty(t, userSetting.HiddenUsableGroups)
+
+		response = adminUserRequest(http.MethodGet, "/api/user/:id/groups", "", "", identity, common.RoleAdminUser, params(target), AdminGetUserGroups)
+		payload := decodeGroups(t, response)
+		assert.Equal(t, "managed-group", payload.Group)
+		assert.Equal(t, []string{"managed-group"}, payload.ExtraUsableGroups)
+		usable, found := payload.usable("managed-group")
+		require.True(t, found)
+		assert.True(t, usable, "an extra visible group counts as usable")
+
+		var audit model.AuditLog
+		require.NoError(t, model.LOG_DB.Where("action = ?", "user.groups_update").Last(&audit).Error)
+		require.NotNil(t, audit.Other.Op)
+		previous, err := common.Marshal(audit.Other.Op.Params["previous_group"])
+		require.NoError(t, err)
+		assert.JSONEq(t, `"default"`, string(previous))
+	})
+
+	t.Run("rejects unknown groups and self hiding", func(t *testing.T) {
+		_, identity, target := setupAdminUserTest(t)
+		for _, test := range []struct {
+			name, body string
+		}{
+			{"unknown group", `{"group":"no-such-group"}`},
+			{"hiding the own group", `{"group":"default","hidden_usable_groups":["default"]}`},
+			{"empty group", `{"group":"   "}`},
+		} {
+			response := adminUserRequest(http.MethodPut, "/api/user/:id/groups", test.body, "", identity, common.RoleAdminUser, params(target), AdminUpdateUserGroups)
+			var result securityEnrollmentResponse
+			require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+			assert.False(t, result.Success, test.name)
+			stored, err := model.GetUserById(target.Id, false)
+			require.NoError(t, err)
+			assert.Equal(t, "default", stored.Group, test.name)
+			assert.Empty(t, stored.GetSetting().HiddenUsableGroups, test.name)
+		}
+	})
+
+	t.Run("a partial request keeps existing overrides", func(t *testing.T) {
+		_, identity, target := setupAdminUserTest(t)
+		require.NoError(t, model.DB.Model(target).Update("setting", `{"extra_usable_groups":["default"]}`).Error)
+		response := adminUserRequest(http.MethodPut, "/api/user/:id/groups", `{"group":"default"}`, "", identity, common.RoleAdminUser, params(target), AdminUpdateUserGroups)
+		var result securityEnrollmentResponse
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+		stored, err := model.GetUserById(target.Id, false)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"default"}, stored.GetSetting().ExtraUsableGroups)
+	})
+}
+
+// TestAdminUserKeyOperations 覆盖管理员查看与操作用户密钥：列表只给掩码，
+// 启用停用即时生效，读取明文与删除都需要二次校验并留痕。
+func TestAdminUserKeyOperations(t *testing.T) {
+	_, identity, target := setupAdminUserTest(t)
+	require.NoError(t, model.DB.AutoMigrate(&model.Token{}, &model.UserGroup{}))
+	require.NoError(t, model.DB.Create(&model.Token{UserId: target.Id, Key: managedTokenSecret, Name: "managed-key", Status: common.TokenStatusEnabled, Group: "default"}).Error)
+	tokenID := managedTokenID(t, target.Id)
+	params := gin.Params{{Key: "id", Value: fmt.Sprint(target.Id)}, {Key: "token_id", Value: fmt.Sprint(tokenID)}}
+
+	t.Run("listing masks the key", func(t *testing.T) {
+		response := adminUserRequest(http.MethodGet, "/api/user/:id/tokens", "", "", identity, common.RoleAdminUser, gin.Params{{Key: "id", Value: fmt.Sprint(target.Id)}}, AdminGetUserTokens)
+		var result securityEnrollmentResponse
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+		assert.NotContains(t, response.Body.String(), managedTokenSecret)
+	})
+
+	t.Run("status changes take effect immediately", func(t *testing.T) {
+		response := adminUserRequest(http.MethodPost, "/api/user/:id/tokens/:token_id/status", `{"status":2}`, "", identity, common.RoleAdminUser, params, AdminSetUserTokenStatus)
+		var result securityEnrollmentResponse
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+		stored, err := model.GetTokenById(tokenID)
+		require.NoError(t, err)
+		assert.Equal(t, common.TokenStatusDisabled, stored.Status)
+
+		// 过期与耗尽由用量推导，不接受手动设置。
+		response = adminUserRequest(http.MethodPost, "/api/user/:id/tokens/:token_id/status", `{"status":3}`, "", identity, common.RoleAdminUser, params, AdminSetUserTokenStatus)
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		assert.False(t, result.Success)
+		stored, err = model.GetTokenById(tokenID)
+		require.NoError(t, err)
+		assert.Equal(t, common.TokenStatusDisabled, stored.Status)
+
+		response = adminUserRequest(http.MethodPost, "/api/user/:id/tokens/:token_id/status", `{"status":1}`, "", identity, common.RoleAdminUser, params, AdminSetUserTokenStatus)
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+		stored, err = model.GetTokenById(tokenID)
+		require.NoError(t, err)
+		assert.Equal(t, common.TokenStatusEnabled, stored.Status)
+	})
+
+	t.Run("reading the full key needs its own proof", func(t *testing.T) {
+		proof := issueSecurityEnrollmentProof(t, identity, service.VerificationOperation{
+			Scope:   service.VerificationScopeAdminUserManage,
+			Context: fmt.Appendf(nil, `{"user_id":%d,"action":"token_key_read"}`, target.Id),
+		}, service.VerificationMethodPassword)
+		response := adminUserRequest(http.MethodGet, "/api/user/:id/tokens/:token_id/key", "", proof, identity, common.RoleAdminUser, params, AdminGetUserTokenKey)
+		var result securityEnrollmentResponse
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+		var payload struct {
+			Key string `json:"key"`
+		}
+		require.NoError(t, common.Unmarshal(result.Data, &payload))
+		assert.Equal(t, managedTokenSecret, payload.Key)
+		var audit model.AuditLog
+		require.NoError(t, model.LOG_DB.Where("action = ?", "user.token_key_view").Last(&audit).Error)
+		require.NotNil(t, audit.Other.Op)
+		assert.NotContains(t, response.Body.String(), proof)
+	})
+
+	t.Run("deleting a key needs the delete proof", func(t *testing.T) {
+		// 读取明文的凭证不能拿来删除：动作必须一致。
+		readProof := issueSecurityEnrollmentProof(t, identity, service.VerificationOperation{
+			Scope:   service.VerificationScopeAdminUserManage,
+			Context: fmt.Appendf(nil, `{"user_id":%d,"action":"token_key_read"}`, target.Id),
+		}, service.VerificationMethodPassword)
+		response := adminUserRequest(http.MethodDelete, "/api/user/:id/tokens/:token_id", "", readProof, identity, common.RoleAdminUser, params, AdminDeleteUserToken)
+		var result securityEnrollmentResponse
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		assert.Equal(t, "SECURITY_PROOF_CONTEXT_MISMATCH", result.Code)
+		var count int64
+		require.NoError(t, model.DB.Model(&model.Token{}).Where("user_id = ?", target.Id).Count(&count).Error)
+		assert.EqualValues(t, 1, count)
+
+		deleteProof := issueSecurityEnrollmentProof(t, identity, service.VerificationOperation{
+			Scope:   service.VerificationScopeAdminUserManage,
+			Context: fmt.Appendf(nil, `{"user_id":%d,"action":"token_delete"}`, target.Id),
+		}, service.VerificationMethodPassword)
+		response = adminUserRequest(http.MethodDelete, "/api/user/:id/tokens/:token_id", "", deleteProof, identity, common.RoleAdminUser, params, AdminDeleteUserToken)
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+		require.NoError(t, model.DB.Model(&model.Token{}).Where("user_id = ?", target.Id).Count(&count).Error)
+		assert.Zero(t, count)
+		var audit model.AuditLog
+		require.NoError(t, model.LOG_DB.Where("action = ?", "user.token_delete").Last(&audit).Error)
+		require.NotNil(t, audit.Other.Op)
+	})
+
+	t.Run("the key of another user is unreachable", func(t *testing.T) {
+		other := &model.User{Username: "other-key-owner", Password: target.Password, Role: common.RoleCommonUser, Status: common.UserStatusEnabled, Group: "default", AuthVersion: 1, AffCode: "other-aff"}
+		require.NoError(t, model.DB.Create(other).Error)
+		require.NoError(t, model.DB.Create(&model.Token{UserId: other.Id, Key: "other-token-secret", Name: "other-key", Status: common.TokenStatusEnabled, Group: "default"}).Error)
+		otherTokenID := managedTokenID(t, other.Id)
+		foreign := gin.Params{{Key: "id", Value: fmt.Sprint(target.Id)}, {Key: "token_id", Value: fmt.Sprint(otherTokenID)}}
+		response := adminUserRequest(http.MethodPost, "/api/user/:id/tokens/:token_id/status", `{"status":2}`, "", identity, common.RoleAdminUser, foreign, AdminSetUserTokenStatus)
+		var result securityEnrollmentResponse
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		assert.False(t, result.Success)
+		stored, err := model.GetTokenById(otherTokenID)
+		require.NoError(t, err)
+		assert.Equal(t, common.TokenStatusEnabled, stored.Status)
 	})
 }

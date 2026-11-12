@@ -36,6 +36,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { TOUR_TARGETS } from '@/features/onboarding/lib/tour-steps'
 
 import { useApiAddresses } from '../hooks/use-api-addresses'
 import { useApiKeys } from './api-keys-provider'
@@ -113,7 +114,11 @@ export function ApiKeysPrimaryButtons() {
             )}
           </PopoverContent>
         </Popover>
-        <Button size='sm' onClick={() => setOpen('create')}>
+        <Button
+          size='sm'
+          data-tour={TOUR_TARGETS.createKey}
+          onClick={() => setOpen('create')}
+        >
           <Plus className='h-4 w-4' />
           {t('Create API Key')}
         </Button>

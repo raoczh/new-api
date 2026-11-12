@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { AnimatedOutlet } from '@/components/page-transition'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SidebarProvider } from '@/components/ui/sidebar'
+import { OnboardingTour } from '@/features/onboarding/components/onboarding-tour'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { AppHeader } from './app-header'
@@ -46,6 +47,7 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
           {props.children ?? <AnimatedOutlet />}
         </div>
       </div>
+      <OnboardingTour />
     </SidebarProvider>
   )
 }

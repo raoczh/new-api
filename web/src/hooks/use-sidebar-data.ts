@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   ClipboardList,
+  Layers,
   FileText,
   Image,
   Key,
@@ -38,6 +39,7 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import type { SidebarBadges, SidebarData } from '@/components/layout/types'
+import { TOUR_TARGETS } from '@/features/onboarding/lib/tour-steps'
 import { ROLE } from '@/lib/roles'
 
 /**
@@ -70,6 +72,7 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             title: t('API Keys'),
             url: '/keys',
             icon: Key,
+            tourTarget: TOUR_TARGETS.keysNav,
           },
           {
             title: t('Usage Logs'),
@@ -98,6 +101,7 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             title: t('AI Chat'),
             url: '/playground',
             icon: MessageCircle,
+            tourTarget: TOUR_TARGETS.playgroundNav,
           },
           {
             title: t('Image Studio'),
@@ -162,12 +166,17 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             icon: Megaphone,
           },
           {
+            title: t('Group Management'),
+            url: '/group-management',
+            icon: Layers,
+            requiredRole: ROLE.SUPER_ADMIN,
+          },
+          {
             title: t('System Settings'),
             url: '/system-settings/site',
             activeUrls: ['/system-settings'],
             icon: Settings,
             requiredRole: ROLE.SUPER_ADMIN,
-            // Model pricing lives in System Settings.
             badge: badges.modelPricing,
           },
         ],

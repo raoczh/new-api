@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { Row } from '@tanstack/react-table'
+import { useNavigate } from '@tanstack/react-router'
 import {
   Pencil,
   Trash2,
@@ -25,10 +26,13 @@ import {
   ArrowUp,
   ArrowDown,
   KeyRound,
+  Layers,
   ShieldAlert,
   Link2,
   CreditCard,
   History,
+  ScrollText,
+  Wallet,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -47,7 +51,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import type { AdminUserManageAction } from '@/features/auth/secure-verification'
 import { UserSubscriptionsDialog } from '@/features/subscriptions/components/dialogs/user-subscriptions-dialog'
 import { handleServerError } from '@/lib/handle-server-error'
 import { AuthOperationError } from '@/lib/secure-verification'
@@ -60,16 +63,51 @@ import {
   isUserDeleted,
 } from '../constants'
 import { getUserActionMessage } from '../lib'
-import type { User } from '../types'
+import type { ManageUserAction, User } from '../types'
 import { UserBindingDialog } from './dialogs/user-binding-dialog'
 import { UserRechargeHistoryDialog } from './dialogs/user-recharge-history-dialog'
 import { useUsers } from './users-provider'
 
-const MANAGE_ACTION_TITLES: Record<AdminUserManageAction, string> = {
+/** Status and role changes the row menu drives through /api/user/manage. */
+type RowManageAction = Extract<
+  ManageUserAction,
+  'disable' | 'enable' | 'promote' | 'demote'
+>
+
+const MANAGE_ACTION_TITLES: Record<RowManageAction, string> = {
   disable: 'Verify to disable user',
   enable: 'Verify to enable user',
   promote: 'Verify to promote user',
   demote: 'Verify to demote user',
+}
+
+interface RowActionButtonProps {
+  label: string
+  onSelect: () => void
+  disabled?: boolean
+  children: React.ReactNode
+}
+
+/** One inline row action, so frequent operations need no menu round trip. */
+function RowActionButton(props: RowActionButtonProps) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant='ghost'
+            size='icon-sm'
+            onClick={props.onSelect}
+            disabled={props.disabled}
+            aria-label={props.label}
+          />
+        }
+      >
+        {props.children}
+      </TooltipTrigger>
+      <TooltipContent>{props.label}</TooltipContent>
+    </Tooltip>
+  )
 }
 
 interface DataTableRowActionsProps {
@@ -78,6 +116,7 @@ interface DataTableRowActionsProps {
 
 export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const user = row.original
   const {
     setOpen,
@@ -102,7 +141,31 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
     setOpen('delete')
   }
 
-  const handleManage = async (action: AdminUserManageAction) => {
+  const handleAdjustQuota = () => {
+    setCurrentRow(user)
+    setOpen('quota')
+  }
+
+  const handleManageGroups = () => {
+    setCurrentRow(user)
+    setOpen('groups')
+  }
+
+  const handleManageApiKeys = () => {
+    setCurrentRow(user)
+    setOpen('api-keys')
+  }
+
+  /** 直接带着用户名打开调用日志，支持排查时不用再手输一遍。 */
+  const handleViewLogs = () => {
+    void navigate({
+      to: '/usage-logs/$section',
+      params: { section: 'common' },
+      search: { username: user.username },
+    })
+  }
+
+  const handleManage = async (action: RowManageAction) => {
     try {
       const proof = await requestVerification({
         scope: 'admin.user.manage',
@@ -197,45 +260,43 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
   return (
     <div className='-ml-1.5 flex items-center gap-1'>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant='ghost'
-              size='icon-sm'
-              onClick={handleEdit}
-              aria-label={t('Edit')}
-            />
-          }
+      <RowActionButton label={t('Edit')} onSelect={handleEdit}>
+        <Pencil />
+      </RowActionButton>
+
+      <RowActionButton label={t('Adjust Quota')} onSelect={handleAdjustQuota}>
+        <Wallet />
+      </RowActionButton>
+
+      <RowActionButton label={t('Groups')} onSelect={handleManageGroups}>
+        <Layers />
+      </RowActionButton>
+
+      <RowActionButton label={t('API Keys')} onSelect={handleManageApiKeys}>
+        <KeyRound />
+      </RowActionButton>
+
+      {isDisabled ? (
+        <RowActionButton
+          label={t('Enable')}
+          onSelect={() => void handleManage('enable')}
         >
-          <Pencil />
-        </TooltipTrigger>
-        <TooltipContent>{t('Edit')}</TooltipContent>
-      </Tooltip>
+          <Power />
+        </RowActionButton>
+      ) : (
+        <RowActionButton
+          label={t('Disable')}
+          onSelect={() => void handleManage('disable')}
+          disabled={isRoot}
+        >
+          <PowerOff />
+        </RowActionButton>
+      )}
 
       <DataTableRowActionMenu
-        ariaLabel={t('Open menu')}
+        ariaLabel={t('More actions')}
         contentClassName='w-48'
       >
-        {isDisabled ? (
-          <DropdownMenuItem onClick={() => handleManage('enable')}>
-            {t('Enable')}
-            <DropdownMenuShortcut>
-              <Power size={16} />
-            </DropdownMenuShortcut>
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem
-            onClick={() => handleManage('disable')}
-            disabled={isRoot}
-          >
-            {t('Disable')}
-            <DropdownMenuShortcut>
-              <PowerOff size={16} />
-            </DropdownMenuShortcut>
-          </DropdownMenuItem>
-        )}
-
         {isAdmin && !isRoot && (
           <DropdownMenuItem onClick={() => handleManage('demote')}>
             {t('Demote')}
@@ -278,7 +339,12 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </DropdownMenuShortcut>
         </DropdownMenuItem>
 
-        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleViewLogs}>
+          {t('View logs')}
+          <DropdownMenuShortcut>
+            <ScrollText size={16} />
+          </DropdownMenuShortcut>
+        </DropdownMenuItem>
 
         <DropdownMenuItem onClick={() => setRechargeHistoryOpen(true)}>
           {t('Recharge records')}
@@ -286,6 +352,8 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             <History size={16} />
           </DropdownMenuShortcut>
         </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
 
         <DropdownMenuItem
           onSelect={(event) => {

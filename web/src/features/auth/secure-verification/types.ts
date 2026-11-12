@@ -47,8 +47,14 @@ export type SecurityProofScope =
   | 'admin.user.2fa.disable'
   | 'admin.user.binding.clear'
 
-/** ManageUser actions that change a user's status or role and need step-up. */
-export type AdminUserManageAction = 'disable' | 'enable' | 'promote' | 'demote'
+/** ManageUser actions that change a user's status, role, or API keys and need step-up. */
+export type AdminUserManageAction =
+  | 'disable'
+  | 'enable'
+  | 'promote'
+  | 'demote'
+  | 'token_delete'
+  | 'token_key_read'
 
 export type VerificationOperation =
   | { scope: 'channel.key.read'; context: { channel_id: number } }

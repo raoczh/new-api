@@ -16,7 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { CircleHelp } from 'lucide-react'
+import { CircleHelp, Compass } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -34,17 +35,20 @@ import {
 } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useFAQ } from '@/features/dashboard/hooks/use-status-data'
+import { useOnboardingStore } from '@/features/onboarding/store'
 import { useStatus } from '@/hooks/use-status'
 
 /**
- * Global help entry in the sidebar footer. It keeps support content out of the
- * dashboard while preserving the FAQ and contact methods configured by the
- * administrator.
+ * Global help entry in the sidebar footer. It reopens the getting-started
+ * guide and keeps support content out of the dashboard while preserving the
+ * FAQ and contact methods configured by the administrator.
  */
 export function HelpPopover() {
   const { t } = useTranslation()
   const { status } = useStatus()
   const { items: faqItems } = useFAQ()
+  const startTour = useOnboardingStore((state) => state.start)
+  const [open, setOpen] = useState(false)
 
   const email = status?.contact_email?.trim()
   const wechatQR = status?.contact_wechat_qrcode?.trim()
@@ -52,10 +56,12 @@ export function HelpPopover() {
   const hasContact = Boolean(email || wechatQR || qqGroup)
   const hasFAQ = faqItems.length > 0
 
-  if (!hasContact && !hasFAQ) return null
+  let summary = t('Not sure where to start? Replay the guide.')
+  if (hasFAQ) summary = t('Answers for common access and billing questions')
+  else if (hasContact) summary = t('Contact support')
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={
           <Button
@@ -76,11 +82,21 @@ export function HelpPopover() {
       >
         <div className='border-b px-4 py-3'>
           <div className='text-sm font-semibold'>{t('Support')}</div>
-          <p className='text-muted-foreground text-xs'>
-            {hasFAQ
-              ? t('Answers for common access and billing questions')
-              : t('Contact support')}
-          </p>
+          <p className='text-muted-foreground text-xs'>{summary}</p>
+        </div>
+
+        <div className='border-b px-2 py-2'>
+          <Button
+            variant='ghost'
+            className='w-full justify-start'
+            onClick={() => {
+              setOpen(false)
+              startTour()
+            }}
+          >
+            <Compass aria-hidden='true' />
+            {t('Show the getting started guide')}
+          </Button>
         </div>
 
         <ScrollArea className='max-h-[min(24rem,60vh)]'>

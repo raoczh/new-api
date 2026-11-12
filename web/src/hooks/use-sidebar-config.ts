@@ -121,6 +121,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/models/deployments': { section: 'admin', module: 'setting' },
   '/redemption-codes': { section: 'admin', module: 'setting' },
   '/open-source-promotion': { section: 'admin', module: 'setting' },
+  '/group-management': { section: 'admin', module: 'setting' },
   '/subscriptions': { section: 'admin', module: 'setting' },
   '/system-info': { section: 'admin', module: 'setting' },
   '/task-plugins': { section: 'admin', module: 'setting' },

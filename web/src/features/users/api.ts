@@ -33,6 +33,9 @@ import type {
   ManageUserQuotaPayload,
   ApiResponse,
   UserRechargeHistory,
+  AdminUserApiKey,
+  AdminUserGroups,
+  AdminUserGroupsUpdate,
 } from './types'
 
 // A step-up proof is single-use, so the request carrying it must never be
@@ -240,6 +243,82 @@ export async function getPermissionCatalog(): Promise<PermissionCatalog> {
     resources: res.data?.data?.resources ?? [],
     roles: res.data?.data?.roles ?? [],
   }
+}
+
+/**
+ * List one user's API keys as an administrator. The backend returns masked
+ * keys; reading a full key is a separate, proof-guarded call.
+ */
+export async function getUserApiKeys(
+  userId: number,
+  page: number,
+  pageSize: number
+): Promise<ApiResponse<{ items: AdminUserApiKey[]; total: number }>> {
+  const res = await api.get(`/api/user/${userId}/tokens`, {
+    params: { p: page, page_size: pageSize },
+  })
+  return res.data
+}
+
+/** Enable or disable one of a managed user's API keys. */
+export async function setUserApiKeyStatus(
+  userId: number,
+  tokenId: number,
+  status: number
+): Promise<ApiResponse> {
+  const res = await api.post(`/api/user/${userId}/tokens/${tokenId}/status`, {
+    status,
+  })
+  return res.data
+}
+
+/**
+ * Read the full key of a managed user; requires an `admin.user.manage` proof
+ * bound to the `token_key_read` action.
+ */
+export async function revealUserApiKey(
+  userId: number,
+  tokenId: number,
+  proofToken: string
+): Promise<ApiResponse<{ key: string }>> {
+  const res = await api.get(
+    `/api/user/${userId}/tokens/${tokenId}/key`,
+    securityProofConfig(proofToken)
+  )
+  return res.data
+}
+
+/**
+ * Delete one of a managed user's API keys; requires an `admin.user.manage`
+ * proof bound to the `token_delete` action.
+ */
+export async function deleteUserApiKey(
+  userId: number,
+  tokenId: number,
+  proofToken: string
+): Promise<ApiResponse> {
+  const res = await api.delete(
+    `/api/user/${userId}/tokens/${tokenId}`,
+    securityProofConfig(proofToken)
+  )
+  return res.data
+}
+
+/** Read a managed user's group, usable groups, and per-user overrides. */
+export async function getUserGroups(
+  userId: number
+): Promise<ApiResponse<AdminUserGroups>> {
+  const res = await api.get(`/api/user/${userId}/groups`)
+  return res.data
+}
+
+/** Replace a managed user's group and usable-group overrides. */
+export async function updateUserGroups(
+  userId: number,
+  payload: AdminUserGroupsUpdate
+): Promise<ApiResponse> {
+  const res = await api.put(`/api/user/${userId}/groups`, payload)
+  return res.data
 }
 
 // ============================================================================

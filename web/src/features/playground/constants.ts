@@ -79,6 +79,35 @@ export const STORAGE_KEYS = {
  */
 export const CONVERSATION_MESSAGES_PREFIX = `${STORAGE_KEYS.MESSAGES}:`
 
+/**
+ * Example things to ask, offered while the conversation is still empty. A
+ * reader who has never used an AI chat often does not know what to type; each
+ * entry names an everyday task and puts a ready instruction in the composer so
+ * it can be adjusted before sending. Both fields are i18n keys.
+ */
+export const PROMPT_STARTERS = [
+  {
+    id: 'summarize',
+    label: 'Summarize a text',
+    prompt: 'Summarize the following text in three sentences:',
+  },
+  {
+    id: 'write-email',
+    label: 'Write an email',
+    prompt: 'Write a short, friendly email asking for a day off next Friday:',
+  },
+  {
+    id: 'translate',
+    label: 'Translate',
+    prompt: 'Translate the following text into English, keeping its tone:',
+  },
+  {
+    id: 'brainstorm',
+    label: 'Brainstorm ideas',
+    prompt: 'Give me five short ideas for a birthday gift under 200 yuan:',
+  },
+] as const
+
 // Error messages
 export const ERROR_MESSAGES = {
   API_REQUEST_ERROR: 'Request error occurred',

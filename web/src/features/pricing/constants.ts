@@ -75,11 +75,21 @@ export const DEFAULT_TOKEN_UNIT: TokenUnit = 'M'
 
 /** View mode options */
 export const VIEW_MODES = {
+  /** Dense rows grouped under the vendor that offers them. */
+  LIST: 'list',
   CARD: 'card',
   TABLE: 'table',
 } as const
 
 export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES]
+
+/**
+ * View a visitor sees when the URL does not name one. The vendor-grouped list
+ * answers "what can I use here, and what does it cost" without any clicking,
+ * which is what a first-time user needs; the other two modes stay one click
+ * away for people who want cards or a full comparison table.
+ */
+export const DEFAULT_VIEW_MODE: ViewMode = VIEW_MODES.LIST
 
 /** Default page size for pricing table */
 export const DEFAULT_PRICING_PAGE_SIZE = 20

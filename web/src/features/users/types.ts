@@ -183,7 +183,53 @@ export interface UserRechargeHistory {
 }
 
 // ============================================================================
+// Admin access to a user's keys and groups
+// ============================================================================
+
+/** One API key of a managed user. `key` is the masked value the admin API returns. */
+export interface AdminUserApiKey {
+  id: number
+  name: string
+  key: string
+  status: number
+  remain_quota: number
+  used_quota: number
+  unlimited_quota: boolean
+  expired_time: number
+  created_time: number
+  accessed_time: number
+  group: string
+}
+
+/** One group as seen from the managed user: usable or not, and its effective ratio. */
+export interface AdminUserGroupOption {
+  name: string
+  desc: string
+  ratio: number
+  usable: boolean
+}
+
+export interface AdminUserGroups {
+  group: string
+  groups: AdminUserGroupOption[]
+  extra_usable_groups: string[]
+  hidden_usable_groups: string[]
+}
+
+export interface AdminUserGroupsUpdate {
+  group: string
+  extra_usable_groups: string[]
+  hidden_usable_groups: string[]
+}
+
+// ============================================================================
 // Dialog Types
 // ============================================================================
 
-export type UsersDialogType = 'create' | 'update' | 'delete'
+export type UsersDialogType =
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'quota'
+  | 'api-keys'
+  | 'groups'

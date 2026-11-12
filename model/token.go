@@ -412,6 +412,15 @@ func (token *Token) SelectUpdate() (err error) {
 	return DB.Model(token).Select("accessed_time", "status").Updates(token).Error
 }
 
+// UpdateStatus 只写 status 一列并失效令牌缓存。
+// 令牌额度可能正在被并发扣减，整体回写会用读到的旧快照覆盖新值，因此按列更新。
+func (token *Token) UpdateStatus() (err error) {
+	if cacheErr := invalidateTokenCacheForMutation(token.Key); cacheErr != nil {
+		common.SysLog(common.LogText("failed to invalidate token cache before status update: %s", cacheErr.Error()))
+	}
+	return DB.Model(&Token{}).Where("id = ?", token.Id).Update("status", token.Status).Error
+}
+
 func (token *Token) Delete() (err error) {
 	if cacheErr := invalidateTokenCacheForMutation(token.Key); cacheErr != nil {
 		common.SysLog(common.LogText("failed to invalidate token cache before delete: %s", cacheErr.Error()))

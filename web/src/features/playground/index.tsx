@@ -34,7 +34,7 @@ import {
   usePlaygroundState,
 } from './hooks'
 
-export function Playground() {
+export function Playground(props: { initialModel?: string }) {
   const { t } = useTranslation()
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const {
@@ -54,7 +54,7 @@ export function Playground() {
     createNewConversation,
     selectConversation,
     deleteConversation,
-  } = usePlaygroundState()
+  } = usePlaygroundState(props.initialModel)
 
   const { sendChat, stopGeneration, isGenerating } = useChatHandler({
     config,
@@ -181,6 +181,7 @@ export function Playground() {
               onStop={stopGeneration}
               onSubmit={handleSendMessage}
               parameterEnabled={parameterEnabled}
+              showPromptStarters={messages.length === 0 && !isLoadingMessages}
             />
           </div>
         </div>

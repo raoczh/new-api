@@ -27,7 +27,7 @@ import {
   Maximize2,
   Sparkles,
 } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
@@ -92,6 +92,7 @@ import type {
 import { DynamicPricingBreakdown } from './dynamic-pricing-breakdown'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
 import { ModelDetailsApi } from './model-details-api'
+import { StartChatAction } from './start-chat-action'
 
 // ----------------------------------------------------------------------------
 // Local UI helpers
@@ -518,7 +519,7 @@ function ModelBackendDetailsSection(props: { model: PricingModel }) {
 // Model header (always visible above the detail sections)
 // ----------------------------------------------------------------------------
 
-function ModelHeader(props: { model: PricingModel }) {
+function ModelHeader(props: { model: PricingModel; action?: ReactNode }) {
   const { t } = useTranslation()
   const model = props.model
   const modelIconKey = model.icon || model.vendor_icon
@@ -527,19 +528,22 @@ function ModelHeader(props: { model: PricingModel }) {
 
   return (
     <header className='pb-4'>
-      <div className='flex items-center gap-2.5'>
-        {modelIcon}
-        <h1 className='font-mono text-xl font-bold tracking-tight sm:text-2xl'>
-          {model.model_name}
-        </h1>
-        <CopyButton
-          value={model.model_name || ''}
-          className='size-6'
-          iconClassName='size-3'
-          tooltip={t('Copy model name')}
-          successTooltip={t('Copied!')}
-          aria-label={t('Copy model name')}
-        />
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <div className='flex min-w-0 items-center gap-2.5'>
+          {modelIcon}
+          <h1 className='font-mono text-xl font-bold tracking-tight sm:text-2xl'>
+            {model.model_name}
+          </h1>
+          <CopyButton
+            value={model.model_name || ''}
+            className='size-6'
+            iconClassName='size-3'
+            tooltip={t('Copy model name')}
+            successTooltip={t('Copied!')}
+            aria-label={t('Copy model name')}
+          />
+        </div>
+        {props.action}
       </div>
       <div className='mt-1 flex flex-wrap items-center gap-1.5 text-xs'>
         {model.vendor_name && (
@@ -1389,6 +1393,8 @@ export interface ModelDetailsContentProps {
   usdExchangeRate: number
   tokenUnit: TokenUnit
   showRechargePrice?: boolean
+  /** Rendered next to the model name, e.g. the "start chatting" entry. */
+  headerAction?: ReactNode
 }
 
 export function ModelDetailsContent(props: ModelDetailsContentProps) {
@@ -1411,7 +1417,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
 
   return (
     <div className='@container/details space-y-4'>
-      <ModelHeader model={props.model} />
+      <ModelHeader model={props.model} action={props.headerAction} />
 
       <Tabs defaultValue='overview' className='gap-4'>
         <TabsList className='bg-muted/60 grid w-full grid-cols-2 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto'>
@@ -1605,6 +1611,7 @@ export function ModelDetails() {
           priceRate={priceRate ?? 1}
           usdExchangeRate={usdExchangeRate ?? 1}
           tokenUnit={tokenUnit}
+          headerAction={<StartChatAction modelName={model.model_name} />}
           endpointMap={
             (endpointMap as Record<
               string,

@@ -28,7 +28,9 @@ import {
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 
+import { PROMPT_STARTERS } from '../../constants'
 import type {
   ModelOption,
   GroupOption,
@@ -44,6 +46,8 @@ interface PlaygroundInputProps {
   onStop?: () => void
   disabled?: boolean
   isGenerating?: boolean
+  /** Offers example questions while there is nothing to reply to yet. */
+  showPromptStarters?: boolean
   models: ModelOption[]
   modelValue: string
   onModelChange: (value: string) => void
@@ -69,6 +73,7 @@ export function PlaygroundInput({
   onStop,
   disabled,
   isGenerating,
+  showPromptStarters = false,
   models,
   modelValue,
   onModelChange,
@@ -100,6 +105,27 @@ export function PlaygroundInput({
 
   return (
     <div className='grid shrink-0 gap-3'>
+      {showPromptStarters && !hasNoChatModels && (
+        <div
+          role='group'
+          aria-label={t('Example prompts')}
+          className='flex flex-wrap items-center gap-2'
+        >
+          {PROMPT_STARTERS.map((starter) => (
+            <Button
+              key={starter.id}
+              type='button'
+              variant='outline'
+              size='sm'
+              disabled={disabled}
+              className='h-auto rounded-full px-3 py-1.5 text-xs font-normal'
+              onClick={() => setText(t(starter.prompt))}
+            >
+              {t(starter.label)}
+            </Button>
+          ))}
+        </div>
+      )}
       {hasNoChatModels && (
         <Alert>
           <AlertDescription>

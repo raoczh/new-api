@@ -166,6 +166,13 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.DELETE("/:id/oauth/bindings/:provider_id", controller.UnbindCustomOAuthByAdmin)
 				adminRoute.DELETE("/:id/bindings/:binding_type", controller.AdminClearUserBinding)
 				adminRoute.GET("/:id", controller.GetUser)
+				// 管理员查看与操作用户资产：密钥（列表只给掩码，读明文单独二次校验）、分组。
+				adminRoute.GET("/:id/tokens", controller.AdminGetUserTokens)
+				adminRoute.POST("/:id/tokens/:token_id/status", controller.AdminSetUserTokenStatus)
+				adminRoute.GET("/:id/tokens/:token_id/key", controller.AdminGetUserTokenKey)
+				adminRoute.DELETE("/:id/tokens/:token_id", controller.AdminDeleteUserToken)
+				adminRoute.GET("/:id/groups", controller.AdminGetUserGroups)
+				adminRoute.PUT("/:id/groups", controller.AdminUpdateUserGroups)
 				adminRoute.POST("/", controller.CreateUser)
 				adminRoute.POST("/manage", controller.ManageUser)
 				adminRoute.PUT("/", controller.UpdateUser)

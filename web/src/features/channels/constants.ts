@@ -245,7 +245,24 @@ export const CHANNEL_STATUS_OPTIONS = [
   { value: 'all', label: 'All Status' },
   { value: 'enabled', label: 'Enabled' },
   { value: 'disabled', label: 'Disabled' },
+  // Channels the gateway turned off by itself after upstream failures. They
+  // are the ones worth reviewing and re-testing after an outage.
+  { value: 'auto_disabled', label: 'Auto Disabled' },
 ] as const
+
+export type ChannelStatusFilterValue =
+  (typeof CHANNEL_STATUS_OPTIONS)[number]['value']
+
+/**
+ * Whether a stored status filter is one this list still offers. A value that
+ * is no longer offered is dropped, so the table falls back to showing
+ * everything instead of sending a filter the server will ignore.
+ */
+export function isChannelStatusFilterValue(
+  value: string | null
+): value is ChannelStatusFilterValue {
+  return CHANNEL_STATUS_OPTIONS.some((option) => option.value === value)
+}
 
 export const CHANNEL_STATUS_CONFIG = {
   [CHANNEL_STATUS.UNKNOWN]: {

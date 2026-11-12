@@ -48,9 +48,25 @@ const (
 	verificationScopeAdminUserPrefix       = "admin.user."
 )
 
+// ManageUser 之外，管理员对用户密钥的操作也复用 admin.user.manage 凭证：
+// 凭证本身已经绑定了目标用户，action 只用来限定具体动作，避免不同动作的
+// 凭证互相复用。
+const (
+	AdminUserManageActionTokenDelete  = "token_delete"
+	AdminUserManageActionTokenKeyRead = "token_key_read"
+)
+
 // adminUserManageActions are the ManageUser actions that change a user's
-// status or role. Quota adjustments are not gated and deletion has its own scope.
-var adminUserManageActions = []string{"disable", "enable", "promote", "demote"}
+// status, role, or API keys. Quota adjustments are not gated and deletion has
+// its own scope.
+var adminUserManageActions = []string{
+	"disable",
+	"enable",
+	"promote",
+	"demote",
+	AdminUserManageActionTokenDelete,
+	AdminUserManageActionTokenKeyRead,
+}
 
 var (
 	ErrVerificationFailed         = errors.New("Verification failed. Please try again.")

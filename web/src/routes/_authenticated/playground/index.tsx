@@ -16,13 +16,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { createFileRoute, redirect, useSearch } from '@tanstack/react-router'
+import z from 'zod'
 
 import { Main } from '@/components/layout'
 import { Playground } from '@/features/playground'
 import { isSidebarModuleEnabledForGuard } from '@/lib/nav-modules'
 
+const playgroundSearchSchema = z.object({
+  /** Model to start the conversation with, set by links from the model square. */
+  model: z.string().optional().catch(undefined),
+})
+
 export const Route = createFileRoute('/_authenticated/playground/')({
+  validateSearch: playgroundSearchSchema,
   beforeLoad: async ({ context }) => {
     if (
       !(await isSidebarModuleEnabledForGuard(
@@ -38,9 +45,11 @@ export const Route = createFileRoute('/_authenticated/playground/')({
 })
 
 function PlaygroundPage() {
+  const { model } = useSearch({ from: '/_authenticated/playground/' })
+
   return (
     <Main className='p-0'>
-      <Playground />
+      <Playground initialModel={model} />
     </Main>
   )
 }

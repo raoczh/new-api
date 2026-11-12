@@ -29,7 +29,7 @@ const pricingSearchSchema = z.object({
   vendor: z.string().optional(),
   group: z.string().optional(),
   tokenUnit: z.enum(['M', 'K']).optional(),
-  view: z.enum(['card', 'table']).optional().catch(undefined),
+  view: z.enum(['list', 'card', 'table']).optional().catch(undefined),
   rechargePrice: z.boolean().optional(),
 })
 

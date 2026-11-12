@@ -454,7 +454,7 @@ export function ChannelHealthSection({
                       name='monitor_setting.iq_probe_minutes'
                       label={t('IQ probe interval (minutes)')}
                       description={t(
-                        'Model pools are configured per group under Group Pricing.'
+                        'Model pools are configured per group under Group Management.'
                       )}
                     />
                   </SettingsControlChildren>

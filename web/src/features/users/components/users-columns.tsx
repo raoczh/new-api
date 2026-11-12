@@ -46,11 +46,17 @@ import type { User } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 import { UserQuotaCell } from './user-quota-cell'
 
-export function useUsersColumns(): ColumnDef<User>[] {
+export function useUsersColumns(
+  options: {
+    /** Lets an administrator top up a balance without leaving the list. */
+    onAdjustQuota?: (user: User) => void
+  } = {}
+): ColumnDef<User>[] {
   const { t } = useTranslation()
   const currencyConfig = useSystemConfigStore((state) => state.config.currency)
   const { meta: currency } = getCurrencyDisplay()
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
+  const onAdjustQuota = options.onAdjustQuota
   return useMemo<ColumnDef<User>[]>(
     () => [
       {
@@ -188,7 +194,13 @@ export function useUsersColumns(): ColumnDef<User>[] {
         header: `${t('Available Balance')} (${quotaUnit})`,
         cell: ({ row }) => {
           const user = row.original
-          return <UserQuotaCell remaining={user.quota} used={user.used_quota} />
+          return (
+            <UserQuotaCell
+              remaining={user.quota}
+              used={user.used_quota}
+              onAdjust={onAdjustQuota ? () => onAdjustQuota(user) : undefined}
+            />
+          )
         },
         size: 180,
         minSize: 160,
@@ -307,6 +319,6 @@ export function useUsersColumns(): ColumnDef<User>[] {
     ],
     // formatQuota reads the currency configuration from the store.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, quotaUnit, currencyConfig]
+    [t, quotaUnit, currencyConfig, onAdjustQuota]
   )
 }

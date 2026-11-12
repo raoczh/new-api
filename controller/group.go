@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -54,10 +55,38 @@ func GetUserGroups(c *gin.Context) {
 			"desc":  setting.GetUsableGroupDescription("auto"),
 		}
 	}
+	// 分组关联的厂商由管理员在分组设置里配置；一并返回，创建密钥时按厂商挑选线路。
+	vendorByID := make(map[int]model.PricingVendor)
+	for _, vendor := range model.GetVendors() {
+		vendorByID[vendor.ID] = vendor
+	}
+	vendors := make([]model.PricingVendor, 0)
+	listed := make(map[int]bool)
+	for groupName, vendorID := range setting.GetGroupVendors() {
+		group, ok := usableGroups[groupName]
+		if !ok || vendorID == 0 {
+			continue
+		}
+		vendor, known := vendorByID[vendorID]
+		if !known {
+			vendor, known = model.GetDefaultVendorByID(vendorID)
+		}
+		if !known {
+			continue
+		}
+		group["vendor_id"] = vendorID
+		if !listed[vendorID] {
+			listed[vendorID] = true
+			vendors = append(vendors, vendor)
+		}
+	}
+	slices.SortFunc(vendors, func(a, b model.PricingVendor) int { return strings.Compare(a.Name, b.Name) })
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    usableGroups,
+		"success":     true,
+		"message":     "",
+		"data":        usableGroups,
+		"vendors":     vendors,
+		"group_order": setting.OrderedGroupNames(slices.Collect(maps.Keys(usableGroups))),
 	})
 }
 

@@ -27,6 +27,7 @@ import { useMediaQuery } from '@/hooks'
 import { toIntlLocale } from '@/i18n/languages'
 import { getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay } from '@/lib/currency'
+import { getLobeIcon } from '@/lib/lobe-icon'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
@@ -49,9 +50,15 @@ import { DataTableRowActions } from './data-table-row-actions'
 type UserGroupData = {
   ratios: Record<string, number | string>
   options: ApiKeyGroupOption[]
+  /** Icon of the vendor the administrator assigned to each group. */
+  vendorIcons: Record<string, string>
 }
 
-const EMPTY_GROUP_DATA: UserGroupData = { ratios: {}, options: [] }
+const EMPTY_GROUP_DATA: UserGroupData = {
+  ratios: {},
+  options: [],
+  vendorIcons: {},
+}
 
 function useUserGroupData(): UserGroupData {
   const { data } = useQuery({
@@ -62,10 +69,16 @@ function useUserGroupData(): UserGroupData {
       if (!res.success || !res.data) return EMPTY_GROUP_DATA
       const ratios: Record<string, number | string> = {}
       const options: ApiKeyGroupOption[] = []
+      const vendorIcons: Record<string, string> = {}
+      const iconByVendor = new Map(
+        (res.vendors ?? []).map((vendor) => [vendor.id, vendor.icon ?? ''])
+      )
       for (const [group, info] of Object.entries(res.data)) {
         if (typeof info.ratio === 'number' || typeof info.ratio === 'string') {
           ratios[group] = info.ratio
         }
+        const icon = iconByVendor.get(info.vendor_id ?? 0)
+        if (icon) vendorIcons[group] = icon
         options.push({
           value: group,
           label: group,
@@ -73,7 +86,7 @@ function useUserGroupData(): UserGroupData {
           ratio: info.ratio,
         })
       }
-      return { ratios, options }
+      return { ratios, options, vendorIcons }
     },
   })
 
@@ -85,7 +98,11 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
   useSystemConfigStore((state) => state.config.currency)
   const { meta: currency } = getCurrencyDisplay()
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
-  const { ratios: groupRatios, options: groupOptions } = useUserGroupData()
+  const {
+    ratios: groupRatios,
+    options: groupOptions,
+    vendorIcons,
+  } = useUserGroupData()
   const shouldReduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const justNowLabel = t('Just now')
@@ -119,9 +136,36 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
       {
         accessorKey: 'name',
         header: t('Name'),
-        cell: ({ row }) => (
-          <span className='font-medium'>{row.getValue('name')}</span>
-        ),
+        cell: ({ row }) => {
+          // A key made for one vendor shows that vendor, and a key with its
+          // own line order shows the order it falls back through.
+          const lines = row.original.auto_groups ?? []
+          const route = lines.length > 0 ? lines : [row.original.group ?? '']
+          const icons = new Set(route.map((line) => vendorIcons[line] ?? ''))
+          const icon = icons.size === 1 ? [...icons][0] : ''
+          return (
+            <span className='flex min-w-0 items-center gap-2'>
+              {icon && (
+                <span aria-hidden='true' className='flex shrink-0'>
+                  {getLobeIcon(icon, 18)}
+                </span>
+              )}
+              <span className='flex min-w-0 flex-col'>
+                <span className='truncate font-medium'>
+                  {row.getValue('name')}
+                </span>
+                {lines.length > 1 && (
+                  <span
+                    className='text-muted-foreground truncate text-xs'
+                    title={lines.join(' → ')}
+                  >
+                    {lines.join(' → ')}
+                  </span>
+                )}
+              </span>
+            </span>
+          )
+        },
         size: 180,
         meta: { mobileTitle: true },
       },
@@ -246,6 +290,6 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
         meta: { pinned: 'right' as const },
       },
     ],
-    [t, quotaUnit, now, groupRatios, groupOptions, shouldReduceMotion, locale, justNowLabel]
+    [t, quotaUnit, now, groupRatios, groupOptions, vendorIcons, shouldReduceMotion, locale, justNowLabel]
   )
 }

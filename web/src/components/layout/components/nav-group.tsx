@@ -138,6 +138,7 @@ function SidebarMenuLink({
             to={item.url}
             preload={isMobile ? false : undefined}
             aria-current={isActive ? 'page' : undefined}
+            data-tour={item.tourTarget}
             onClick={() => {
               setOpenMobile(false)
               onNavigate?.()

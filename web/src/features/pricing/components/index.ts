@@ -29,3 +29,5 @@ export {
   ModelDetailsDrawer,
 } from './model-details'
 export { PricingTable } from './pricing-table'
+export { VendorModelList } from './vendor-model-list'
+export { StartChatAction } from './start-chat-action'

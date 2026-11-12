@@ -117,11 +117,14 @@ func TestAddTokenPersistsOrderedAutoGroupsSnapshot(t *testing.T) {
 
 	ctx, recorder := newTokenAutoGroupsAuthenticatedContext(t, http.MethodPost, "/api/token/", request, user.Id)
 	AddToken(ctx)
-	require.True(t, decodeAPIResponse(t, recorder).Success)
+	createResponse := decodeAPIResponse(t, recorder)
+	require.True(t, createResponse.Success)
 
 	var token model.Token
 	require.NoError(t, model.DB.Where("name = ?", "ordered-snapshot").First(&token).Error)
 	assert.JSONEq(t, `["vip","default"]`, token.AutoGroups)
+	assert.JSONEq(t, `{"id":`+stringInt(token.Id)+`}`, string(createResponse.Data),
+		"creation reports the new id and never the key itself")
 
 	getCtx, getRecorder := newTokenAutoGroupsAuthenticatedContext(t, http.MethodGet, "/api/token/"+stringInt(token.Id), nil, user.Id)
 	getCtx.Params = append(getCtx.Params, gin.Param{Key: "id", Value: stringInt(token.Id)})
