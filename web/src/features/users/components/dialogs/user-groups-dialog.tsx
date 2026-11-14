@@ -305,6 +305,10 @@ export function UserGroupsDialog(props: UserGroupsDialogProps) {
   const groups = useQuery({
     queryKey: ['users', userId, 'groups'],
     enabled: props.open && userId > 0,
+    // Every opening loads what is saved now. The dialog stays mounted while it
+    // is closed, so what it loaded before is still held; counted as fresh, it
+    // would be shown again after a save and written back by the next one.
+    staleTime: 0,
     // The form starts from what was loaded; reloading behind the administrator
     // would throw away what they have ticked so far.
     refetchOnWindowFocus: false,
@@ -312,7 +316,8 @@ export function UserGroupsDialog(props: UserGroupsDialogProps) {
     gcTime: 0,
     queryFn: async () => requireServerSuccess(await getUserGroups(userId)),
   })
-  const saved = groups.data?.data
+  // What an earlier opening loaded is not offered while this one is loading.
+  const saved = groups.isFetching ? undefined : groups.data?.data
 
   return (
     <Dialog
@@ -339,8 +344,8 @@ export function UserGroupsDialog(props: UserGroupsDialogProps) {
         </>
       }
     >
-      {groups.isPending && <LoadingState />}
-      {groups.isError && (
+      {groups.isFetching && <LoadingState />}
+      {groups.isError && !groups.isFetching && (
         <ErrorState
           title={t('Failed to load groups')}
           description={getServerErrorMessage(groups.error)}

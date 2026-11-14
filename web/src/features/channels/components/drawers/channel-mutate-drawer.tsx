@@ -316,6 +316,7 @@ const SENSITIVE_FORM_FIELDS = [
   'allow_inference_geo',
   'allow_speed',
   'claude_beta_query',
+  'claude_code_only',
   'ollama_openai_chat',
   'disable_task_polling_sleep',
   'upstream_model_update_check_enabled',
@@ -2317,6 +2318,29 @@ export function ChannelMutateDrawer({
               <Switch
                 checked={field.value === 1}
                 onCheckedChange={(checked) => field.onChange(checked ? 1 : 0)}
+              />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name='claude_code_only'
+        render={({ field }) => (
+          <FormItem className='flex items-center justify-between gap-3'>
+            <div className='space-y-0.5'>
+              <FormLabel>{t('Claude Code clients only')}</FormLabel>
+              <FormDescription>
+                {t(
+                  'Serve only requests from the Claude Code client. Other requests use the remaining channels of the group and are rejected when there is none.'
+                )}
+              </FormDescription>
+            </div>
+            <FormControl>
+              <Switch
+                checked={field.value === true}
+                onCheckedChange={field.onChange}
               />
             </FormControl>
           </FormItem>

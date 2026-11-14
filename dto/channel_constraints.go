@@ -43,6 +43,10 @@ const (
 	// FilterExcludeChannels drops channels that already failed in this request
 	// so a retry tries an untried channel first.
 	FilterExcludeChannels ChannelFilterKind = "exclude_channels"
+	// FilterClaudeCodeOnly is added to a request that does not come from the
+	// Claude Code client. It drops the channels restricted to that client, so
+	// the request is served by the other channels of the group.
+	FilterClaudeCodeOnly ChannelFilterKind = "claude_code_only"
 )
 
 type ChannelFilter struct {

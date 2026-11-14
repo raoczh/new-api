@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1147,4 +1148,84 @@ func testChannelListStatusFilter(t *testing.T, dialect, dsn string) {
 	assert.False(t, matchesChannelStatusFilter(common.ChannelStatusAutoDisabled, common.ChannelStatusEnabled))
 	assert.True(t, matchesChannelStatusFilter(common.ChannelStatusManuallyDisabled, 0))
 	assert.True(t, matchesChannelStatusFilter(common.ChannelStatusEnabled, -1))
+}
+
+// A channel test that simulates the Claude Code client must send a request
+// that a gateway restricted to Claude Code clients recognises as one.
+func TestChannelTestSimulatingClaudeCodeSendsARequestTheClientCheckAccepts(t *testing.T) {
+	db := modelManagementDB(t, "sqlite", "")
+	require.NoError(t, db.AutoMigrate(&model.StatusProbe{}, &model.Log{}, &model.PerfMetric{}))
+	withTieredBillingConfig(t, map[string]string{"claude-test": "tiered_expr"}, map[string]string{"claude-test": `tier("base", p * 1 + c * 1)`})
+	user := model.User{Username: "claude-code-root", Password: "unused", Group: "default", Role: common.RoleRootUser, Status: common.UserStatusEnabled}
+	require.NoError(t, db.Create(&user).Error)
+
+	var recognised, streamed atomic.Bool
+	var path, userAgent, apiKey, overridden atomic.Value
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		path.Store(r.URL.RequestURI())
+		userAgent.Store(r.UserAgent())
+		apiKey.Store(r.Header.Get("x-api-key"))
+		overridden.Store(r.Header.Get("X-Stainless-OS"))
+		streamed.Store(bytes.Contains(body, []byte(`"stream":true`)))
+		// Ask the same question a restricted gateway asks of an incoming request.
+		incoming, _ := gin.CreateTestContext(httptest.NewRecorder())
+		incoming.Request = httptest.NewRequest(http.MethodPost, r.URL.Path, bytes.NewReader(body))
+		incoming.Request.Header = r.Header.Clone()
+		recognised.Store(service.IsClaudeCodeRequest(incoming))
+		w.Header().Set("Content-Type", "text/event-stream")
+		for _, event := range []string{
+			`{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-test","content":[],"usage":{"input_tokens":1,"output_tokens":0}}}`,
+			`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+			`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}`,
+			`{"type":"content_block_stop","index":0}`,
+			`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}`,
+			`{"type":"message_stop"}`,
+		} {
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", event)
+		}
+	}))
+	t.Cleanup(upstream.Close)
+	channel := &model.Channel{
+		Type: constant.ChannelTypeAnthropic, Key: "test-key", BaseURL: common.GetPointer(upstream.URL), Name: "claude",
+		Models: "claude-test", Group: "default", Status: common.ChannelStatusEnabled,
+		HeaderOverride: common.GetPointer(`{"X-Stainless-OS":"MacOS"}`),
+	}
+	require.NoError(t, channel.Insert())
+	service.InitHttpClient()
+
+	// The endpoint and stream mode asked for are ignored: the client only
+	// streams from the Messages API.
+	result := runChannelTest(context.Background(), channel, user.Id, "claude-test", "openai", false, channelTestOptions{manual: true, claudeCode: true})
+	require.NoError(t, result.localErr)
+	require.Nil(t, result.newAPIError)
+	assert.True(t, recognised.Load(), "the simulated request must pass the Claude Code client check")
+	assert.Equal(t, "/v1/messages?beta=true", path.Load())
+	assert.True(t, streamed.Load())
+	assert.Regexp(t, `^claude-cli/\d+\.\d+\.\d+ `, userAgent.Load())
+	assert.Equal(t, "test-key", apiKey.Load())
+	assert.Equal(t, "MacOS", overridden.Load(), "a header the channel overrides keeps the channel's value")
+
+	// Without the simulation the same channel is tested with a plain request.
+	result = runChannelTest(context.Background(), channel, user.Id, "claude-test", "anthropic", true, channelTestOptions{manual: true})
+	require.NoError(t, result.localErr)
+	assert.False(t, recognised.Load())
+	assert.Equal(t, "/v1/messages", path.Load())
+
+	// Only Anthropic channels can be tested this way.
+	other := &model.Channel{Type: constant.ChannelTypeOpenAI, Key: "k", BaseURL: common.GetPointer(upstream.URL), Name: "openai", Models: "claude-test", Group: "default", Status: common.ChannelStatusEnabled}
+	require.NoError(t, other.Insert())
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/channel/test/%d?claude_code=true", other.Id), nil)
+	c.Params = gin.Params{{Key: "id", Value: fmt.Sprint(other.Id)}}
+	c.Set("id", user.Id)
+	path.Store("")
+	TestChannel(c)
+	assert.Contains(t, recorder.Body.String(), `"success":false`)
+	assert.Empty(t, path.Load(), "no request may reach the upstream of another provider")
 }

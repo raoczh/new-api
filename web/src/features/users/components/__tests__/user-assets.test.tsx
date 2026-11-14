@@ -26,11 +26,13 @@ import {
   within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { createAppQueryClient } from '@/lib/query-client'
 
-import type { User } from '../../types'
+import type { AdminUserGroupsUpdate, User } from '../../types'
 import { DataTableRowActions } from '../data-table-row-actions'
 import { UserApiKeysDialog } from '../dialogs/user-api-keys-dialog'
 import { UserGroupsDialog } from '../dialogs/user-groups-dialog'
@@ -304,6 +306,67 @@ it.each(['-1', 'abc', '1000.5'])(
     expect(put).not.toHaveBeenCalled()
   }
 )
+
+/** The dialog as the users page keeps it: mounted while it is closed. */
+function ReopenableGroupsDialog() {
+  const [open, setOpen] = useState(true)
+  return (
+    <>
+      <button type='button' onClick={() => setOpen(true)}>
+        Open groups
+      </button>
+      <UserGroupsDialog
+        open={open}
+        onOpenChange={setOpen}
+        user={{ id: 2, username: 'managed-user' }}
+      />
+    </>
+  )
+}
+
+it('opening the dialog again right after a save shows the saved ratios, not the ones loaded before', async () => {
+  // The server keeps what the last save sent, as the real one does.
+  let storedRatios: Record<string, number> = { default: 0.8 }
+  vi.spyOn(api, 'get').mockImplementation(async (url) => {
+    if (url === '/api/user/2/groups') {
+      return {
+        data: {
+          success: true,
+          data: { ...groupsOfManagedUser, group_ratios: storedRatios },
+        },
+      }
+    }
+    throw new Error(`Unexpected GET ${url}`)
+  })
+  vi.spyOn(api, 'put').mockImplementation(async (_url, payload) => {
+    storedRatios = (payload as AdminUserGroupsUpdate).group_ratios
+    return { data: { success: true } }
+  })
+  // The page's own client: what it loads stays fresh for a while.
+  render(
+    <QueryClientProvider client={createAppQueryClient()}>
+      <ReopenableGroupsDialog />
+    </QueryClientProvider>
+  )
+
+  const ownRatio = await screen.findByRole('textbox', {
+    name: 'Ratio of default for this user',
+  })
+  expect(ownRatio).toHaveValue('0.8')
+  await userEvent.clear(ownRatio)
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  )
+
+  await userEvent.click(screen.getByRole('button', { name: 'Open groups' }))
+
+  expect(
+    await screen.findByRole('textbox', {
+      name: 'Ratio of default for this user',
+    })
+  ).toHaveValue('')
+})
 
 /** One key of the managed user, as the masked admin listing returns it. */
 const managedKey = {

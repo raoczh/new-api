@@ -200,6 +200,9 @@ const STREAM_INCOMPATIBLE_ENDPOINTS = new Set([
   'openai-response-compact',
 ])
 
+/** Only this provider is tested with a simulated Claude Code client. */
+const CHANNEL_TYPE_ANTHROPIC = 14
+
 const MODEL_PRICE_ERROR_CODE = 'model_price_error'
 const FAILURE_SUMMARY_MAX_LENGTH = 96
 const BATCH_TEST_CONCURRENCY = 5
@@ -324,6 +327,7 @@ function ChannelTestDialogContent({
   > | null>(null)
   const [endpointType, setEndpointType] = useState('auto')
   const [isStreamTest, setIsStreamTest] = useState(false)
+  const [simulateClaudeCode, setSimulateClaudeCode] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({})
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
@@ -391,6 +395,7 @@ function ChannelTestDialogContent({
     batchStopRequestedRef.current = true
     setEndpointType('auto')
     setIsStreamTest(false)
+    setSimulateClaudeCode(false)
     setSearchTerm('')
     setTestResults({})
     setRowSelection({})
@@ -405,8 +410,15 @@ function ChannelTestDialogContent({
     setPagination({ pageIndex: 0, pageSize: 30 })
   }, [])
 
-  const streamDisabled = STREAM_INCOMPATIBLE_ENDPOINTS.has(endpointType)
-  const effectiveStreamTest = !streamDisabled && isStreamTest
+  const canSimulateClaudeCode = currentRow.type === CHANNEL_TYPE_ANTHROPIC
+  // The Claude Code client only streams from the Messages API, so simulating
+  // it settles both choices; what was chosen before returns when it is off.
+  const claudeCodeTest = canSimulateClaudeCode && simulateClaudeCode
+  const effectiveEndpointType = claudeCodeTest ? 'anthropic' : endpointType
+  const streamDisabled =
+    claudeCodeTest || STREAM_INCOMPATIBLE_ENDPOINTS.has(endpointType)
+  const effectiveStreamTest =
+    claudeCodeTest || (!streamDisabled && isStreamTest)
 
   const handleEndpointTypeChange = useCallback((value: string | null) => {
     if (value === null) return
@@ -550,8 +562,12 @@ function ChannelTestDialogContent({
           {
             channelName: currentRow.name,
             testModel: model,
-            endpointType: endpointType === 'auto' ? undefined : endpointType,
+            endpointType:
+              effectiveEndpointType === 'auto'
+                ? undefined
+                : effectiveEndpointType,
             stream: effectiveStreamTest || undefined,
+            claudeCode: claudeCodeTest || undefined,
             silent,
           },
           (success, responseTime, error, errorCode) => {
@@ -587,8 +603,9 @@ function ChannelTestDialogContent({
       return finalResult
     },
     [
+      claudeCodeTest,
       currentRow,
-      endpointType,
+      effectiveEndpointType,
       effectiveStreamTest,
       markModelTesting,
       refreshChannelLists,
@@ -979,14 +996,35 @@ function ChannelTestDialogContent({
         }
       >
         <div className='max-h-[78vh] space-y-4 overflow-y-auto py-4 pr-1'>
+          {canSimulateClaudeCode && (
+            <div className='flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5'>
+              <div className='grid gap-1'>
+                <Label htmlFor='claude-code-toggle'>
+                  {t('Simulate Claude Code client')}
+                </Label>
+                <p className='text-muted-foreground text-xs'>
+                  {t(
+                    'Send the test request with the headers, system prompt and metadata of the Claude Code client. The Anthropic endpoint and stream mode are then fixed.'
+                  )}
+                </p>
+              </div>
+              <Switch
+                id='claude-code-toggle'
+                checked={simulateClaudeCode}
+                onCheckedChange={setSimulateClaudeCode}
+                disabled={isAnyTesting}
+              />
+            </div>
+          )}
           <div className='grid gap-4 md:grid-cols-2'>
             <div className='grid gap-2'>
               <Label htmlFor='endpoint-type'>{t('Endpoint Type')}</Label>
               <Combobox
                 options={endpointSelectItems}
-                value={endpointType}
+                value={effectiveEndpointType}
                 onValueChange={handleEndpointTypeChange}
                 id='endpoint-type'
+                disabled={claudeCodeTest}
                 className='w-full min-w-0'
                 placeholder={t('Auto detect (default)')}
               />

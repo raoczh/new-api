@@ -43,6 +43,10 @@ func AppendTaskPluginIdentityFilter(c *gin.Context, pluginKey string) {
 	})
 }
 
+// ginKeyClaudeCodeClientChecked marks a request whose client has been
+// recognised, so the request body is looked at once.
+const ginKeyClaudeCodeClientChecked = "claude_code_client_checked"
+
 type RetryParam struct {
 	Ctx          *gin.Context
 	TokenGroup   string
@@ -334,6 +338,14 @@ type ChannelSelectError struct {
 // callers. The caller still applies SetupContextForSelectedChannel.
 func SelectChannelForRequest(c *gin.Context, modelName string, retry *RetryParam) (*model.Channel, string, *ChannelSelectError) {
 	constraints := GetChannelConstraints(c)
+	// The filter stays on the request, so retries keep away from the channels
+	// restricted to Claude Code clients as well.
+	if !c.GetBool(ginKeyClaudeCodeClientChecked) {
+		c.Set(ginKeyClaudeCodeClientChecked, true)
+		if !IsClaudeCodeRequest(c) {
+			constraints.AddFilter(dto.ChannelFilter{Kind: dto.FilterClaudeCodeOnly})
+		}
+	}
 	if pin, found, overridden := constraints.ResolvedPin(); found {
 		for _, lost := range overridden {
 			logger.LogWarn(c, common.LogText(
@@ -349,6 +361,13 @@ func SelectChannelForRequest(c *gin.Context, modelName string, retry *RetryParam
 			return nil, "", pinnedChannelUnavailable(pin, http.StatusForbidden, i18n.MsgDistributorChannelDisabled)
 		}
 		if ok, kind := model.ChannelSatisfiesFilters(channel, modelName, constraints.Filters); !ok {
+			if kind == dto.FilterClaudeCodeOnly {
+				return nil, "", &ChannelSelectError{
+					StatusCode: http.StatusForbidden, Code: types.ErrorCode(kind), MessageID: i18n.MsgDistributorClaudeCodeOnly,
+					Params:     map[string]any{"Group": common.GetContextKeyString(c, constant.ContextKeyUsingGroup), "Model": modelName},
+					FilterKind: kind, Channel: channel,
+				}
+			}
 			return nil, "", &ChannelSelectError{
 				StatusCode: http.StatusBadRequest, Code: types.ErrorCode(kind), MessageID: i18n.MsgDistributorNoAvailableChannel,
 				Params:     map[string]any{"Group": common.GetContextKeyString(c, constant.ContextKeyUsingGroup), "Model": modelName},
@@ -436,6 +455,27 @@ func SelectChannelForRequest(c *gin.Context, modelName string, retry *RetryParam
 			}
 		}
 		if channel == nil {
+			// Say so when the model is served, but only to Claude Code clients:
+			// "no available channel" would send the administrator looking for a
+			// channel that is there.
+			open := slices.DeleteFunc(slices.Clone(constraints.Filters), func(filter dto.ChannelFilter) bool {
+				return filter.Kind == dto.FilterClaudeCodeOnly
+			})
+			if len(open) < len(constraints.Filters) {
+				groups := []string{usingGroup}
+				if usingGroup == "auto" {
+					groups = GetRequestAutoGroups(c, common.GetContextKeyString(c, constant.ContextKeyUserGroup), GetContextUserSetting(c))
+				}
+				for _, group := range groups {
+					if restricted, _ := model.GetRandomSatisfiedChannel(group, modelName, 0, open); restricted != nil {
+						return nil, selectGroup, &ChannelSelectError{
+							StatusCode: http.StatusForbidden, Code: types.ErrorCode(dto.FilterClaudeCodeOnly), MessageID: i18n.MsgDistributorClaudeCodeOnly,
+							Params:     map[string]any{"Group": usingGroup, "Model": modelName},
+							FilterKind: dto.FilterClaudeCodeOnly, Channel: restricted,
+						}
+					}
+				}
+			}
 			return nil, selectGroup, &ChannelSelectError{
 				StatusCode: http.StatusServiceUnavailable, Code: types.ErrorCodeModelNotFound, MessageID: i18n.MsgDistributorNoAvailableChannel,
 				Params: map[string]any{"Group": usingGroup, "Model": modelName}, NoAvailableChannel: true,

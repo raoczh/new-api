@@ -2,6 +2,7 @@ package model
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
@@ -12,6 +13,7 @@ var filterEvalOrder = []dto.ChannelFilterKind{
 	dto.FilterTaskPluginEndpoint,
 	dto.FilterTaskPluginIdentity,
 	dto.FilterResponsesWebSocket,
+	dto.FilterClaudeCodeOnly,
 	dto.FilterExcludeChannels,
 }
 
@@ -138,6 +140,10 @@ func channelMatchesFilter(ch *Channel, modelName string, filter dto.ChannelFilte
 		default:
 			return false
 		}
+	case dto.FilterClaudeCodeOnly:
+		// Every candidate of nearly every request is checked here; the settings
+		// are only decoded for a channel that mentions the restriction.
+		return !strings.Contains(ch.OtherSettings, `"claude_code_only"`) || !ch.GetOtherSettings().ClaudeCodeOnly
 	case dto.FilterExcludeChannels:
 		return !slices.Contains(filter.ExcludeChannelIds, ch.Id)
 	default:

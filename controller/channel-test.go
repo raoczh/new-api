@@ -54,6 +54,9 @@ type channelTestOptions struct {
 	manual bool
 	// iqPrompt replaces the "hi" message for IQ monitor generations.
 	iqPrompt string
+	// claudeCode sends the request the Claude Code client would send: its
+	// headers, system prompt and metadata, streamed to the Messages API.
+	claudeCode bool
 }
 
 // iqProbeMaxOutputTokens bounds IQ generations, including reasoning tokens.
@@ -131,6 +134,9 @@ func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int,
 	}
 
 	endpointType = normalizeChannelTestEndpoint(channel, endpointType)
+	if options.claudeCode {
+		endpointType, isStream = string(constant.EndpointTypeAnthropic), true
+	}
 
 	requestPath := "/v1/chat/completions"
 
@@ -171,7 +177,16 @@ func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int,
 	if isStream && constant.EndpointType(endpointType) == constant.EndpointTypeGemini {
 		requestPath = strings.Replace(requestPath, ":generateContent", ":streamGenerateContent", 1)
 	}
+	if options.claudeCode {
+		// The client always calls the beta Messages API.
+		requestPath += "?beta=true"
+	}
 	c.Request = httptest.NewRequestWithContext(ctx, http.MethodPost, requestPath, nil)
+	if options.claudeCode {
+		// The adaptor forwards these two from the client request.
+		c.Request.Header.Set("anthropic-beta", service.ClaudeCodeBetaHeader)
+		c.Request.Header.Set("anthropic-version", "2023-06-01")
+	}
 
 	cache, err := model.GetUserCache(testUserID)
 	if err != nil {
@@ -254,6 +269,13 @@ func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int,
 	}
 
 	request := buildTestRequest(testModel, endpointType, channel, isStream)
+	if options.claudeCode {
+		claudeCodeRequest, err := service.NewClaudeCodeTestRequest(testModel)
+		if err != nil {
+			return testResult{context: c, localErr: err, newAPIError: types.NewError(err, types.ErrorCodeConvertRequestFailed)}
+		}
+		request = claudeCodeRequest
+	}
 	if options.iqPrompt != "" {
 		if err := applyIQProbePrompt(request, testModel, options.iqPrompt); err != nil {
 			return testResult{context: c, localErr: err, newAPIError: types.NewError(err, types.ErrorCodeConvertRequestFailed)}
@@ -328,6 +350,20 @@ func runChannelTest(ctx context.Context, channel *model.Channel, testUserID int,
 		}()
 	}
 	info.InitChannelMeta(c)
+	if options.claudeCode {
+		// The adaptor sends none of the client's own headers, so they go out as
+		// header overrides. A header the channel overrides itself keeps the
+		// channel's value, as it does for a real request.
+		headers := map[string]any{}
+		for name, value := range service.ClaudeCodeClientHeaders() {
+			headers[strings.ToLower(name)] = value
+		}
+		for name, value := range info.ChannelMeta.HeadersOverride {
+			headers[strings.ToLower(strings.TrimSpace(name))] = value
+		}
+		info.RuntimeHeadersOverride = headers
+		info.UseRuntimeHeadersOverride = true
+	}
 
 	err = attachTestBillingRequestInput(info, request)
 	if err != nil {
@@ -1007,6 +1043,11 @@ func TestChannel(c *gin.Context) {
 	testModel := c.Query("model")
 	endpointType := c.Query("endpoint_type")
 	isStream, _ := strconv.ParseBool(c.Query("stream"))
+	claudeCode, _ := strconv.ParseBool(c.Query("claude_code"))
+	if claudeCode && channel.Type != constant.ChannelTypeAnthropic {
+		common.ApiErrorT(c, "Claude Code client simulation is only available for Anthropic channels")
+		return
+	}
 	testUserID, err := resolveChannelTestUserID(c)
 	if err != nil {
 		common.ApiError(c, err)
@@ -1017,7 +1058,7 @@ func TestChannel(c *gin.Context) {
 	if c.Request != nil {
 		requestCtx = c.Request.Context()
 	}
-	result := runChannelTest(requestCtx, channel, testUserID, testModel, endpointType, isStream, channelTestOptions{manual: true})
+	result := runChannelTest(requestCtx, channel, testUserID, testModel, endpointType, isStream, channelTestOptions{manual: true, claudeCode: claudeCode})
 	if result.localErr != nil {
 		resp := gin.H{
 			"success": false,

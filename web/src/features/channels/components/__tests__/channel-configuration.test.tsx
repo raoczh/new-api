@@ -1707,6 +1707,53 @@ test('an Ollama channel marks a saved OpenAI-compatible chat setting in Request 
   })
 })
 
+test('keeping a channel for Claude Code clients marks Routing & Mapping and saves the setting', async () => {
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true } })
+  const user = userEvent.setup()
+  render(<ConfigurationHarness currentRow={editingChannel} />)
+  await screen.findByDisplayValue('Existing channel')
+  const routingTab = screen.getByRole('tab', { name: /Routing & Mapping/ })
+  expect(routingTab).not.toHaveAccessibleName(/Configured/)
+  await user.click(routingTab)
+  const toggle = screen.getByRole('switch', {
+    name: 'Claude Code clients only',
+  })
+  expect(toggle).not.toBeChecked()
+
+  await user.click(toggle)
+  expect(toggle).toBeChecked()
+  expect(routingTab).toHaveAccessibleName(/Configured/)
+  await user.click(screen.getByRole('button', { name: 'Update Channel' }))
+  await waitFor(() => expect(put).toHaveBeenCalledTimes(1))
+  const saved = put.mock.calls[0]?.[1] as { settings: string }
+  expect(JSON.parse(saved.settings)).toMatchObject({ claude_code_only: true })
+})
+
+test('a channel saved for Claude Code clients shows the setting on and saves without it once turned off', async () => {
+  editingChannel = { ...editingChannel, settings: '{"claude_code_only":true}' }
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true } })
+  const user = userEvent.setup()
+  render(<ConfigurationHarness currentRow={editingChannel} />)
+  await screen.findByDisplayValue('Existing channel')
+  const routingTab = screen.getByRole('tab', { name: /Routing & Mapping/ })
+  expect(routingTab).toHaveAccessibleName(/Configured/)
+  await user.click(routingTab)
+  const toggle = screen.getByRole('switch', {
+    name: 'Claude Code clients only',
+  })
+  expect(toggle).toBeChecked()
+
+  await user.click(toggle)
+  await user.click(screen.getByRole('button', { name: 'Update Channel' }))
+  await waitFor(() => expect(put).toHaveBeenCalledTimes(1))
+  const saved = put.mock.calls[0]?.[1] as { settings: string }
+  expect(JSON.parse(saved.settings)).not.toHaveProperty('claude_code_only')
+})
+
 test('a saved upstream TLS verification skip marks Other Settings and turning it off saves the setting without it', async () => {
   editingChannel = {
     ...editingChannel,

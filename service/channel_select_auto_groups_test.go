@@ -158,3 +158,99 @@ func TestCacheGetRandomSatisfiedChannelUsesTokenAutoGroupsWhenGlobalAutoIsEmpty(
 	assert.Equal(t, "default", selectedGroup)
 	assert.Equal(t, "default", common.GetContextKeyString(ctx, constant.ContextKeyAutoGroup))
 }
+
+// A channel restricted to Claude Code clients is skipped for every other
+// request, which is served by the remaining channels of the group or refused
+// when the restricted channel is the only one serving the model.
+func TestClaudeCodeOnlyChannelServesOnlyClaudeCodeClients(t *testing.T) {
+	db := setupChannelSelectAutoGroupsTest(t)
+	const sharedModel, exclusiveModel = "claude-shared", "claude-exclusive"
+	createChannelSelectAutoGroupsChannel(t, db, 2301, "default", sharedModel)
+	createChannelSelectAutoGroupsChannel(t, db, 2302, "default", sharedModel)
+	createChannelSelectAutoGroupsChannel(t, db, 2303, "default", exclusiveModel)
+	require.NoError(t, db.Model(&model.Channel{}).Where("id IN ?", []int{2301, 2303}).
+		Update("settings", `{"claude_code_only":true}`).Error)
+	model.InitChannelCache()
+	gin.SetMode(gin.TestMode)
+
+	const systemPrompt = `[{"type":"text","text":"You are Claude Code, Anthropic's official CLI for Claude."}]`
+	const userID = `"{\"device_id\":\"d1\",\"account_uuid\":\"\",\"session_id\":\"s1\"}"`
+	messagesBody := func(system, userID string) string {
+		return fmt.Sprintf(`{"model":"m","max_tokens":64,"system":%s,"metadata":{"user_id":%s},"messages":[{"role":"user","content":"hi"}]}`, system, userID)
+	}
+	clientHeaders := map[string]string{
+		"User-Agent": "claude-cli/2.1.100 (external, cli)", "X-App": "cli",
+		"anthropic-beta": "claude-code-20250219", "anthropic-version": "2023-06-01",
+	}
+	without := func(name string) map[string]string {
+		headers := map[string]string{}
+		for key, value := range clientHeaders {
+			if key != name {
+				headers[key] = value
+			}
+		}
+		return headers
+	}
+	simulated, err := NewClaudeCodeTestRequest("m")
+	require.NoError(t, err)
+	simulatedBody, err := common.Marshal(simulated)
+	require.NoError(t, err)
+	simulatedHeaders := ClaudeCodeClientHeaders()
+	simulatedHeaders["anthropic-beta"], simulatedHeaders["anthropic-version"] = ClaudeCodeBetaHeader, "2023-06-01"
+
+	selectChannel := func(modelName, path, body string, headers map[string]string) (*model.Channel, *ChannelSelectError) {
+		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+		ctx.Request = httptest.NewRequest("POST", path, strings.NewReader(body))
+		ctx.Request.Header.Set("Content-Type", "application/json")
+		for key, value := range headers {
+			ctx.Request.Header.Set(key, value)
+		}
+		common.SetContextKey(ctx, constant.ContextKeyUsingGroup, "default")
+		channel, _, selectErr := SelectChannelForRequest(ctx, modelName, &RetryParam{
+			Ctx: ctx, TokenGroup: "default", ModelName: modelName, RequestPath: path, Retry: common.GetPointer(0),
+		})
+		return channel, selectErr
+	}
+
+	for _, tc := range []struct {
+		name       string
+		path, body string
+		headers    map[string]string
+		claudeCode bool
+	}{
+		{"client request", "/v1/messages", messagesBody(systemPrompt, userID), clientHeaders, true},
+		{"user id of older clients", "/v1/messages", messagesBody(systemPrompt,
+			`"user_`+strings.Repeat("a", 64)+`_account__session_`+strings.Repeat("b", 36)+`"`), clientHeaders, true},
+		{"billing attribution block instead of the identity prompt", "/v1/messages", messagesBody(
+			`[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.100; cc_entrypoint=cli;"}]`, userID), clientHeaders, true},
+		{"one-token connectivity probe", "/v1/messages", `{"model":"m","max_tokens":1,"messages":[]}`, without("X-App"), true},
+		{"request a simulated channel test sends", "/v1/messages", string(simulatedBody), simulatedHeaders, true},
+		{"another client sending the same body", "/v1/messages", messagesBody(systemPrompt, userID), without("User-Agent"), false},
+		{"missing X-App", "/v1/messages", messagesBody(systemPrompt, userID), without("X-App"), false},
+		{"missing anthropic-beta", "/v1/messages", messagesBody(systemPrompt, userID), without("anthropic-beta"), false},
+		{"a system prompt of its own", "/v1/messages", messagesBody(`[{"type":"text","text":"You are a translator."}]`, userID), clientHeaders, false},
+		{"string system prompt", "/v1/messages", messagesBody(`"You are Claude Code, Anthropic's official CLI for Claude."`, userID), clientHeaders, false},
+		{"user id in no client format", "/v1/messages", messagesBody(systemPrompt, `"user-42"`), clientHeaders, false},
+		{"chat completions with the client's User-Agent", "/v1/chat/completions", messagesBody(systemPrompt, userID), clientHeaders, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			channel, selectErr := selectChannel(exclusiveModel, tc.path, tc.body, tc.headers)
+			if tc.claudeCode {
+				require.Nil(t, selectErr)
+				assert.Equal(t, 2303, channel.Id)
+				return
+			}
+			require.NotNil(t, selectErr)
+			assert.Nil(t, channel)
+			assert.Equal(t, 403, selectErr.StatusCode)
+			assert.Equal(t, "claude_code_only", string(selectErr.Code))
+
+			// The same request is served where the group has an open channel.
+			for range 20 {
+				channel, selectErr := selectChannel(sharedModel, tc.path, tc.body, tc.headers)
+				require.Nil(t, selectErr)
+				assert.Equal(t, 2302, channel.Id)
+			}
+		})
+	}
+}
