@@ -220,7 +220,9 @@ describe('CC Switch app import', () => {
 
     await user.click(screen.getByRole('radio', { name: 'Pi' }))
 
-    expect(screen.getByRole('button', { name: 'Open CC Switch' })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Open CC Switch' })
+    ).toBeDisabled()
     expect(screen.getByRole('status')).toBeVisible()
   })
 

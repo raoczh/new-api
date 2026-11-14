@@ -2,6 +2,7 @@ package helper
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -802,3 +803,48 @@ func (s *priceTestReservation) GetPreConsumedQuota() int { return s.held }
 func (s *priceTestReservation) Reserve(quota int) error  { s.held = max(s.held, quota); return nil }
 
 func (s *priceTestReservation) ReserveBeforeSubmit(quota int) error { return s.Reserve(quota) }
+
+// A ratio set for one user replaces both the group ratio and the ratio between
+// user groups; a stored value that could not be charged safely is ignored.
+func TestHandleGroupRatioAppliesValidUserRatioFirst(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	savedGroupRatio := ratio_setting.GroupRatio2JSONString()
+	savedGroupGroupRatio := ratio_setting.GroupGroupRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(savedGroupRatio))
+		require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(savedGroupGroupRatio))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"premium":2,"partner":3}`))
+	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"default":{"partner":1.5}}`))
+
+	for _, test := range []struct {
+		name        string
+		userRatios  map[string]float64
+		usingGroup  string
+		wantRatio   float64
+		wantSpecial bool
+	}{
+		{"no user ratio charges the group ratio", nil, "premium", 2, false},
+		{"user ratio replaces the group ratio", map[string]float64{"premium": 0.5}, "premium", 0.5, true},
+		{"user ratio of another group does not apply", map[string]float64{"default": 0.5}, "premium", 2, false},
+		{"user ratio wins over the ratio between user groups", map[string]float64{"partner": 0.8}, "partner", 0.8, true},
+		{"ratio between user groups still applies without a user ratio", nil, "partner", 1.5, true},
+		{"zero makes the group free for the user", map[string]float64{"premium": 0}, "premium", 0, true},
+		{"negative user ratio is ignored", map[string]float64{"premium": -1}, "premium", 2, false},
+		{"NaN user ratio is ignored", map[string]float64{"premium": math.NaN()}, "premium", 2, false},
+		{"infinite user ratio is ignored", map[string]float64{"premium": math.Inf(1)}, "premium", 2, false},
+		{"user ratio above the limit is ignored", map[string]float64{"premium": ratio_setting.MaxUserGroupRatio + 1}, "premium", 2, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			info := &relaycommon.RelayInfo{
+				UserGroup:   "default",
+				UsingGroup:  test.usingGroup,
+				UserSetting: dto.UserSetting{GroupRatios: test.userRatios},
+			}
+			got := HandleGroupRatio(ctx, info)
+			assert.Equal(t, test.wantRatio, got.GroupRatio)
+			assert.Equal(t, test.wantSpecial, got.HasSpecialRatio)
+		})
+	}
+}

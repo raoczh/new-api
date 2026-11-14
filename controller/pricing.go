@@ -13,6 +13,31 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// orderVendorsByGroupOrder sorts vendors the way their groups are arranged in
+// group management, so the model square lists providers in the configured
+// order. Vendors without a group keep their original relative order at the end.
+func orderVendorsByGroupOrder(vendors []model.PricingVendor) []model.PricingVendor {
+	rankOf := make(map[int]int)
+	for rank, id := range setting.OrderedVendorIDs() {
+		rankOf[id] = rank
+	}
+	slices.SortStableFunc(vendors, func(a, b model.PricingVendor) int {
+		rankA, knownA := rankOf[a.ID]
+		rankB, knownB := rankOf[b.ID]
+		switch {
+		case knownA && knownB:
+			return rankA - rankB
+		case knownA:
+			return -1
+		case knownB:
+			return 1
+		default:
+			return 0
+		}
+	})
+	return vendors
+}
+
 func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string]string) []model.Pricing {
 	if len(pricing) == 0 {
 		return pricing
@@ -51,10 +76,7 @@ func GetPricing(c *gin.Context) {
 			group = user.Group
 			userSetting = user.GetSetting()
 			for g := range groupRatio {
-				ratio, ok := ratio_setting.GetGroupGroupRatio(group, g)
-				if ok {
-					groupRatio[g] = ratio
-				}
+				groupRatio[g] = service.GetUserGroupRatio(group, userSetting, g)
 			}
 		}
 	}
@@ -68,10 +90,13 @@ func GetPricing(c *gin.Context) {
 		}
 	}
 
+	vendors := slices.Clone(model.GetVendors())
+	orderVendorsByGroupOrder(vendors)
+
 	c.JSON(200, gin.H{
 		"success":            true,
 		"data":               pricing,
-		"vendors":            model.GetVendors(),
+		"vendors":            vendors,
 		"group_ratio":        groupRatio,
 		"usable_group":       usableGroup,
 		"group_order":        setting.OrderedGroupNames(slices.Collect(maps.Keys(usableGroup))),

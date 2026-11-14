@@ -452,15 +452,14 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 		return false
 	}
 
-	groupRatio := ratio_setting.GetGroupRatio(group)
-	userGroupRatio, hasUserGroupRatio := ratio_setting.GetGroupGroupRatio(group, group)
-
-	var finalGroupRatio float64
-	if hasUserGroupRatio {
-		finalGroupRatio = userGroupRatio
-	} else {
-		finalGroupRatio = groupRatio
+	// The ratio set for this user in the group applies here as it does when
+	// the task is submitted; a user whose setting cannot be read is charged the
+	// ratio of the group.
+	var userRatios map[string]float64
+	if userSetting, err := model.GetUserSetting(task.UserId, false); err == nil {
+		userRatios = userSetting.GroupRatios
 	}
+	finalGroupRatio, _ := ratio_setting.ResolveGroupRatio(userRatios, group, group)
 
 	// 计算 OtherRatios 乘积（视频折扣、时长等）
 	otherMultiplier := 1.0

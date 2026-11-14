@@ -16,9 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ApiKeyCreateDialog } from './api-key-create-dialog'
+import { ApiKeyFormDialog } from './api-key-form-dialog'
 import { ApiKeysDeleteDialog } from './api-keys-delete-dialog'
-import { ApiKeysMutateDrawer } from './api-keys-mutate-drawer'
 import { useApiKeys } from './api-keys-provider'
 import { ApiKeyReadyDialog } from './dialogs/api-key-ready-dialog'
 import { CCSwitchDialog } from './dialogs/cc-switch-dialog'
@@ -28,7 +27,7 @@ export function ApiKeysDialogs() {
 
   return (
     <>
-      <ApiKeyCreateDialog
+      <ApiKeyFormDialog
         open={open === 'create'}
         onOpenChange={(isOpen) => !isOpen && setOpen(null)}
       />
@@ -36,11 +35,15 @@ export function ApiKeysDialogs() {
         open={open === 'created'}
         onOpenChange={(isOpen) => !isOpen && setOpen(null)}
       />
-      <ApiKeysMutateDrawer
-        open={open === 'update'}
-        onOpenChange={(isOpen) => !isOpen && setOpen(null)}
-        currentRow={open === 'update' ? currentRow || undefined : undefined}
-      />
+      {/* Editing uses the same dialog as creating, opened on the key's lines. */}
+      {currentRow && (
+        <ApiKeyFormDialog
+          key={currentRow.id}
+          open={open === 'update'}
+          onOpenChange={(isOpen) => !isOpen && setOpen(null)}
+          apiKey={currentRow}
+        />
+      )}
       <ApiKeysDeleteDialog />
       <CCSwitchDialog
         open={open === 'cc-switch'}

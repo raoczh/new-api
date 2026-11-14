@@ -337,8 +337,8 @@ export function buildGuidePages(urls: DocUrls): DocPage[] {
                   zh: '按次计费的模型（例如许多图像和视频模型）按每次调用、每张图或每秒收取固定价格，并随尺寸、质量或时长调整。',
                 },
                 {
-                  en: 'The group multiplier applies on top. The same model can cost different amounts in different groups; Model Square shows the final price per group.',
-                  zh: '在此基础上再乘以分组倍率。同一模型在不同分组的价格可能不同，模型广场展示的是各分组的最终价格。',
+                  en: 'The group multiplier applies on top. The same model can cost different amounts in different groups; the model prices page shows the final price per group.',
+                  zh: '在此基础上再乘以分组倍率。同一模型在不同分组的价格可能不同，模型价格页展示的是各分组的最终价格。',
                 },
                 {
                   en: 'Failed requests are not charged. If the gateway retried on another channel, only the successful attempt is billed.',
@@ -383,7 +383,7 @@ export function buildGuidePages(urls: DocUrls): DocPage[] {
                 { to: '/wallet', text: { en: 'Open Wallet', zh: '打开钱包' } },
                 {
                   to: '/pricing',
-                  text: { en: 'Open Model Square', zh: '打开模型广场' },
+                  text: { en: 'Open model prices', zh: '打开模型价格' },
                 },
               ],
             },

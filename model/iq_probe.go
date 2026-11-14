@@ -23,8 +23,10 @@ const (
 // IQProbeResult stores one IQ monitor generation. Channel identity is not
 // stored because the public page only reports groups and models.
 type IQProbeResult struct {
-	ID               int64    `json:"id" gorm:"primaryKey"`
-	GroupName        string   `json:"group_name" gorm:"size:64;index:idx_iq_probe_group_model_ts,priority:1"`
+	ID        int64  `json:"id" gorm:"primaryKey"`
+	GroupName string `json:"group_name" gorm:"size:64;index:idx_iq_probe_group_model_ts,priority:1"`
+	// GroupId 是 group_name 所指分组在 user_groups 中的 id，写入时随分组名一起绑定。
+	GroupId          int      `json:"-" gorm:"default:0"`
 	ModelName        string   `json:"model_name" gorm:"size:191;index:idx_iq_probe_group_model_ts,priority:2"`
 	Code             string   `json:"code" gorm:"size:32"`
 	PromptTitle      string   `json:"prompt_title" gorm:"size:255"`

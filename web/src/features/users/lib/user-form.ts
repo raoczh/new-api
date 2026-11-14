@@ -41,12 +41,7 @@ export const userFormSchema = z.object({
   quota_dollars: z.number().min(0).optional(),
   group: z.string().optional(),
   remark: z.string().optional(),
-  max_concurrent_requests: z
-    .number()
-    .int()
-    .min(0)
-    .max(1_000_000)
-    .optional(),
+  max_concurrent_requests: z.number().int().min(0).max(1_000_000).optional(),
   requests_per_minute: z.number().int().min(0).max(1_000_000).optional(),
   extra_usable_groups: z.array(z.string()).max(100).optional(),
   hidden_usable_groups: z.array(z.string()).max(100).optional(),

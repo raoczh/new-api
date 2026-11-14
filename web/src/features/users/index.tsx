@@ -20,19 +20,15 @@ import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 
-import { UserApiKeysDialog } from './components/dialogs/user-api-keys-dialog'
-import { UserGroupsDialog } from './components/dialogs/user-groups-dialog'
-import { UserQuotaDialog } from './components/user-quota-dialog'
-import { UsersDeleteDialog } from './components/users-delete-dialog'
-import { UsersMutateDrawer } from './components/users-mutate-drawer'
+import { UsersDialogs } from './components/users-dialogs'
 import { UsersPrimaryButtons } from './components/users-primary-buttons'
-import { UsersProvider, useUsers } from './components/users-provider'
+import { UsersProvider } from './components/users-provider'
 import { UsersTable } from './components/users-table'
 
+// The page itself reads no dialog state: only `UsersDialogs` does, so opening
+// a dialog leaves the list and the page header as they are.
 function UsersContent() {
   const { t } = useTranslation()
-  const { open, setOpen, currentRow, triggerRefresh } = useUsers()
-  const closeDialog = (isOpen: boolean) => !isOpen && setOpen(null)
 
   return (
     <>
@@ -46,35 +42,7 @@ function UsersContent() {
         </SectionPageLayout.Content>
       </SectionPageLayout>
 
-      <UsersMutateDrawer
-        open={open === 'create' || open === 'update'}
-        onOpenChange={closeDialog}
-        currentRow={open === 'update' ? currentRow || undefined : undefined}
-      />
-      <UsersDeleteDialog />
-      {currentRow && (
-        <>
-          <UserQuotaDialog
-            open={open === 'quota'}
-            onOpenChange={closeDialog}
-            userId={currentRow.id}
-            currentQuota={currentRow.quota}
-            onSuccess={triggerRefresh}
-          />
-          <UserGroupsDialog
-            open={open === 'groups'}
-            onOpenChange={closeDialog}
-            user={currentRow}
-            onSuccess={triggerRefresh}
-          />
-          <UserApiKeysDialog
-            open={open === 'api-keys'}
-            onOpenChange={closeDialog}
-            user={currentRow}
-            onSuccess={triggerRefresh}
-          />
-        </>
-      )}
+      <UsersDialogs />
     </>
   )
 }

@@ -24,7 +24,13 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createInstance } from 'i18next'
 import { I18nextProvider } from 'react-i18next'
@@ -113,6 +119,7 @@ async function renderChannelsPage(
         success: true,
         data: ['vip', 'default'],
         group_ratio: { vip: 2, default: 1 },
+        group_desc: { vip: 'Dedicated line for paying customers' },
       },
     }
   })
@@ -219,4 +226,23 @@ it('keeps tag aggregate rows read-only', async () => {
   expect(
     screen.queryByRole('combobox', { name: 'Change group for batch' })
   ).not.toBeInTheDocument()
+})
+
+it('shows full group names with their notes in the picker and finds a group by its note', async () => {
+  const user = userEvent.setup()
+  await renderChannelsPage()
+
+  await user.click(
+    screen.getByRole('combobox', { name: 'Change group for prod' })
+  )
+  // Names wrap instead of being cut off, and the note sits under the name.
+  const vip = getCommandOption('vip')
+  expect(within(vip).getByText('vip')).not.toHaveClass('truncate')
+  expect(
+    within(vip).getByText('Dedicated line for paying customers')
+  ).toBeVisible()
+
+  await user.type(screen.getByPlaceholderText('Search...'), 'paying')
+  expect(getCommandOption('vip')).toBeVisible()
+  expect(() => getCommandOption('default')).toThrow()
 })

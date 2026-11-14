@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { PlaygroundConfig, ParameterEnabled } from './types'
+import type { PlaygroundConfig } from './types'
 
 // Message constants
 export const MESSAGE_ROLES = {
@@ -47,28 +47,15 @@ export const DEFAULT_GROUP = 'default' as const
 export const DEFAULT_CONFIG: PlaygroundConfig = {
   model: 'gpt-4o',
   group: DEFAULT_GROUP,
-  temperature: 0.7,
-  top_p: 1,
-  max_tokens: 4096,
-  frequency_penalty: 0,
-  presence_penalty: 0,
-  seed: null,
   stream: true,
-}
-
-export const DEFAULT_PARAMETER_ENABLED: ParameterEnabled = {
-  temperature: true,
-  top_p: true,
-  max_tokens: false,
-  frequency_penalty: true,
-  presence_penalty: true,
-  seed: false,
 }
 
 // Storage keys
 export const STORAGE_KEYS = {
   CONFIG: 'playground_config',
   MESSAGES: 'playground_messages',
+  // Written by the removed parameter panel and no longer read. It stays listed
+  // so the storage cleanup still deletes what earlier versions left behind.
   PARAMETER_ENABLED: 'playground_parameter_enabled',
   CONVERSATIONS: 'playground_conversations',
 } as const

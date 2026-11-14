@@ -169,6 +169,7 @@ func SetApiRouter(router *gin.Engine) {
 				// 管理员查看与操作用户资产：密钥（列表只给掩码，读明文单独二次校验）、分组。
 				adminRoute.GET("/:id/tokens", controller.AdminGetUserTokens)
 				adminRoute.POST("/:id/tokens/:token_id/status", controller.AdminSetUserTokenStatus)
+				adminRoute.PUT("/:id/tokens/:token_id/group", controller.AdminSetUserTokenGroup)
 				adminRoute.GET("/:id/tokens/:token_id/key", controller.AdminGetUserTokenKey)
 				adminRoute.DELETE("/:id/tokens/:token_id", controller.AdminDeleteUserToken)
 				adminRoute.GET("/:id/groups", controller.AdminGetUserGroups)

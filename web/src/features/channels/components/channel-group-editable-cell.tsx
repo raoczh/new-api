@@ -51,6 +51,8 @@ const MAX_VISIBLE_GROUPS = 2
 export type ChannelGroupOption = {
   label: string
   value: string
+  /** Administrator's note on the group, shown under its name in the list. */
+  desc?: string
   suffix?: ReactNode
 }
 
@@ -58,8 +60,6 @@ type ChannelGroupEditableCellProps = {
   channel: Channel
   groupOptions: ChannelGroupOption[]
   groupRatios?: Record<string, number>
-  /** Card view stretches the trigger to the footer width. */
-  layout?: 'table' | 'card'
 }
 
 /**
@@ -74,7 +74,6 @@ export function ChannelGroupEditableCell({
   channel,
   groupOptions,
   groupRatios,
-  layout = 'table',
 }: ChannelGroupEditableCellProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -97,7 +96,8 @@ export function ChannelGroupEditableCell({
     return groupOptions.filter(
       (option) =>
         option.value.toLowerCase().includes(search) ||
-        option.label.toLowerCase().includes(search)
+        option.label.toLowerCase().includes(search) ||
+        option.desc?.toLowerCase().includes(search)
     )
   }, [groupOptions, searchValue])
 
@@ -161,7 +161,7 @@ export function ChannelGroupEditableCell({
               'group/group-cell flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors',
               'hover:bg-muted/60 focus-visible:ring-ring/50 data-popup-open:bg-muted/60 outline-none focus-visible:ring-[3px]',
               'disabled:cursor-progress disabled:opacity-70',
-              layout === 'card' ? '-ml-1.5 w-full' : '-ml-1.5 w-full max-w-50'
+              '-ml-1.5 w-full'
             )}
           />
         }
@@ -199,7 +199,7 @@ export function ChannelGroupEditableCell({
         )}
       </PopoverTrigger>
       <PopoverContent
-        className='w-64 overflow-hidden rounded-xl p-0 shadow-lg'
+        className='w-96 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl p-0 shadow-lg'
         onWheel={(event) => event.stopPropagation()}
         onTouchMove={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
@@ -229,8 +229,15 @@ export function ChannelGroupEditableCell({
                         selected ? 'opacity-100' : 'opacity-0'
                       )}
                     />
-                    <span className='min-w-0 flex-1 truncate'>
-                      {sensitiveVisible ? option.label : SENSITIVE_MASK}
+                    <span className='min-w-0 flex-1'>
+                      <span className='block break-all'>
+                        {sensitiveVisible ? option.label : SENSITIVE_MASK}
+                      </span>
+                      {sensitiveVisible && option.desc && (
+                        <span className='text-muted-foreground block text-xs break-words'>
+                          {option.desc}
+                        </span>
+                      )}
                     </span>
                     {option.suffix}
                   </CommandItem>

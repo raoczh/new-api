@@ -3,8 +3,10 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -422,12 +424,19 @@ func adminTargetUser(c *gin.Context) (user *model.User, ok bool) {
 	return user, true
 }
 
-// adminUserGroupOption 描述一个分组对该用户的样子：能否使用、说明与实际生效倍率。
+// adminUserGroupOption 描述一个分组对该用户的样子。Usable 与 Ratio 是实际生效的结果；
+// DefaultUsable 与 DefaultRatio 去掉了为该用户单独设置的可见分组和倍率，只由所属
+// 分组决定，供弹窗标出“默认可用”和“默认倍率”。
 type adminUserGroupOption struct {
-	Name   string  `json:"name"`
-	Desc   string  `json:"desc"`
-	Ratio  float64 `json:"ratio"`
-	Usable bool    `json:"usable"`
+	Name          string  `json:"name"`
+	Desc          string  `json:"desc"`
+	Ratio         float64 `json:"ratio"`
+	Usable        bool    `json:"usable"`
+	DefaultRatio  float64 `json:"default_ratio"`
+	DefaultUsable bool    `json:"default_usable"`
+	// HasRatio 为 false 的条目不计费，也就不能设置专属倍率：auto 是路由方式，
+	// 已从倍率设置中移除的历史分组不再可用。
+	HasRatio bool `json:"has_ratio"`
 }
 
 type adminUserGroupsResponse struct {
@@ -435,64 +444,88 @@ type adminUserGroupsResponse struct {
 	Groups             []adminUserGroupOption `json:"groups"`
 	ExtraUsableGroups  []string               `json:"extra_usable_groups"`
 	HiddenUsableGroups []string               `json:"hidden_usable_groups"`
+	GroupRatios        map[string]float64     `json:"group_ratios"`
 }
 
-// groupNameExists 判断分组名是否真实存在：以分组倍率设置为准，同时兼容已登记但
-// 尚未出现在倍率设置里的历史分组。
+// groupNameExists 判断分组名是否真实存在，以分组倍率设置为准。分组登记表里还会
+// 留着已删除但仍被密钥引用的分组，不能据此把用户改进一个已删除的分组。
 func groupNameExists(name string) bool {
-	if _, ok := ratio_setting.GetGroupRatioCopy()[name]; ok {
-		return true
-	}
-	_, ok := model.GetGroupRegistry()[name]
-	return ok
+	return ratio_setting.ContainsGroupRatio(name)
 }
 
-// AdminGetUserGroups 查看某个用户的分组：所属分组、可用分组（含实际倍率）与
-// 管理员设置的额外可见/隐藏覆盖，供管理员在一个弹窗里看清并直接调整。
+// AdminGetUserGroups 查看某个用户的分组：所属分组、每个分组能否使用及实际倍率，
+// 以及管理员为该用户单独设置的可见分组和专属倍率，供管理员在一个弹窗里看清并直接调整。
+// 带 group 查询参数时按该所属分组预览，不落库：默认可用分组和默认倍率都由所属分组
+// 决定，管理员在弹窗里改了所属分组但还没保存时需要看到新的默认值。
 func AdminGetUserGroups(c *gin.Context) {
 	user, ok := adminTargetUser(c)
 	if !ok {
 		return
 	}
-	userSetting := user.GetSetting()
-	usableGroups := service.GetUserUsableGroups(user.Group, userSetting)
-	names := make([]string, 0, len(usableGroups)+1)
-	for name := range usableGroups {
-		names = append(names, name)
-	}
-	for name := range model.GetGroupRegistry() {
-		if _, exists := usableGroups[name]; !exists {
-			names = append(names, name)
+	group := user.Group
+	if preview := strings.TrimSpace(c.Query("group")); preview != "" && preview != user.Group {
+		if !groupNameExists(preview) {
+			common.ApiErrorT(c, "Group {{group}} does not exist", map[string]any{"group": preview})
+			return
 		}
+		group = preview
 	}
-	names = setting.OrderedGroupNames(names)
+	userSetting := user.GetSetting()
+	usableGroups := service.GetUserUsableGroups(group, userSetting)
+	defaultGroups := service.GetUserUsableGroups(group, dto.UserSetting{})
+	// 列出现有的全部分组：被隐藏的分组也要在，否则管理员无法在弹窗里把它重新勾上。
+	// 已删除的分组不列出，即便分组登记表里还留着它的 id。
+	listed := make(map[string]bool)
+	for name := range ratio_setting.GetGroupRatioCopy() {
+		listed[name] = true
+	}
+	for name := range usableGroups {
+		listed[name] = true
+	}
+	for name := range defaultGroups {
+		listed[name] = true
+	}
+	names := setting.OrderedGroupNames(slices.Collect(maps.Keys(listed)))
 	options := make([]adminUserGroupOption, 0, len(names))
 	for _, name := range names {
 		desc, usable := usableGroups[name]
-		options = append(options, adminUserGroupOption{
-			Name:   name,
-			Desc:   desc,
-			Ratio:  service.GetUserGroupRatio(user.Group, name),
-			Usable: usable,
-		})
+		defaultDesc, defaultUsable := defaultGroups[name]
+		if !usable {
+			desc = defaultDesc
+		}
+		option := adminUserGroupOption{
+			Name:          name,
+			Desc:          desc,
+			Usable:        usable,
+			DefaultUsable: defaultUsable,
+			HasRatio:      ratio_setting.ContainsGroupRatio(name),
+		}
+		if option.HasRatio {
+			option.Ratio = service.GetUserGroupRatio(group, userSetting, name)
+			option.DefaultRatio = service.GetUserGroupRatio(group, dto.UserSetting{}, name)
+		}
+		options = append(options, option)
 	}
 	common.ApiSuccess(c, adminUserGroupsResponse{
-		Group:              user.Group,
+		Group:              group,
 		Groups:             options,
 		ExtraUsableGroups:  userSetting.ExtraUsableGroups,
 		HiddenUsableGroups: userSetting.HiddenUsableGroups,
+		GroupRatios:        userSetting.GroupRatios,
 	})
 }
 
 type adminUserGroupsRequest struct {
 	Group string `json:"group"`
 	// 指针区分“未传”与“显式清空”：未传时保留原覆盖，避免只改分组的请求顺带清掉它们。
-	ExtraUsableGroups  *[]string `json:"extra_usable_groups"`
-	HiddenUsableGroups *[]string `json:"hidden_usable_groups"`
+	ExtraUsableGroups  *[]string           `json:"extra_usable_groups"`
+	HiddenUsableGroups *[]string           `json:"hidden_usable_groups"`
+	GroupRatios        *map[string]float64 `json:"group_ratios"`
 }
 
-// AdminUpdateUserGroups 管理员直接修改用户的分组与可见分组覆盖。
-// 只写这两类字段，不动额度、角色与状态；分组变化会推进 auth_version。
+// AdminUpdateUserGroups 管理员直接修改用户的分组、可见分组覆盖与专属分组倍率。
+// 只写这几类字段，不动额度、角色与状态；分组变化会推进 auth_version。
+// 专属倍率保存后随用户缓存一起刷新，下一次请求即按新倍率计费。
 func AdminUpdateUserGroups(c *gin.Context) {
 	user, ok := adminTargetUser(c)
 	if !ok {
@@ -526,7 +559,22 @@ func AdminUpdateUserGroups(c *gin.Context) {
 		common.ApiErrorT(c, "Invalid input {{error}}", map[string]any{"error": err.Error()})
 		return
 	}
-	authChanged, err := model.UpdateUserGroupOverrides(user.Id, group, extra, hidden)
+	ratios := currentSetting.GroupRatios
+	if req.GroupRatios != nil {
+		ratios = *req.GroupRatios
+		if err := model.ValidateUserGroupRatios(ratios); err != nil {
+			common.ApiErrorT(c, "Invalid input {{error}}", map[string]any{"error": err.Error()})
+			return
+		}
+		// 专属倍率直接决定扣费，只接受有计费倍率的分组，防止写进一个永远不会生效的名字。
+		for name := range ratios {
+			if !ratio_setting.ContainsGroupRatio(name) {
+				common.ApiErrorT(c, "Group {{group}} does not exist", map[string]any{"group": name})
+				return
+			}
+		}
+	}
+	authChanged, err := model.UpdateUserGroupOverrides(user.Id, group, extra, hidden, ratios)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -550,6 +598,7 @@ func AdminUpdateUserGroups(c *gin.Context) {
 		"previous_group":       user.Group,
 		"extra_usable_groups":  extra,
 		"hidden_usable_groups": hidden,
+		"group_ratios":         ratios,
 	})
 	common.ApiSuccess(c, nil)
 }

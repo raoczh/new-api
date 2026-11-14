@@ -62,6 +62,16 @@ type ApiKeyGroupComboboxProps = {
    */
   trigger?: ReactElement
   contentClassName?: string
+  /**
+   * Turns the list into a multi-select: every listed value is ticked, picking
+   * an option reports it without closing the list, so it can be ticked and
+   * cleared in place.
+   */
+  selectedValues?: string[]
+  /** One-line trigger for forms where the picker is not the main field. */
+  compact?: boolean
+  /** Names the built-in trigger, whose role takes no name from its content. */
+  'aria-label'?: string
 }
 
 export function ApiKeyGroupCombobox({
@@ -72,6 +82,9 @@ export function ApiKeyGroupCombobox({
   disabled,
   trigger,
   contentClassName,
+  selectedValues,
+  compact,
+  'aria-label': ariaLabel,
 }: ApiKeyGroupComboboxProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -97,6 +110,7 @@ export function ApiKeyGroupCombobox({
 
   const handleSelect = (selectedValue: string) => {
     onValueChange(selectedValue)
+    if (selectedValues) return
     setOpen(false)
     setSearchValue('')
   }
@@ -110,52 +124,56 @@ export function ApiKeyGroupCombobox({
     />
   ) : (
     <PopoverTrigger
-        render={
-          <Button
-            type='button'
-            variant='outline'
-            role='combobox'
-            aria-expanded={open}
-            data-auto-group-effect={isAutoSelected ? 'trigger' : undefined}
-            disabled={disabled}
-            className={cn(
-              'border-input bg-muted/40 hover:bg-muted/55 hover:text-foreground active:bg-background data-popup-open:border-ring data-popup-open:bg-background data-popup-open:ring-ring/20 relative h-auto min-h-14 w-full justify-between gap-2 rounded-lg px-3 py-2 text-start shadow-none transition-[background-color,border-color,box-shadow] duration-150 data-popup-open:ring-[3px] sm:min-h-20 sm:gap-3 sm:px-4 sm:py-3',
-              isAutoSelected &&
-                cn(
-                  AUTO_GROUP_FRAME_CLASS_NAME,
-                  'hover:border-primary/55 data-popup-open:border-primary/55 data-popup-open:ring-primary/20'
-                )
-            )}
-          />
-        }
-      >
-        {isAutoSelected && (
-          <AutoGroupFlowBorder shouldReduceMotion={shouldReduceMotion} />
-        )}
-        <span className='flex min-w-0 flex-1 items-center justify-between gap-2 sm:gap-3'>
-          <span className='min-w-0'>
-            <span className='block truncate font-medium'>
-              {selectedOption?.label || placeholder || t('Select a group')}
-            </span>
-            {selectedOption?.desc && (
-              <span className='text-muted-foreground block truncate text-[11px] sm:text-xs'>
-                {selectedOption.desc}
-              </span>
-            )}
-          </span>
-          <span className='hidden sm:block'>
-            <GroupRatioBadge
-              ratio={selectedOption?.ratio}
-              isAuto={isAutoSelected}
-              shouldReduceMotion={shouldReduceMotion}
-            />
-          </span>
-        </span>
-        <ChevronsUpDown
-          aria-hidden='true'
-          className='size-4 shrink-0 opacity-50'
+      render={
+        <Button
+          type='button'
+          variant='outline'
+          role='combobox'
+          aria-label={ariaLabel}
+          aria-expanded={open}
+          data-auto-group-effect={isAutoSelected ? 'trigger' : undefined}
+          disabled={disabled}
+          className={cn(
+            'border-input bg-muted/40 hover:bg-muted/55 hover:text-foreground active:bg-background data-popup-open:border-ring data-popup-open:bg-background data-popup-open:ring-ring/20 relative h-auto w-full justify-between gap-2 rounded-lg px-3 py-2 text-start shadow-none transition-[background-color,border-color,box-shadow] duration-150 data-popup-open:ring-[3px]',
+            compact
+              ? 'min-h-9'
+              : 'min-h-14 sm:min-h-20 sm:gap-3 sm:px-4 sm:py-3',
+            isAutoSelected &&
+              cn(
+                AUTO_GROUP_FRAME_CLASS_NAME,
+                'hover:border-primary/55 data-popup-open:border-primary/55 data-popup-open:ring-primary/20'
+              )
+          )}
         />
-      </PopoverTrigger>
+      }
+    >
+      {isAutoSelected && (
+        <AutoGroupFlowBorder shouldReduceMotion={shouldReduceMotion} />
+      )}
+      <span className='flex min-w-0 flex-1 items-center justify-between gap-2 sm:gap-3'>
+        <span className='min-w-0'>
+          <span className='block truncate font-medium'>
+            {selectedOption?.label || placeholder || t('Select a group')}
+          </span>
+          {selectedOption?.desc && (
+            <span className='text-muted-foreground block truncate text-[11px] sm:text-xs'>
+              {selectedOption.desc}
+            </span>
+          )}
+        </span>
+        <span className='hidden sm:block'>
+          <GroupRatioBadge
+            ratio={selectedOption?.ratio}
+            isAuto={isAutoSelected}
+            shouldReduceMotion={shouldReduceMotion}
+          />
+        </span>
+      </span>
+      <ChevronsUpDown
+        aria-hidden='true'
+        className='size-4 shrink-0 opacity-50'
+      />
+    </PopoverTrigger>
   )
 
   return (
@@ -188,6 +206,10 @@ export function ApiKeyGroupCombobox({
                     value={option.value}
                     data-auto-group-effect={isAutoOption ? 'option' : undefined}
                     onSelect={() => handleSelect(option.value)}
+                    aria-checked={
+                      selectedValues?.includes(option.value) ??
+                      value === option.value
+                    }
                     className={cn(
                       'data-[selected=true]:bg-muted items-start gap-3 rounded-lg px-3 py-3 transition-colors',
                       isAutoOption &&
@@ -206,7 +228,10 @@ export function ApiKeyGroupCombobox({
                       aria-hidden='true'
                       className={cn(
                         'mt-0.5 size-4',
-                        value === option.value ? 'opacity-100' : 'opacity-0'
+                        (selectedValues?.includes(option.value) ??
+                          value === option.value)
+                          ? 'opacity-100'
+                          : 'opacity-0'
                       )}
                     />
                     <span className='min-w-0 flex-1'>

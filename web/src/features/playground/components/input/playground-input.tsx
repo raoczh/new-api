@@ -31,17 +31,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 
 import { PROMPT_STARTERS } from '../../constants'
-import type {
-  ModelOption,
-  GroupOption,
-  ParameterEnabled,
-  PlaygroundConfig,
-} from '../../types'
+import type { ModelOption, GroupOption } from '../../types'
 import { PlaygroundInputControls } from './playground-input-controls'
 import { PlaygroundInputTools } from './playground-input-tools'
 
 interface PlaygroundInputProps {
-  config: PlaygroundConfig
   onSubmit: (text: string, attachments?: string[]) => void
   onStop?: () => void
   disabled?: boolean
@@ -56,19 +50,9 @@ interface PlaygroundInputProps {
   groups: GroupOption[]
   groupValue: string
   onGroupChange: (value: string) => void
-  onConfigChange: <K extends keyof PlaygroundConfig>(
-    key: K,
-    value: PlaygroundConfig[K]
-  ) => void
-  onParameterEnabledChange: (
-    key: keyof ParameterEnabled,
-    value: boolean
-  ) => void
-  parameterEnabled: ParameterEnabled
 }
 
 export function PlaygroundInput({
-  config,
   onSubmit,
   onStop,
   disabled,
@@ -82,9 +66,6 @@ export function PlaygroundInput({
   groups,
   groupValue,
   onGroupChange,
-  onConfigChange,
-  onParameterEnabledChange,
-  parameterEnabled,
 }: PlaygroundInputProps) {
   const { t } = useTranslation()
   const [text, setText] = useState('')
@@ -165,7 +146,6 @@ export function PlaygroundInput({
 
         <PromptInputFooter className='border-border/60 bg-muted/20 dark:bg-muted/10 border-t px-3 py-2.5 backdrop-blur'>
           <PlaygroundInputControls
-            config={config}
             disabled={disabled}
             groups={groups}
             groupValue={groupValue}
@@ -173,12 +153,9 @@ export function PlaygroundInput({
             isModelLoading={isModelLoading}
             models={models}
             modelValue={modelValue}
-            onConfigChange={onConfigChange}
             onGroupChange={onGroupChange}
             onModelChange={onModelChange}
-            onParameterEnabledChange={onParameterEnabledChange}
             onStop={onStop}
-            parameterEnabled={parameterEnabled}
             text={text}
             tools={<PlaygroundInputTools disabled={disabled} />}
           />

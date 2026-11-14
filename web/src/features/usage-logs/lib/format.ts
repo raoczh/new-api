@@ -538,6 +538,8 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   'user.oauth_unbind': 'Removed an OAuth binding for the user',
   'user.groups_update': 'Changed the group of user {{username}}',
   'user.token_status_update': 'Updated an API key of user {{username}}',
+  'user.token_group_update':
+    'Changed the group of an API key of user {{username}}',
   'user.token_delete': 'Deleted an API key of user {{username}}',
   'user.token_key_view': 'Viewed an API key of user {{username}}',
   // System settings

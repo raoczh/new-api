@@ -183,13 +183,15 @@ function buildUsageScript(display: UsageDisplay): string {
     .replace(/=+$/, '')
 }
 
-function usageDisplay(status: {
-  quota_display_type?: string
-  quota_per_unit?: number
-  usd_exchange_rate?: number
-  custom_currency_symbol?: string
-  custom_currency_exchange_rate?: number
-} | null): UsageDisplay {
+function usageDisplay(
+  status: {
+    quota_display_type?: string
+    quota_per_unit?: number
+    usd_exchange_rate?: number
+    custom_currency_symbol?: string
+    custom_currency_exchange_rate?: number
+  } | null
+): UsageDisplay {
   const perUnit =
     typeof status?.quota_per_unit === 'number' && status.quota_per_unit > 0
       ? status.quota_per_unit

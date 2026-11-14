@@ -34,12 +34,14 @@ import {
   usePlaygroundState,
 } from './hooks'
 
-export function Playground(props: { initialModel?: string }) {
+export function Playground(props: {
+  initialModel?: string
+  initialGroup?: string
+}) {
   const { t } = useTranslation()
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const {
     config,
-    parameterEnabled,
     messages,
     isLoadingMessages,
     conversations,
@@ -50,15 +52,13 @@ export function Playground(props: { initialModel?: string }) {
     setModels,
     setGroups,
     updateConfig,
-    updateParameterEnabled,
     createNewConversation,
     selectConversation,
     deleteConversation,
-  } = usePlaygroundState(props.initialModel)
+  } = usePlaygroundState(props.initialModel, props.initialGroup)
 
   const { sendChat, stopGeneration, isGenerating } = useChatHandler({
     config,
-    parameterEnabled,
     onMessageUpdate: updateMessages,
   })
 
@@ -79,6 +79,7 @@ export function Playground(props: { initialModel?: string }) {
   const { isLoadingModels, hasNoChatModels } = usePlaygroundOptions({
     currentGroup: config.group,
     currentModel: config.model,
+    linkedModel: props.initialModel,
     setGroups,
     setModels,
     updateConfig,
@@ -165,7 +166,6 @@ export function Playground(props: { initialModel?: string }) {
         <div className='bg-card/50 shrink-0 border-t pb-[env(safe-area-inset-bottom)]'>
           <div className='mx-auto w-full max-w-4xl px-4 py-3 sm:px-6 sm:py-4'>
             <PlaygroundInput
-              config={config}
               disabled={isGenerating}
               groups={groups}
               groupValue={config.group}
@@ -174,13 +174,10 @@ export function Playground(props: { initialModel?: string }) {
               isModelLoading={isLoadingModels}
               modelValue={config.model}
               models={models}
-              onConfigChange={updateConfig}
               onGroupChange={(value) => updateConfig('group', value)}
               onModelChange={(value) => updateConfig('model', value)}
-              onParameterEnabledChange={updateParameterEnabled}
               onStop={stopGeneration}
               onSubmit={handleSendMessage}
-              parameterEnabled={parameterEnabled}
               showPromptStarters={messages.length === 0 && !isLoadingMessages}
             />
           </div>

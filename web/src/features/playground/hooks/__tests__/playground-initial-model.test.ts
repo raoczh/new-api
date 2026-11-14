@@ -54,6 +54,19 @@ describe('playground initial model', () => {
     expect(result.current.config.model).toBe('gpt-x')
   })
 
+  it('starts on the group a link asked for and keeps the stored group otherwise', () => {
+    store.set(
+      `${STORAGE_KEYS.CONFIG}:${user.id}`,
+      JSON.stringify({ version: 1, data: { group: 'stored-group' } })
+    )
+
+    const linked = renderHook(() => usePlaygroundState('gpt-x', 'vip'))
+    const plain = renderHook(() => usePlaygroundState('gpt-x'))
+
+    expect(linked.result.current.config.group).toBe('vip')
+    expect(plain.result.current.config.group).toBe('stored-group')
+  })
+
   it('keeps the stored model when no model was asked for', () => {
     store.set(
       `${STORAGE_KEYS.CONFIG}:${user.id}`,

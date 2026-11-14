@@ -32,17 +32,11 @@ import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
 import { StaticDataTable } from '@/components/data-table'
-import { sideDrawerContentClassName } from '@/components/drawer-layout'
+import { Dialog } from '@/components/dialog'
 import { GroupBadge } from '@/components/group-badge'
 import { PublicLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+import { DialogClose } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PluginIcon } from '@/features/task-plugins/components/plugin-icon'
@@ -1395,11 +1389,19 @@ export interface ModelDetailsContentProps {
   showRechargePrice?: boolean
   /** Rendered next to the model name, e.g. the "start chatting" entry. */
   headerAction?: ReactNode
+  /**
+   * `dialog` leaves the model name to the dialog header and keeps the tab bar
+   * pinned while the content scrolls. The standalone page keeps its own header.
+   */
+  layout?: 'page' | 'dialog'
 }
 
 export function ModelDetailsContent(props: ModelDetailsContentProps) {
   const { t } = useTranslation()
   const showRechargePrice = props.showRechargePrice ?? false
+  const inDialog = props.layout === 'dialog'
+  const description =
+    props.model.description || props.model.vendor_description || null
 
   const isDynamic =
     props.model.billing_mode === 'tiered_expr' &&
@@ -1415,26 +1417,46 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
     simpleTaskPricing ||
     taskTiers.length === 0
 
+  const tabsList = (
+    <TabsList className='bg-muted/60 grid w-full grid-cols-2 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto'>
+      {TAB_VALUES.map((value) => {
+        const Icon = TAB_META[value].icon
+        return (
+          <TabsTrigger
+            key={value}
+            value={value}
+            className='h-8 min-w-0 gap-1.5 rounded-md px-3 text-xs sm:text-sm'
+          >
+            <Icon className='size-3.5' />
+            <span className='truncate'>{t(TAB_META[value].labelKey)}</span>
+          </TabsTrigger>
+        )
+      })}
+    </TabsList>
+  )
+
   return (
     <div className='@container/details space-y-4'>
-      <ModelHeader model={props.model} action={props.headerAction} />
+      {inDialog ? (
+        description && (
+          <p className='text-muted-foreground text-sm leading-relaxed'>
+            {description}
+          </p>
+        )
+      ) : (
+        <ModelHeader model={props.model} action={props.headerAction} />
+      )}
 
-      <Tabs defaultValue='overview' className='gap-4'>
-        <TabsList className='bg-muted/60 grid w-full grid-cols-2 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto'>
-          {TAB_VALUES.map((value) => {
-            const Icon = TAB_META[value].icon
-            return (
-              <TabsTrigger
-                key={value}
-                value={value}
-                className='h-8 min-w-0 gap-1.5 rounded-md px-3 text-xs sm:text-sm'
-              >
-                <Icon className='size-3.5' />
-                <span className='truncate'>{t(TAB_META[value].labelKey)}</span>
-              </TabsTrigger>
-            )
-          })}
-        </TabsList>
+      <Tabs defaultValue='overview' className={inDialog ? 'gap-1' : 'gap-4'}>
+        {inDialog ? (
+          // Pinned to the top of the dialog body so switching tabs never
+          // requires scrolling back up through a long price table.
+          <div className='bg-popover sticky top-0 z-10 -mx-1 px-1 pb-3'>
+            {tabsList}
+          </div>
+        ) : (
+          tabsList
+        )}
 
         <TabsContent value='overview' className='space-y-6 outline-none'>
           <section className='bg-card/60 space-y-5 rounded-xl border p-4 shadow-sm'>
@@ -1486,35 +1508,81 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
 }
 
 // ----------------------------------------------------------------------------
-// Drawer & page wrappers
+// Dialog & page wrappers
 // ----------------------------------------------------------------------------
 
-export interface ModelDetailsDrawerProps extends ModelDetailsContentProps {
+export interface ModelDetailsDialogProps extends ModelDetailsContentProps {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function ModelDetailsDrawer(props: ModelDetailsDrawerProps) {
+/**
+ * Full-size dialog for one model. The model prices page opens it in place, so
+ * the pricing tables get the whole screen width instead of a narrow side
+ * column. The model name stays in the dialog header and the tab bar stays
+ * pinned while the content scrolls; the start-chat entry sits in the footer so
+ * it is reachable from any scroll position.
+ */
+export function ModelDetailsDialog(props: ModelDetailsDialogProps) {
   const { t } = useTranslation()
-  const { open, onOpenChange, ...contentProps } = props
+  const { open, onOpenChange, headerAction, ...contentProps } = props
+  const model = props.model
+  const modelIconKey = model.icon || model.vendor_icon
+  const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 22) : null
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side='right'
-        className={sideDrawerContentClassName(
-          'sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl 2xl:max-w-5xl'
-        )}
-      >
-        <SheetHeader className='sr-only'>
-          <SheetTitle>{props.model.model_name}</SheetTitle>
-          <SheetDescription>{t('Model details')}</SheetDescription>
-        </SheetHeader>
-        <div className='flex-1 overflow-y-auto px-4 pt-11 pb-5 sm:px-6 sm:pt-12 sm:pb-6'>
-          <ModelDetailsContent {...contentProps} />
-        </div>
-      </SheetContent>
-    </Sheet>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={
+        <span className='flex min-w-0 items-center gap-2.5'>
+          {modelIcon ? (
+            <span aria-hidden='true' className='shrink-0'>
+              {modelIcon}
+            </span>
+          ) : null}
+          <span className='truncate'>{model.model_name}</span>
+        </span>
+      }
+      titleAction={
+        <CopyButton
+          value={model.model_name || ''}
+          className='size-7'
+          iconClassName='size-3.5'
+          tooltip={t('Copy model name')}
+          successTooltip={t('Copied!')}
+          aria-label={t('Copy model name')}
+        />
+      }
+      titleClassName='font-mono text-lg leading-7 font-bold tracking-tight sm:text-xl'
+      description={
+        <span className='flex flex-wrap items-center gap-1.5 text-xs'>
+          {model.vendor_name ? (
+            <>
+              <span>{model.vendor_name}</span>
+              <span aria-hidden='true' className='text-muted-foreground/40'>
+                ·
+              </span>
+            </>
+          ) : null}
+          <ModelBillingModeBadge model={model} />
+        </span>
+      }
+      headerClassName='gap-1.5 pe-8'
+      contentClassName='sm:max-w-5xl'
+      contentHeight='min(68vh, 44rem)'
+      footerClassName='sm:items-center'
+      footer={
+        <>
+          <DialogClose render={<Button type='button' variant='outline' />}>
+            {t('Close')}
+          </DialogClose>
+          {headerAction}
+        </>
+      }
+    >
+      <ModelDetailsContent {...contentProps} layout='dialog' />
+    </Dialog>
   )
 }
 
@@ -1611,7 +1679,14 @@ export function ModelDetails() {
           priceRate={priceRate ?? 1}
           usdExchangeRate={usdExchangeRate ?? 1}
           tokenUnit={tokenUnit}
-          headerAction={<StartChatAction modelName={model.model_name} />}
+          headerAction={
+            <StartChatAction
+              modelName={model.model_name}
+              group={model.enable_groups?.find((group) =>
+                Object.hasOwn(usableGroup ?? {}, group)
+              )}
+            />
+          }
           endpointMap={
             (endpointMap as Record<
               string,

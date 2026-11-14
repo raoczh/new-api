@@ -25,7 +25,6 @@ import {
 } from '../../constants'
 import type {
   PlaygroundConfig,
-  ParameterEnabled,
   Message,
   PlaygroundConversationIndex,
 } from '../../types'
@@ -45,7 +44,6 @@ import {
   STORAGE_VERSION,
   conversationIndexSchema,
   messagesSchema,
-  parameterEnabledSchema,
   playgroundConfigSchema,
 } from './storage-schema'
 
@@ -335,37 +333,6 @@ export function saveConfig(config: Partial<PlaygroundConfig>): void {
 }
 
 /**
- * Load parameter enabled state from localStorage
- */
-export function loadParameterEnabled(): Partial<ParameterEnabled> {
-  try {
-    const saved = readStoredValue(STORAGE_KEYS.PARAMETER_ENABLED)
-    if (!saved) return {}
-
-    return parameterEnabledSchema.parse(unwrapStoredValue(saved))
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to load parameter enabled:', error)
-  }
-  return {}
-}
-
-/**
- * Save parameter enabled state to localStorage
- */
-export function saveParameterEnabled(
-  parameterEnabled: Partial<ParameterEnabled>
-): void {
-  try {
-    const parsed = parameterEnabledSchema.parse(parameterEnabled)
-    writeStoredValue(STORAGE_KEYS.PARAMETER_ENABLED, parsed)
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to save parameter enabled:', error)
-  }
-}
-
-/**
  * Load messages for a conversation from localStorage
  */
 export function loadMessages(conversationId: string): Message[] | null {
@@ -420,10 +387,7 @@ export function saveMessages(
         }),
       }))
     ) as Message[]
-    writeStoredValue(
-      `${CONVERSATION_MESSAGES_PREFIX}${conversationId}`,
-      parsed
-    )
+    writeStoredValue(`${CONVERSATION_MESSAGES_PREFIX}${conversationId}`, parsed)
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to save messages:', error)

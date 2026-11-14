@@ -106,8 +106,8 @@ export function buildApiReferencePages(urls: DocUrls): DocPage[] {
             {
               type: 'note',
               text: {
-                en: 'Which endpoints a model supports is listed under “Endpoint type” in Model Square. Files and fine-tuning endpoints are not available.',
-                zh: '每个模型支持哪些接口，以模型广场中的“端点类型”为准。文件和微调相关接口不可用。',
+                en: 'Which endpoints a model supports is listed under “Endpoint type” on the model prices page. Files and fine-tuning endpoints are not available.',
+                zh: '每个模型支持哪些接口，以模型价格页中的“端点类型”为准。文件和微调相关接口不可用。',
               },
             },
           ],
@@ -385,8 +385,8 @@ export function buildApiReferencePages(urls: DocUrls): DocPage[] {
             {
               type: 'p',
               text: {
-                en: 'Image models are usually billed per image, and size, quality and n change the price. Check the model’s price examples in Model Square before generating in bulk. Editing uses POST /v1/images/edits with multipart form data.',
-                zh: '图像模型通常按张计费，尺寸、质量和 n 都会影响价格。批量生成前请先在模型广场查看该模型的价格示例。图像编辑使用 POST /v1/images/edits，以 multipart 表单提交。',
+                en: 'Image models are usually billed per image, and size, quality and n change the price. Check the model’s price examples on the model prices page before generating in bulk. Editing uses POST /v1/images/edits with multipart form data.',
+                zh: '图像模型通常按张计费，尺寸、质量和 n 都会影响价格。批量生成前请先在模型价格页查看该模型的价格示例。图像编辑使用 POST /v1/images/edits，以 multipart 表单提交。',
               },
             },
           ],

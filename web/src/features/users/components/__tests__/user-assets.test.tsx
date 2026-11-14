@@ -143,28 +143,47 @@ it('opens quota, group and key dialogs from their own row buttons', async () => 
   expect(screen.getByRole('button', { name: 'Disable' })).toBeVisible()
 })
 
-it('shows which groups a user can use and saves only the group fields', async () => {
+/** Groups as the server reports them for a user whose own group is default. */
+const groupsOfManagedUser = {
+  group: 'default',
+  groups: [
+    {
+      name: 'default',
+      desc: 'Standard group',
+      ratio: 1,
+      usable: true,
+      default_ratio: 1,
+      default_usable: true,
+      has_ratio: true,
+    },
+    {
+      name: 'vip',
+      desc: 'Premium group',
+      ratio: 0.5,
+      usable: true,
+      default_ratio: 0.5,
+      default_usable: true,
+      has_ratio: true,
+    },
+    {
+      name: 'partner',
+      desc: 'Partner group',
+      ratio: 2,
+      usable: false,
+      default_ratio: 2,
+      default_usable: false,
+      has_ratio: true,
+    },
+  ],
+  extra_usable_groups: [],
+  hidden_usable_groups: [],
+  group_ratios: {},
+}
+
+function renderGroupsDialog(groups: object = groupsOfManagedUser) {
   vi.spyOn(api, 'get').mockImplementation(async (url) => {
     if (url === '/api/user/2/groups') {
-      return {
-        data: {
-          success: true,
-          data: {
-            group: 'default',
-            groups: [
-              {
-                name: 'default',
-                desc: 'Standard group',
-                ratio: 1,
-                usable: true,
-              },
-              { name: 'vip', desc: 'Premium group', ratio: 0.5, usable: false },
-            ],
-            extra_usable_groups: [],
-            hidden_usable_groups: [],
-          },
-        },
-      }
+      return { data: { success: true, data: groups } }
     }
     throw new Error(`Unexpected GET ${url}`)
   })
@@ -178,48 +197,138 @@ it('shows which groups a user can use and saves only the group fields', async ()
       user={{ id: 2, username: 'managed-user' }}
     />
   )
+  return put
+}
 
-  expect(await screen.findByText('Not usable')).toBeVisible()
-  expect(await screen.findByText('Premium group')).toBeVisible()
-  expect(screen.getAllByText('Own group').length).toBeGreaterThan(0)
+it('lists every group with a tick for the ones the user can use', async () => {
+  renderGroupsDialog()
 
+  expect(await screen.findByRole('checkbox', { name: /^vip/ })).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: /^partner/ })).not.toBeChecked()
+  // The own group is always usable, so it cannot be cleared.
+  expect(screen.getByRole('checkbox', { name: /^default/ })).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: /^default/ })).toHaveAttribute(
+    'aria-disabled',
+    'true'
+  )
+  expect(screen.getByText('Premium group')).toBeVisible()
+  expect(screen.getByText('2 of 3 usable')).toBeVisible()
+})
+
+it('ticking and clearing groups saves them as the extra visible and hidden groups', async () => {
+  const put = renderGroupsDialog()
+
+  await userEvent.click(await screen.findByRole('checkbox', { name: /^vip/ }))
+  await userEvent.click(screen.getByRole('checkbox', { name: /^partner/ }))
+  expect(screen.getByText('Blocked for this user')).toBeVisible()
+  expect(screen.getByText('Added for this user')).toBeVisible()
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
   await waitFor(() =>
     expect(put).toHaveBeenCalledWith('/api/user/2/groups', {
       group: 'default',
-      extra_usable_groups: [],
-      hidden_usable_groups: [],
+      extra_usable_groups: ['partner'],
+      hidden_usable_groups: ['vip'],
+      group_ratios: {},
     })
   )
 })
 
-it('keeps the full key behind verification and deletes with its own proof', async () => {
-  const get = vi.spyOn(api, 'get').mockImplementation(async (url) => {
+it('ticking a hidden group again removes the override instead of adding another', async () => {
+  const put = renderGroupsDialog({
+    ...groupsOfManagedUser,
+    groups: groupsOfManagedUser.groups.map((group) =>
+      group.name === 'vip' ? { ...group, usable: false } : group
+    ),
+    hidden_usable_groups: ['vip'],
+  })
+
+  await userEvent.click(await screen.findByRole('checkbox', { name: /^vip/ }))
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/user/2/groups',
+      expect.objectContaining({
+        extra_usable_groups: [],
+        hidden_usable_groups: [],
+      })
+    )
+  )
+})
+
+it('a ratio typed for a group is saved for this user and an emptied one is removed', async () => {
+  const put = renderGroupsDialog({
+    ...groupsOfManagedUser,
+    group_ratios: { default: 0.8 },
+  })
+
+  const vipRatio = await screen.findByRole('textbox', {
+    name: 'Ratio of vip for this user',
+  })
+  // The saved ratio is shown, and an empty field offers the default one.
+  expect(
+    screen.getByRole('textbox', { name: 'Ratio of default for this user' })
+  ).toHaveValue('0.8')
+  expect(vipRatio).toHaveAttribute('placeholder', '0.5')
+
+  await userEvent.type(vipRatio, '0.3')
+  await userEvent.clear(
+    screen.getByRole('textbox', { name: 'Ratio of default for this user' })
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/user/2/groups',
+      expect.objectContaining({ group_ratios: { vip: 0.3 } })
+    )
+  )
+})
+
+it.each(['-1', 'abc', '1000.5'])(
+  'a ratio of %s is pointed out and nothing is saved',
+  async (typed) => {
+    const put = renderGroupsDialog()
+
+    const vipRatio = await screen.findByRole('textbox', {
+      name: 'Ratio of vip for this user',
+    })
+    await userEvent.type(vipRatio, typed)
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(vipRatio).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'A ratio must be a number from 0 to 1000.'
+    )
+    expect(put).not.toHaveBeenCalled()
+  }
+)
+
+/** One key of the managed user, as the masked admin listing returns it. */
+const managedKey = {
+  id: 5,
+  name: 'ci',
+  key: 'sk-abc***xyz',
+  status: 1,
+  remain_quota: 0,
+  used_quota: 0,
+  unlimited_quota: true,
+  expired_time: -1,
+  created_time: 0,
+  accessed_time: 0,
+  group: 'default',
+}
+
+function mockManagedKeys() {
+  return vi.spyOn(api, 'get').mockImplementation(async (url) => {
     if (url === '/api/user/2/tokens') {
       return {
-        data: {
-          success: true,
-          data: {
-            items: [
-              {
-                id: 5,
-                name: 'ci',
-                key: 'sk-abc***xyz',
-                status: 1,
-                remain_quota: 0,
-                used_quota: 0,
-                unlimited_quota: true,
-                expired_time: -1,
-                created_time: 0,
-                accessed_time: 0,
-                group: 'default',
-              },
-            ],
-            total: 1,
-          },
-        },
+        data: { success: true, data: { items: [managedKey], total: 1 } },
       }
+    }
+    if (url === '/api/user/2/groups') {
+      return { data: { success: true, data: groupsOfManagedUser } }
     }
     if (url === '/api/verify/methods') {
       return {
@@ -234,24 +343,11 @@ it('keeps the full key behind verification and deletes with its own proof', asyn
         },
       }
     }
-    if (url === '/api/user/2/tokens/5/key') {
-      return { data: { success: true, data: { key: 'sk-secret-full-key' } } }
-    }
     throw new Error(`Unexpected GET ${url}`)
   })
-  const post = vi.spyOn(api, 'post').mockImplementation(async (url) => {
-    if (url === '/api/verify') {
-      return mockVerification('admin.user.manage', 'key-proof')
-    }
-    if (url === '/api/user/2/tokens/5/status') {
-      return { data: { success: true } }
-    }
-    throw new Error(`Unexpected POST ${url}`)
-  })
-  const del = vi
-    .spyOn(api, 'delete')
-    .mockResolvedValue({ data: { success: true } })
+}
 
+function renderKeysDialog() {
   renderInProvider(
     <UserApiKeysDialog
       open
@@ -259,26 +355,59 @@ it('keeps the full key behind verification and deletes with its own proof', asyn
       user={{ id: 2, username: 'managed-user' }}
     />
   )
+}
 
-  // 列表只拿到掩码，明文要等二次校验。
+it('shows keys masked and offers no way to read a full key', async () => {
+  const get = mockManagedKeys()
+  renderKeysDialog()
+
   expect(await screen.findByText('sk-abc***xyz')).toBeVisible()
-  await userEvent.click(screen.getByRole('button', { name: 'View full key' }))
+  expect(
+    screen.queryByRole('button', { name: 'View full key' })
+  ).not.toBeInTheDocument()
   expect(get).not.toHaveBeenCalledWith(
     '/api/user/2/tokens/5/key',
     expect.anything()
   )
-  await completeTwoFactorVerification()
-  expect(await screen.findByText('sk-secret-full-key')).toBeVisible()
-  expect(post).toHaveBeenCalledWith(
-    '/api/verify',
-    expect.objectContaining({
-      scope: 'admin.user.manage',
-      context: { user_id: 2, action: 'token_key_read' },
-    }),
-    expect.anything()
-  )
+})
 
-  await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+it('moves a key to another group the user can use', async () => {
+  mockManagedKeys()
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true } })
+  renderKeysDialog()
+
+  const groupPicker = await screen.findByRole('combobox', {
+    name: 'Change group for ci',
+  })
+  await waitFor(() => expect(groupPicker).toBeEnabled())
+  await userEvent.click(groupPicker)
+  // Only groups the owner can use are offered.
+  expect(screen.queryByRole('option', { name: /partner/ })).toBeNull()
+  await userEvent.click(await screen.findByRole('option', { name: /vip/ }))
+
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith('/api/user/2/tokens/5/group', {
+      group: 'vip',
+    })
+  )
+  expect(
+    screen.queryByLabelText('Authenticator code or backup code')
+  ).toBeNull()
+})
+
+it('deletes a key only with a proof bound to that user and action', async () => {
+  mockManagedKeys()
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValue(mockVerification('admin.user.manage', 'key-proof'))
+  const del = vi
+    .spyOn(api, 'delete')
+    .mockResolvedValue({ data: { success: true } })
+  renderKeysDialog()
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Delete' }))
   const confirmation = await screen.findByRole('alertdialog')
   await userEvent.click(
     within(confirmation).getByRole('button', { name: 'Delete' })
@@ -304,45 +433,12 @@ it('keeps the full key behind verification and deletes with its own proof', asyn
 })
 
 it('toggles a key status without a verification round trip', async () => {
-  vi.spyOn(api, 'get').mockImplementation(async (url) => {
-    if (url === '/api/user/2/tokens') {
-      return {
-        data: {
-          success: true,
-          data: {
-            items: [
-              {
-                id: 5,
-                name: 'ci',
-                key: 'sk-abc***xyz',
-                status: 1,
-                remain_quota: 0,
-                used_quota: 0,
-                unlimited_quota: true,
-                expired_time: -1,
-                created_time: 0,
-                accessed_time: 0,
-                group: 'default',
-              },
-            ],
-            total: 1,
-          },
-        },
-      }
-    }
-    throw new Error(`Unexpected GET ${url}`)
-  })
+  mockManagedKeys()
   const post = vi
     .spyOn(api, 'post')
     .mockResolvedValue({ data: { success: true } })
 
-  renderInProvider(
-    <UserApiKeysDialog
-      open
-      onOpenChange={() => undefined}
-      user={{ id: 2, username: 'managed-user' }}
-    />
-  )
+  renderKeysDialog()
 
   await userEvent.click(await screen.findByRole('button', { name: 'Disable' }))
 

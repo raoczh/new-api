@@ -118,10 +118,7 @@ func GetGroupStatus(c *gin.Context) {
 	}
 	for i := range result.Groups {
 		name := result.Groups[i].Group
-		result.Groups[i].GroupRatio = ratio_setting.GetGroupRatio(name)
-		if ratio, ok := ratio_setting.GetGroupGroupRatio(userGroup, name); userGroup != "" && ok {
-			result.Groups[i].GroupRatio = ratio
-		}
+		result.Groups[i].GroupRatio = service.GetUserGroupRatio(userGroup, userSetting, name)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

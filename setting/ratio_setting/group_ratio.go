@@ -3,6 +3,7 @@ package ratio_setting
 import (
 	"encoding/json"
 	"errors"
+	"math"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/config"
@@ -95,6 +96,32 @@ func GetGroupGroupRatio(userGroup, usingGroup string) (float64, bool) {
 		return -1, false
 	}
 	return ratio, true
+}
+
+// MaxUserGroupRatio bounds the ratio an administrator can give one user in a
+// group, so a typing mistake cannot multiply a charge without limit.
+const MaxUserGroupRatio = 1000.0
+
+// IsValidUserGroupRatio reports whether ratio can be charged to a single user.
+// Zero is allowed and makes the group free for that user, the same as a group
+// ratio of zero does for everyone.
+func IsValidUserGroupRatio(ratio float64) bool {
+	return !math.IsNaN(ratio) && ratio >= 0 && ratio <= MaxUserGroupRatio
+}
+
+// ResolveGroupRatio returns the group ratio one user is charged in usingGroup.
+// The ratio set for that user comes first, then the ratio configured between
+// the user's group and usingGroup, then the ratio of usingGroup itself.
+// special is true when one of the first two applies. A stored user ratio that
+// is not valid is ignored instead of being charged.
+func ResolveGroupRatio(userRatios map[string]float64, userGroup, usingGroup string) (ratio float64, special bool) {
+	if ratio, ok := userRatios[usingGroup]; ok && IsValidUserGroupRatio(ratio) {
+		return ratio, true
+	}
+	if ratio, ok := GetGroupGroupRatio(userGroup, usingGroup); ok {
+		return ratio, true
+	}
+	return GetGroupRatio(usingGroup), false
 }
 
 func GroupGroupRatio2JSONString() string {

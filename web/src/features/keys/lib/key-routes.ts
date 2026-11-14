@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { ApiKey } from '../types'
 import type { ApiKeyFormValues } from './api-key-form'
 
 /** Groups without a configured vendor are offered together under this id. */
@@ -119,6 +120,24 @@ export function routeToKeyGroups(
     auto_groups: [],
     cross_group_retry: false,
   }
+}
+
+/**
+ * The ordered lines a stored key uses, the inverse of routeToKeyGroups. An
+ * Auto key without an order of its own follows the site-wide order; lines the
+ * account can no longer use are left out of an Auto order. A key that follows
+ * the account's group has no line of its own.
+ */
+export function keyToRoute(
+  apiKey: Pick<ApiKey, 'group' | 'auto_groups'>,
+  globalAutoGroups: string[],
+  availableLines: string[]
+): string[] {
+  if (apiKey.group !== 'auto') return apiKey.group ? [apiKey.group] : []
+  const own = apiKey.auto_groups ?? []
+  return (own.length > 0 ? own : globalAutoGroups).filter((line) =>
+    availableLines.includes(line)
+  )
 }
 
 /** Default key name: the vendor followed by the first line. */

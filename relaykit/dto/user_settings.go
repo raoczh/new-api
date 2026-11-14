@@ -38,6 +38,11 @@ type UserSetting struct {
 	// The user's own group always stays visible and cannot be hidden.
 	ExtraUsableGroups  []string `json:"extra_usable_groups,omitempty"`
 	HiddenUsableGroups []string `json:"hidden_usable_groups,omitempty"`
+
+	// GroupRatios holds the billing ratio an administrator set for this user in
+	// a group. It replaces the ratio of that group and the ratio configured
+	// between user groups; a group that is not listed keeps the usual ratio.
+	GroupRatios map[string]float64 `json:"group_ratios,omitempty"`
 }
 
 var (

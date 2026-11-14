@@ -22,6 +22,7 @@ import {
   useReactTable,
   type ColumnDef,
 } from '@tanstack/react-table'
+import { ChevronsUpDown } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -31,9 +32,12 @@ import { DataTablePagination, DataTableView } from '@/components/data-table'
 import { Dialog } from '@/components/dialog'
 import { ErrorState } from '@/components/error-state'
 import { LoadingState } from '@/components/loading-state'
-import { MaskedValueDisplay } from '@/components/masked-value-display'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
+import {
+  ApiKeyGroupCombobox,
+  type ApiKeyGroupOption,
+} from '@/features/keys/components/api-key-group-combobox'
 import { API_KEY_STATUS, API_KEY_STATUSES } from '@/features/keys/constants'
 import { handleServerError } from '@/lib/handle-server-error'
 import { AuthOperationError } from '@/lib/secure-verification'
@@ -46,7 +50,8 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 import {
   deleteUserApiKey,
   getUserApiKeys,
-  revealUserApiKey,
+  getUserGroups,
+  setUserApiKeyGroup,
   setUserApiKeyStatus,
 } from '../../api'
 import { ERROR_MESSAGES } from '../../constants'
@@ -63,15 +68,15 @@ interface UserApiKeysDialogProps {
 const PAGE_SIZE = 10
 
 /**
- * Administrator view of one user's API keys. Listing shows masked keys only;
- * reading a full key or deleting one is a separate, step-up verified action.
+ * Administrator view of one user's API keys. Keys are shown masked. A key can
+ * be moved to another group the user may use, switched on or off, or deleted;
+ * deleting is a separate, step-up verified action.
  */
 export function UserApiKeysDialog(props: UserApiKeysDialogProps) {
   const { t } = useTranslation()
   const { requestVerification, verificationActive } = useUsers()
   useSystemConfigStore((state) => state.config.currency)
   const [pageIndex, setPageIndex] = useState(0)
-  const [revealedKeys, setRevealedKeys] = useState<Record<number, string>>({})
   const [pendingDelete, setPendingDelete] = useState<AdminUserApiKey | null>(
     null
   )
@@ -87,6 +92,54 @@ export function UserApiKeysDialog(props: UserApiKeysDialogProps) {
         await getUserApiKeys(userId, pageIndex + 1, PAGE_SIZE)
       ),
   })
+
+  // A key can only be moved to a group its owner may use, so the choices come
+  // from that user's groups rather than from the administrator's own.
+  const userGroups = useQuery({
+    queryKey: ['users', userId, 'groups'],
+    enabled: props.open && userId > 0,
+    queryFn: async () => requireServerSuccess(await getUserGroups(userId)),
+  })
+  const groupOptions: ApiKeyGroupOption[] = [
+    { value: '', label: t('Follow user group') },
+    ...(userGroups.data?.data?.groups ?? [])
+      .filter((item) => item.usable && (item.has_ratio || item.name === 'auto'))
+      .map((item) => ({
+        value: item.name,
+        label: item.name,
+        desc: item.desc,
+        ratio: item.has_ratio ? item.ratio : undefined,
+      })),
+  ]
+
+  const handleGroupChange = async (apiKey: AdminUserApiKey, group: string) => {
+    if (group === (apiKey.group || '')) return
+    setBusyKeyId(apiKey.id)
+    try {
+      const result = await setUserApiKeyGroup(userId, apiKey.id, group)
+      if (result.success) {
+        toast.success(
+          t('Group changed to {{group}}', {
+            group: group || t('Follow user group'),
+          })
+        )
+        void keys.refetch()
+        props.onSuccess?.()
+      } else {
+        handleServerError(
+          result,
+          t('Failed to change the group of the API key')
+        )
+      }
+    } catch (error) {
+      handleServerError(
+        AuthOperationError.from(error),
+        t(ERROR_MESSAGES.UNEXPECTED)
+      )
+    } finally {
+      setBusyKeyId(null)
+    }
+  }
 
   const handleToggleStatus = async (apiKey: AdminUserApiKey) => {
     const nextStatus =
@@ -106,42 +159,6 @@ export function UserApiKeysDialog(props: UserApiKeysDialogProps) {
         props.onSuccess?.()
       } else {
         handleServerError(result, t('Failed to update API key status'))
-      }
-    } catch (error) {
-      handleServerError(
-        AuthOperationError.from(error),
-        t(ERROR_MESSAGES.UNEXPECTED)
-      )
-    } finally {
-      setBusyKeyId(null)
-    }
-  }
-
-  const handleReveal = async (apiKey: AdminUserApiKey) => {
-    setBusyKeyId(apiKey.id)
-    try {
-      const proof = await requestVerification({
-        scope: 'admin.user.manage',
-        context: { user_id: userId, action: 'token_key_read' },
-        title: t('Verify to view API key'),
-        description: t(
-          'Confirm your identity before viewing the API key of {{username}}.',
-          { username }
-        ),
-      })
-      if (!proof) return
-      const result = await revealUserApiKey(
-        userId,
-        apiKey.id,
-        proof.proof_token
-      )
-      if (result.success && result.data?.key) {
-        setRevealedKeys((previous) => ({
-          ...previous,
-          [apiKey.id]: result.data?.key ?? '',
-        }))
-      } else {
-        handleServerError(result, t('Failed to read API key'))
       }
     } catch (error) {
       handleServerError(
@@ -174,7 +191,6 @@ export function UserApiKeysDialog(props: UserApiKeysDialogProps) {
       )
       if (result.success) {
         toast.success(t('API key deleted'))
-        setRevealedKeys(({ [apiKey.id]: _removed, ...rest }) => rest)
         void keys.refetch()
         props.onSuccess?.()
       } else {
@@ -201,38 +217,11 @@ export function UserApiKeysDialog(props: UserApiKeysDialogProps) {
     {
       id: 'key',
       header: t('API Key'),
-      cell: ({ row }) => {
-        const apiKey = row.original
-        const revealed = revealedKeys[apiKey.id]
-        if (revealed) {
-          return (
-            <MaskedValueDisplay
-              label={t('API Key')}
-              fullValue={revealed}
-              maskedValue={revealed}
-              copyTooltip={t('Copy API key')}
-              copyAriaLabel={t('Copy API key')}
-            />
-          )
-        }
-        return (
-          <div className='flex items-center gap-2'>
-            <span className='text-muted-foreground font-mono text-xs'>
-              {apiKey.key || '-'}
-            </span>
-            <Button
-              type='button'
-              variant='ghost'
-              size='sm'
-              className='h-7 px-2 text-xs'
-              disabled={busyKeyId === apiKey.id}
-              onClick={() => void handleReveal(apiKey)}
-            >
-              {t('View full key')}
-            </Button>
-          </div>
-        )
-      },
+      cell: ({ row }) => (
+        <span className='text-muted-foreground font-mono text-xs'>
+          {row.original.key || '-'}
+        </span>
+      ),
     },
     {
       accessorKey: 'status',
@@ -253,9 +242,32 @@ export function UserApiKeysDialog(props: UserApiKeysDialogProps) {
       accessorKey: 'group',
       header: t('Group'),
       cell: ({ row }) => (
-        <span className='text-sm'>
-          {row.original.group || t('Follow user group')}
-        </span>
+        <ApiKeyGroupCombobox
+          options={groupOptions}
+          value={row.original.group || ''}
+          onValueChange={(group) => void handleGroupChange(row.original, group)}
+          disabled={busyKeyId === row.original.id || !userGroups.isSuccess}
+          contentClassName='min-w-72'
+          trigger={
+            <Button
+              type='button'
+              variant='outline'
+              size='sm'
+              aria-label={t('Change group for {{name}}', {
+                name: row.original.name,
+              })}
+              className='h-7 max-w-48 justify-between gap-1.5 px-2 text-xs font-normal'
+            >
+              <span className='truncate'>
+                {row.original.group || t('Follow user group')}
+              </span>
+              <ChevronsUpDown
+                aria-hidden='true'
+                className='text-muted-foreground size-3.5 shrink-0'
+              />
+            </Button>
+          }
+        />
       ),
     },
     {
@@ -328,7 +340,7 @@ export function UserApiKeysDialog(props: UserApiKeysDialogProps) {
         onOpenChange={props.onOpenChange}
         title={t('API keys of {{username}}', { username })}
         description={t(
-          'Keys belong to this user. Disabling or deleting one interrupts whatever it is being used for right away.'
+          'Keys belong to this user. Changing the group, disabling or deleting a key takes effect on its next request.'
         )}
         contentClassName='sm:max-w-5xl'
         bodyClassName='space-y-4'

@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, Route, Sparkles } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm, type SubmitErrorHandler } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -44,7 +44,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { getUserGroups, getUserModels } from '@/lib/api'
 import { handleServerError } from '@/lib/handle-server-error'
 import { getLobeIcon } from '@/lib/lobe-icon'
@@ -54,20 +53,28 @@ import {
 } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
-import { createApiKey, getTokenAutoGroups } from '../api'
-import { ERROR_MESSAGES } from '../constants'
+import {
+  createApiKey,
+  getApiKey,
+  getTokenAutoGroups,
+  updateApiKey,
+} from '../api'
+import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
   API_KEY_FORM_DEFAULT_VALUES,
   getApiKeyFormSchema,
   groupKeyVendors,
+  keyToRoute,
   resolveVendorAutoRoute,
   routeToKeyGroups,
   suggestKeyName,
+  transformApiKeyToFormDefaults,
   transformFormDataToPayload,
   UNASSIGNED_VENDOR_ID,
   type ApiKeyFormValues,
   type KeyVendorChoice,
 } from '../lib'
+import type { ApiKey } from '../types'
 import {
   ApiKeyAccessFields,
   ApiKeyCountField,
@@ -77,29 +84,34 @@ import {
 import type { ApiKeyGroupOption } from './api-key-group-combobox'
 import { useApiKeys } from './api-keys-provider'
 import { AutoGroupOrderEditor } from './auto-group-order-editor'
-import { GroupRatioBadge } from './auto-group-visuals'
 
-type RouteMode = 'auto' | 'custom'
-
-type ApiKeyCreateDialogProps = {
+type ApiKeyFormDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** The key to edit. Without one the dialog creates a key. */
+  apiKey?: ApiKey
 }
 
 /**
- * Creating a key starts from the model vendor instead of a raw group list:
- * pick a vendor, and the lines the administrator arranged for it are used in
- * order. Reordering or replacing a line switches the key to a custom route.
+ * Creating or editing a key starts from the model vendor instead of a raw
+ * group list: pick a vendor, and the lines the administrator arranged for it
+ * are ticked in that order. The lines can be ticked, cleared and reordered in
+ * place. An edited key opens on the lines it already uses.
  */
-export function ApiKeyCreateDialog(props: ApiKeyCreateDialogProps) {
+export function ApiKeyFormDialog(props: ApiKeyFormDialogProps) {
   const { t } = useTranslation()
   const { triggerRefresh, setCreatedKeyId, setOpen } = useApiKeys()
+  const editedKeyId = props.apiKey?.id
+  const isUpdate = editedKeyId !== undefined
   const [vendorId, setVendorId] = useState<number | null>(null)
-  const [routeMode, setRouteMode] = useState<RouteMode>('auto')
-  const [customRoute, setCustomRoute] = useState<string[]>([])
+  // Null until the user changes the lines: a new key uses the vendor's
+  // default so far, an edited key the lines it was saved with.
+  const [editedRoute, setEditedRoute] = useState<string[] | null>(null)
   const [nameEdited, setNameEdited] = useState(false)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // The key whose stored values the form currently holds.
+  const [loadedKeyId, setLoadedKeyId] = useState<number | null>(null)
 
   const groupsQuery = useQuery({
     queryKey: ['user-groups'],
@@ -119,6 +131,15 @@ export function ApiKeyCreateDialog(props: ApiKeyCreateDialogProps) {
     enabled: props.open,
     staleTime: 0,
   })
+  // The list row can hold a stale quota, so editing starts from the stored key.
+  const keyQuery = useQuery({
+    queryKey: ['api-key', editedKeyId],
+    queryFn: async () =>
+      requireServerSuccess(await getApiKey(editedKeyId ?? 0)),
+    enabled: props.open && isUpdate,
+    staleTime: 0,
+  })
+  const storedKey = isUpdate ? keyQuery.data?.data : undefined
 
   const groupOptions = useMemo<ApiKeyGroupOption[]>(
     () =>
@@ -149,12 +170,28 @@ export function ApiKeyCreateDialog(props: ApiKeyCreateDialogProps) {
     defaultValues: API_KEY_FORM_DEFAULT_VALUES,
   })
 
-  const vendor = vendors.find((choice) => choice.id === vendorId) ?? vendors[0]
-  const vendorOptions = useMemo(
+  const availableLines = useMemo(
     () =>
-      groupOptions.filter((option) => vendor?.groups.includes(option.value)),
-    [groupOptions, vendor]
+      groupOptions
+        .filter((option) => option.value !== 'auto')
+        .map((option) => option.value),
+    [groupOptions]
   )
+  const storedRoute = useMemo(
+    () =>
+      storedKey
+        ? keyToRoute(storedKey, globalAutoGroups ?? [], availableLines).slice(
+            0,
+            maxLines
+          )
+        : [],
+    [storedKey, globalAutoGroups, availableLines, maxLines]
+  )
+  // An edited key opens on the vendor of its first line.
+  const vendor =
+    vendors.find((choice) => choice.id === vendorId) ??
+    vendors.find((choice) => choice.groups.includes(storedRoute[0] ?? '')) ??
+    vendors[0]
   const autoRoute = useMemo(
     () =>
       vendor
@@ -166,7 +203,17 @@ export function ApiKeyCreateDialog(props: ApiKeyCreateDialogProps) {
         : [],
     [vendor, globalAutoGroups, maxLines]
   )
-  const route = routeMode === 'auto' ? autoRoute : customRoute
+  const route = editedRoute ?? (isUpdate ? storedRoute : autoRoute)
+  // Lines of another vendor that the key already uses stay listed, so they
+  // keep their ratio and can be cleared.
+  const vendorOptions = useMemo(
+    () =>
+      groupOptions.filter(
+        (option) =>
+          vendor?.groups.includes(option.value) || route.includes(option.value)
+      ),
+    [groupOptions, vendor, route]
+  )
   const firstLine = route[0] ?? ''
   const vendorName = vendor ? getVendorLabel(vendor, t('Other models')) : ''
   const suggestedName = suggestKeyName(vendorName, firstLine)
@@ -176,34 +223,110 @@ export function ApiKeyCreateDialog(props: ApiKeyCreateDialogProps) {
     if (props.open) return
     form.reset(API_KEY_FORM_DEFAULT_VALUES)
     setVendorId(null)
-    setRouteMode('auto')
-    setCustomRoute([])
+    setEditedRoute(null)
     setNameEdited(false)
     setOptionsOpen(false)
+    setLoadedKeyId(null)
   }, [props.open, form])
 
-  // The name follows the vendor and first line until the user types their own.
+  const listsReady =
+    groupsQuery.isFetched &&
+    !groupsQuery.isFetching &&
+    autoGroupsQuery.isFetched &&
+    !autoGroupsQuery.isFetching
+  // An edited key fills the form once, when it and the lines have loaded.
   useEffect(() => {
-    if (!props.open || nameEdited) return
-    form.setValue('name', suggestedName)
-  }, [props.open, nameEdited, suggestedName, form])
+    if (!props.open || !storedKey || !listsReady) return
+    if (keyQuery.isFetching || loadedKeyId === storedKey.id) return
+    form.reset(
+      transformApiKeyToFormDefaults(storedKey, availableLines, maxLines)
+    )
+    setLoadedKeyId(storedKey.id)
+    // The limits are what an existing key is usually opened for.
+    setOptionsOpen(true)
+  }, [
+    props.open,
+    storedKey,
+    listsReady,
+    keyQuery.isFetching,
+    loadedKeyId,
+    form,
+    availableLines,
+    maxLines,
+  ])
 
-  const isReady = groupsQuery.isFetched && autoGroupsQuery.isFetched
-  const hasFailed = groupsQuery.isError || autoGroupsQuery.isError
+  // The name of a new key follows the vendor and first line until the user
+  // types their own.
+  useEffect(() => {
+    if (!props.open || isUpdate || nameEdited) return
+    form.setValue('name', suggestedName)
+  }, [props.open, isUpdate, nameEdited, suggestedName, form])
+
+  const isReady = isUpdate
+    ? listsReady && loadedKeyId === editedKeyId
+    : groupsQuery.isFetched && autoGroupsQuery.isFetched
+  const hasFailed =
+    groupsQuery.isError || autoGroupsQuery.isError || keyQuery.isError
+  // A key that follows the account's group has no line of its own, and stays
+  // that way until lines are ticked for it.
+  const followsUserGroup = isUpdate && editedRoute === null && !storedKey?.group
+  const canSubmit = route.length > 0 || followsUserGroup
+
+  // The form keeps the stored group fields of an edited key, and they are
+  // validated on submit, so chosen lines are written into them right away.
+  const chooseLines = (lines: string[]) => {
+    setEditedRoute(lines)
+    const stored = routeToKeyGroups(lines)
+    form.setValue('group', stored.group, { shouldDirty: true })
+    form.setValue('auto_groups_mode', stored.auto_groups_mode)
+    form.setValue('auto_groups', stored.auto_groups, { shouldDirty: true })
+    form.setValue('cross_group_retry', stored.cross_group_retry)
+    form.clearErrors('auto_groups')
+  }
 
   const selectVendor = (id: number) => {
     setVendorId(id)
-    setRouteMode('auto')
-    setCustomRoute([])
+    if (!isUpdate) {
+      setEditedRoute(null)
+      return
+    }
+    const next = vendors.find((choice) => choice.id === id)
+    chooseLines(
+      next
+        ? resolveVendorAutoRoute(next.groups, globalAutoGroups ?? [], maxLines)
+        : []
+    )
+  }
+
+  const saveChanges = async (data: ApiKeyFormValues, id: number) => {
+    // Untouched lines are saved as they were stored, which keeps a key on
+    // the site-wide line order or on the account's group.
+    const result = await updateApiKey({
+      ...transformFormDataToPayload(
+        editedRoute === null ? data : { ...data, ...routeToKeyGroups(route) }
+      ),
+      id,
+    })
+    if (!result.success) {
+      handleServerError(result, t(ERROR_MESSAGES.UPDATE_FAILED))
+      return
+    }
+    toast.success(t(SUCCESS_MESSAGES.API_KEY_UPDATED))
+    triggerRefresh()
+    props.onOpenChange(false)
   }
 
   const onSubmit = async (data: ApiKeyFormValues) => {
-    if (route.length === 0) {
+    if (!canSubmit) {
       toast.error(t('Choose at least one line for this key'))
       return
     }
     setIsSubmitting(true)
     try {
+      if (editedKeyId !== undefined) {
+        await saveChanges(data, editedKeyId)
+        return
+      }
       const payload = transformFormDataToPayload({
         ...data,
         ...routeToKeyGroups(route),
@@ -245,8 +368,18 @@ export function ApiKeyCreateDialog(props: ApiKeyCreateDialogProps) {
     }
   }
 
-  const onInvalid: SubmitErrorHandler<ApiKeyFormValues> = () => {
-    toast.error(t('Please fix the highlighted fields before saving'))
+  const onInvalid: SubmitErrorHandler<ApiKeyFormValues> = (errors) => {
+    // The stored lines of an edited key can all have become unavailable.
+    toast.error(
+      errors.auto_groups
+        ? t('Choose at least one line for this key')
+        : t('Please fix the highlighted fields before saving')
+    )
+  }
+
+  let submitLabel = isSubmitting ? t('Creating...') : t('Create API Key')
+  if (isUpdate) {
+    submitLabel = isSubmitting ? t('Saving...') : t('Save changes')
   }
 
   let body = <LoadingState message={t('Loading...')} />
@@ -270,7 +403,7 @@ export function ApiKeyCreateDialog(props: ApiKeyCreateDialogProps) {
     body = (
       <Form {...form}>
         <form
-          id='api-key-create-form'
+          id='api-key-form'
           onSubmit={form.handleSubmit(onSubmit, onInvalid)}
           inert={isSubmitting ? true : undefined}
           className='flex flex-col gap-5'
@@ -282,62 +415,32 @@ export function ApiKeyCreateDialog(props: ApiKeyCreateDialogProps) {
           />
 
           <fieldset className='flex flex-col gap-2'>
-            <div className='flex flex-wrap items-center justify-between gap-2'>
-              <legend className='text-sm font-medium'>{t('Line')}</legend>
-              <ToggleGroup
-                value={[routeMode]}
-                onValueChange={(values) => {
-                  const next = values.find((value) => value !== routeMode)
-                  if (next !== 'auto' && next !== 'custom') return
-                  if (next === 'custom') setCustomRoute(autoRoute)
-                  setRouteMode(next)
-                }}
-                variant='outline'
-                size='sm'
-                aria-label={t('Line')}
-              >
-                <ToggleGroupItem value='auto'>
-                  <Sparkles aria-hidden='true' />
-                  {t('Automatic')}
-                </ToggleGroupItem>
-                <ToggleGroupItem value='custom'>
-                  <Route aria-hidden='true' />
-                  {t('Custom')}
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </div>
+            <legend className='text-sm font-medium'>{t('Line')}</legend>
             <p className='text-muted-foreground text-xs'>
-              {routeMode === 'auto'
-                ? t(
-                    'We pick the lines for you. If the first one is busy or fails, the next one takes over.'
-                  )
-                : t(
-                    'Lines are tried from top to bottom. Drag to reorder, or add and remove lines.'
-                  )}
+              {t(
+                'Lines are tried from top to bottom: if the first one is busy or fails, the next one takes over. Tick lines in the list, and drag to reorder.'
+              )}
             </p>
-            {routeMode === 'auto' ? (
-              <RoutePreview
-                route={autoRoute}
-                options={groupOptions}
-                onCustomize={() => {
-                  setCustomRoute(autoRoute)
-                  setRouteMode('custom')
-                }}
-              />
-            ) : (
-              <AutoGroupOrderEditor
-                aria-label={t('Line')}
-                value={customRoute}
-                mode='custom'
-                options={vendorOptions}
-                globalOptions={[]}
-                maxCount={maxLines}
-                hideModeHeader
-                numbered
-                addPlaceholder={t('Add a line')}
-                onChange={(value) => setCustomRoute(value.groups)}
-              />
-            )}
+            <AutoGroupOrderEditor
+              aria-label={t('Line')}
+              value={route}
+              mode='custom'
+              options={vendorOptions}
+              globalOptions={[]}
+              maxCount={maxLines}
+              hideModeHeader
+              numbered
+              tickInPicker
+              addPlaceholder={t('Choose lines')}
+              emptyText={
+                followsUserGroup
+                  ? t(
+                      'This key follows the group of your account. Tick lines above to give it lines of its own.'
+                    )
+                  : t('No line is chosen. Tick at least one line above.')
+              }
+              onChange={(value) => chooseLines(value.groups)}
+            />
           </fieldset>
 
           <FormField
@@ -390,7 +493,7 @@ export function ApiKeyCreateDialog(props: ApiKeyCreateDialogProps) {
               <div className='flex flex-col gap-4 pt-3'>
                 <ApiKeyQuotaFields />
                 <ApiKeyExpiryField />
-                <ApiKeyCountField />
+                {!isUpdate && <ApiKeyCountField />}
                 <ApiKeyAccessFields models={modelsQuery.data?.data ?? []} />
               </div>
             </CollapsibleContent>
@@ -407,10 +510,16 @@ export function ApiKeyCreateDialog(props: ApiKeyCreateDialogProps) {
         if (!open && isSubmitting) return
         props.onOpenChange(open)
       }}
-      title={t('Create API Key')}
-      description={t(
-        'Choose which models this key is for. Everything else has a sensible default.'
-      )}
+      title={isUpdate ? t('Update API Key') : t('Create API Key')}
+      description={
+        isUpdate
+          ? t(
+              'Change the lines, name or limits of this key. The key itself stays the same.'
+            )
+          : t(
+              'Choose which models this key is for. Everything else has a sensible default.'
+            )
+      }
       contentClassName='sm:max-w-xl'
       footer={
         <>
@@ -424,10 +533,10 @@ export function ApiKeyCreateDialog(props: ApiKeyCreateDialogProps) {
           </Button>
           <Button
             type='submit'
-            form='api-key-create-form'
-            disabled={!isReady || !vendor || route.length === 0 || isSubmitting}
+            form='api-key-form'
+            disabled={!isReady || !vendor || !canSubmit || isSubmitting}
           >
-            {isSubmitting ? t('Creating...') : t('Create API Key')}
+            {submitLabel}
           </Button>
         </>
       }
@@ -509,65 +618,5 @@ function VendorPicker(props: {
         </p>
       )}
     </fieldset>
-  )
-}
-
-function RoutePreview(props: {
-  route: string[]
-  options: ApiKeyGroupOption[]
-  onCustomize: () => void
-}) {
-  const { t } = useTranslation()
-  const optionByName = new Map(
-    props.options.map((option) => [option.value, option])
-  )
-
-  return (
-    <div className='flex flex-col gap-2'>
-      <ol aria-label={t('Line')} className='flex flex-col gap-1.5'>
-        {props.route.map((name, index) => {
-          const option = optionByName.get(name)
-          return (
-            <li
-              key={name}
-              className='bg-muted/30 flex min-w-0 items-center gap-2.5 rounded-lg border px-3 py-2'
-            >
-              <span
-                aria-hidden='true'
-                className='bg-primary/10 text-primary flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums'
-              >
-                {index + 1}
-              </span>
-              <span className='flex min-w-0 flex-1 flex-col'>
-                <span className='truncate text-sm font-medium' title={name}>
-                  {name}
-                </span>
-                {option?.desc && option.desc !== name && (
-                  <span
-                    className='text-muted-foreground truncate text-xs'
-                    title={option.desc}
-                  >
-                    {option.desc}
-                  </span>
-                )}
-              </span>
-              <span className='text-muted-foreground shrink-0 text-xs'>
-                {index === 0 ? t('Used first') : t('Backup')}
-              </span>
-              <GroupRatioBadge ratio={option?.ratio} />
-            </li>
-          )
-        })}
-      </ol>
-      <Button
-        type='button'
-        variant='link'
-        size='sm'
-        className='h-auto self-start p-0 text-xs'
-        onClick={props.onCustomize}
-      >
-        {t('Change the lines or their order')}
-      </Button>
-    </div>
   )
 }

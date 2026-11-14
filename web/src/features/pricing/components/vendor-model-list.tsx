@@ -34,6 +34,11 @@ export interface VendorModelListProps {
   usdExchangeRate?: number
   tokenUnit?: TokenUnit
   selectedGroup?: string
+  /**
+   * The reader's groups. When given, every row offers to start a chat with its
+   * model on one of them.
+   */
+  chatGroups?: string[]
 }
 
 /**
@@ -92,6 +97,7 @@ export const VendorModelList = memo(function VendorModelList(
                 priceRate={props.priceRate}
                 usdExchangeRate={props.usdExchangeRate}
                 selectedGroup={props.selectedGroup}
+                chatGroups={props.chatGroups}
                 onClick={props.onModelClick}
               />
             ))}

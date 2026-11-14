@@ -617,9 +617,7 @@ export function UsersMutateDrawer({
                     name='max_concurrent_requests'
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>
-                          {t('Max concurrent requests')}
-                        </FormLabel>
+                        <FormLabel>{t('Max concurrent requests')}</FormLabel>
                         <FormControl>
                           <Input
                             {...field}

@@ -150,6 +150,16 @@ describe('API key ready dialog', () => {
     ).toHaveAttribute('href', '/playground')
   })
 
+  test('opens chat and the guide in a new tab so the key stays on screen', async () => {
+    await renderReadyDialog({ status: chatEnabled })
+    const chat = await screen.findByRole('link', { name: 'Start chatting' })
+    const guide = screen.getByRole('link', { name: 'View guide' })
+    for (const link of [chat, guide]) {
+      expect(link).toHaveAttribute('target', '_blank')
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    }
+  })
+
   test('leaves chat out when the chat module is turned off, keeping the other next steps', async () => {
     await renderReadyDialog({})
 

@@ -132,13 +132,6 @@ export function useFilters(models: PricingModel[], groupOrder: string[]) {
     [vendorFilter, groupFilter]
   )
 
-  const activeFilterCount = useMemo(
-    () =>
-      (vendorFilter !== FILTER_ALL ? 1 : 0) +
-      (groupFilter !== FILTER_ALL ? 1 : 0),
-    [vendorFilter, groupFilter]
-  )
-
   const clearFilters = useCallback(() => {
     updateFilters({
       vendor: undefined,
@@ -165,7 +158,6 @@ export function useFilters(models: PricingModel[], groupOrder: string[]) {
     setViewMode,
     filteredModels,
     hasActiveFilters,
-    activeFilterCount,
     clearFilters,
     clearSearch,
   }

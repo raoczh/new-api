@@ -201,25 +201,36 @@ export interface AdminUserApiKey {
   group: string
 }
 
-/** One group as seen from the managed user: usable or not, and its effective ratio. */
+/**
+ * One group as seen from the managed user. `usable` and `ratio` are what
+ * applies now; the `default_` values are what the user's own group gives
+ * before anything is set for this user alone.
+ */
 export interface AdminUserGroupOption {
   name: string
   desc: string
   ratio: number
   usable: boolean
+  default_ratio: number
+  default_usable: boolean
+  /** False for entries that are not billed, such as auto routing. */
+  has_ratio: boolean
 }
 
 export interface AdminUserGroups {
   group: string
   groups: AdminUserGroupOption[]
-  extra_usable_groups: string[]
-  hidden_usable_groups: string[]
+  extra_usable_groups: string[] | null
+  hidden_usable_groups: string[] | null
+  /** Billing ratios set for this user alone, by group name. */
+  group_ratios: Record<string, number> | null
 }
 
 export interface AdminUserGroupsUpdate {
   group: string
   extra_usable_groups: string[]
   hidden_usable_groups: string[]
+  group_ratios: Record<string, number>
 }
 
 // ============================================================================
@@ -233,3 +244,8 @@ export type UsersDialogType =
   | 'quota'
   | 'api-keys'
   | 'groups'
+  | 'bindings'
+  | 'subscriptions'
+  | 'recharge-history'
+  | 'reset-passkey'
+  | 'reset-2fa'

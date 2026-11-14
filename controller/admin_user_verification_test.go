@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -436,14 +437,17 @@ func TestAdminUserVerificationPolicy(t *testing.T) {
 
 // adminUserGroupsPayload 是分组管理接口的响应形状，供测试断言使用。
 type adminUserGroupsPayload struct {
-	Group              string   `json:"group"`
-	ExtraUsableGroups  []string `json:"extra_usable_groups"`
-	HiddenUsableGroups []string `json:"hidden_usable_groups"`
+	Group              string             `json:"group"`
+	ExtraUsableGroups  []string           `json:"extra_usable_groups"`
+	HiddenUsableGroups []string           `json:"hidden_usable_groups"`
+	GroupRatios        map[string]float64 `json:"group_ratios"`
 	Groups             []struct {
-		Name   string  `json:"name"`
-		Desc   string  `json:"desc"`
-		Ratio  float64 `json:"ratio"`
-		Usable bool    `json:"usable"`
+		Name          string  `json:"name"`
+		Desc          string  `json:"desc"`
+		Ratio         float64 `json:"ratio"`
+		Usable        bool    `json:"usable"`
+		DefaultRatio  float64 `json:"default_ratio"`
+		DefaultUsable bool    `json:"default_usable"`
 	} `json:"groups"`
 }
 
@@ -471,12 +475,23 @@ func TestAdminUserGroupManagement(t *testing.T) {
 		require.NoError(t, common.Unmarshal(body.Data, &payload))
 		return payload
 	}
-
-	t.Run("viewing a user reports their usable groups", func(t *testing.T) {
-		_, identity, target := setupAdminUserTest(t)
+	// 分组以分组倍率设置为准：managed-group 是现有分组，retired-group 已被删除，
+	// 只在分组登记表里留着 id（仍有密钥引用时会这样）。
+	useManagedGroups := func(t *testing.T) {
+		t.Helper()
 		require.NoError(t, model.DB.AutoMigrate(&model.Token{}, &model.UserGroup{}))
-		_, err := model.EnsureGroupId("managed-group")
-		require.NoError(t, err)
+		previousRatios := ratio_setting.GroupRatio2JSONString()
+		t.Cleanup(func() { require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousRatios)) })
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"vip":1,"managed-group":2}`))
+		for _, name := range []string{"managed-group", "retired-group"} {
+			_, err := model.EnsureGroupId(name)
+			require.NoError(t, err)
+		}
+	}
+
+	t.Run("viewing a user lists the existing groups and no removed one", func(t *testing.T) {
+		_, identity, target := setupAdminUserTest(t)
+		useManagedGroups(t)
 		response := adminUserRequest(http.MethodGet, "/api/user/:id/groups", "", "", identity, common.RoleAdminUser, params(target), AdminGetUserGroups)
 		payload := decodeGroups(t, response)
 		assert.Equal(t, "default", payload.Group)
@@ -484,16 +499,16 @@ func TestAdminUserGroupManagement(t *testing.T) {
 		require.True(t, found, "the own group of the user must be listed")
 		assert.True(t, usable, "the own group of the user is always usable")
 		usable, found = payload.usable("managed-group")
-		require.True(t, found, "registered groups are listed so an admin can grant them")
+		require.True(t, found, "existing groups are listed so an admin can grant them")
 		assert.False(t, usable)
+		_, found = payload.usable("retired-group")
+		assert.False(t, found, "a removed group is not offered even while its id is still registered")
 	})
 
 	t.Run("changing groups keeps unrelated fields and overrides", func(t *testing.T) {
 		_, identity, target := setupAdminUserTest(t)
-		require.NoError(t, model.DB.AutoMigrate(&model.UserGroup{}))
+		useManagedGroups(t)
 		before, err := model.GetUserById(target.Id, false)
-		require.NoError(t, err)
-		_, err = model.EnsureGroupId("managed-group")
 		require.NoError(t, err)
 		body := `{"group":"managed-group","extra_usable_groups":["managed-group"],"hidden_usable_groups":[]}`
 		response := adminUserRequest(http.MethodPut, "/api/user/:id/groups", body, "", identity, common.RoleAdminUser, params(target), AdminUpdateUserGroups)
@@ -530,10 +545,12 @@ func TestAdminUserGroupManagement(t *testing.T) {
 
 	t.Run("rejects unknown groups and self hiding", func(t *testing.T) {
 		_, identity, target := setupAdminUserTest(t)
+		useManagedGroups(t)
 		for _, test := range []struct {
 			name, body string
 		}{
 			{"unknown group", `{"group":"no-such-group"}`},
+			{"removed group", `{"group":"retired-group"}`},
 			{"hiding the own group", `{"group":"default","hidden_usable_groups":["default"]}`},
 			{"empty group", `{"group":"   "}`},
 		} {
@@ -545,6 +562,70 @@ func TestAdminUserGroupManagement(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, "default", stored.Group, test.name)
 			assert.Empty(t, stored.GetSetting().HiddenUsableGroups, test.name)
+		}
+	})
+
+	t.Run("a ratio set for the user is charged on the next request and can be cleared", func(t *testing.T) {
+		_, identity, target := setupAdminUserTest(t)
+		body := `{"group":"default","hidden_usable_groups":["vip"],"group_ratios":{"default":0.5}}`
+		response := adminUserRequest(http.MethodPut, "/api/user/:id/groups", body, "", identity, common.RoleAdminUser, params(target), AdminUpdateUserGroups)
+		var result securityEnrollmentResponse
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+
+		// 计费读的是用户缓存里的设置，保存后必须立即反映新倍率。
+		cached, err := model.GetUserCache(target.Id)
+		require.NoError(t, err)
+		assert.Equal(t, 0.5, service.GetUserGroupRatio(cached.Group, cached.GetSetting(), "default"))
+
+		payload := decodeGroups(t, adminUserRequest(http.MethodGet, "/api/user/:id/groups", "", "", identity, common.RoleAdminUser, params(target), AdminGetUserGroups))
+		assert.Equal(t, map[string]float64{"default": 0.5}, payload.GroupRatios)
+		assert.Equal(t, []string{"vip"}, payload.HiddenUsableGroups)
+		for _, group := range payload.Groups {
+			switch group.Name {
+			case "default":
+				assert.Equal(t, 0.5, group.Ratio)
+				assert.Equal(t, 1.0, group.DefaultRatio)
+			case "vip":
+				// 被隐藏的分组仍要列出，管理员才能重新勾上。
+				assert.False(t, group.Usable)
+				assert.True(t, group.DefaultUsable)
+			}
+		}
+
+		// 只改分组的请求不带倍率，原有专属倍率保留；显式传空才清除。
+		response = adminUserRequest(http.MethodPut, "/api/user/:id/groups", `{"group":"default"}`, "", identity, common.RoleAdminUser, params(target), AdminUpdateUserGroups)
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+		stored, err := model.GetUserById(target.Id, false)
+		require.NoError(t, err)
+		assert.Equal(t, map[string]float64{"default": 0.5}, stored.GetSetting().GroupRatios)
+
+		response = adminUserRequest(http.MethodPut, "/api/user/:id/groups", `{"group":"default","group_ratios":{}}`, "", identity, common.RoleAdminUser, params(target), AdminUpdateUserGroups)
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+		stored, err = model.GetUserById(target.Id, false)
+		require.NoError(t, err)
+		assert.Empty(t, stored.GetSetting().GroupRatios)
+	})
+
+	t.Run("rejects ratios that could not be charged safely", func(t *testing.T) {
+		_, identity, target := setupAdminUserTest(t)
+		for _, test := range []struct {
+			name, body string
+		}{
+			{"negative ratio", `{"group":"default","group_ratios":{"default":-0.5}}`},
+			{"ratio above the limit", `{"group":"default","group_ratios":{"default":1000.5}}`},
+			{"overflowing ratio", `{"group":"default","group_ratios":{"default":1e400}}`},
+			{"group without a billing ratio", `{"group":"default","group_ratios":{"no-such-group":0.5}}`},
+		} {
+			response := adminUserRequest(http.MethodPut, "/api/user/:id/groups", test.body, "", identity, common.RoleAdminUser, params(target), AdminUpdateUserGroups)
+			var result securityEnrollmentResponse
+			require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result), test.name)
+			assert.False(t, result.Success, test.name)
+			stored, err := model.GetUserById(target.Id, false)
+			require.NoError(t, err)
+			assert.Empty(t, stored.GetSetting().GroupRatios, test.name)
 		}
 	})
 
@@ -601,6 +682,39 @@ func TestAdminUserKeyOperations(t *testing.T) {
 		stored, err = model.GetTokenById(tokenID)
 		require.NoError(t, err)
 		assert.Equal(t, common.TokenStatusEnabled, stored.Status)
+	})
+
+	t.Run("moving a key to another group clears what only auto routing uses", func(t *testing.T) {
+		require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", tokenID).Updates(map[string]any{"group": "auto", "cross_group_retry": true, "auto_groups": `["default","vip"]`}).Error)
+		response := adminUserRequest(http.MethodPut, "/api/user/:id/tokens/:token_id/group", `{"group":"vip"}`, "", identity, common.RoleAdminUser, params, AdminSetUserTokenGroup)
+		var result securityEnrollmentResponse
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+		stored, err := model.GetTokenById(tokenID)
+		require.NoError(t, err)
+		assert.Equal(t, "vip", stored.Group)
+		assert.False(t, stored.CrossGroupRetry)
+		assert.Empty(t, stored.AutoGroups)
+		assert.Equal(t, common.TokenStatusEnabled, stored.Status, "only the group columns are written")
+		var audit model.AuditLog
+		require.NoError(t, model.LOG_DB.Where("action = ?", "user.token_group_update").Last(&audit).Error)
+		require.NotNil(t, audit.Other.Op)
+
+		// 用户自己不能选的分组，管理员也不能替他选进密钥里。
+		response = adminUserRequest(http.MethodPut, "/api/user/:id/tokens/:token_id/group", `{"group":"no-such-group"}`, "", identity, common.RoleAdminUser, params, AdminSetUserTokenGroup)
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		assert.False(t, result.Success)
+		stored, err = model.GetTokenById(tokenID)
+		require.NoError(t, err)
+		assert.Equal(t, "vip", stored.Group)
+
+		// 空值表示跟随用户所属分组。
+		response = adminUserRequest(http.MethodPut, "/api/user/:id/tokens/:token_id/group", `{"group":""}`, "", identity, common.RoleAdminUser, params, AdminSetUserTokenGroup)
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+		stored, err = model.GetTokenById(tokenID)
+		require.NoError(t, err)
+		assert.Empty(t, stored.Group)
 	})
 
 	t.Run("reading the full key needs its own proof", func(t *testing.T) {

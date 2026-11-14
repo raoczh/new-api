@@ -18,7 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Row } from '@tanstack/react-table'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useEffect } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -28,6 +34,7 @@ import { api } from '@/lib/api'
 import type { User } from '../../types'
 import { DataTableRowActions } from '../data-table-row-actions'
 import { UsersDeleteDialog } from '../users-delete-dialog'
+import { UserRowDialogs } from '../users-dialogs'
 import { UsersProvider, useUsers } from '../users-provider'
 
 const target: User = {
@@ -193,5 +200,55 @@ it('disabling a user from the row menu binds the proof to the user and action', 
       context: { user_id: 2, action: 'disable' },
     }),
     expect.anything()
+  )
+})
+
+it('resetting a Passkey from the row menu waits for confirmation and a proof for that user', async () => {
+  const proof = mockVerification('admin.user.passkey.reset', 'passkey-proof')
+  const post = vi.spyOn(api, 'post').mockResolvedValue(proof)
+  const del = vi
+    .spyOn(api, 'delete')
+    .mockResolvedValue({ data: { success: true } })
+  renderInProvider(
+    <>
+      <DataTableRowActions row={{ original: target } as Row<User>} />
+      <UserRowDialogs />
+    </>
+  )
+
+  await userEvent.click(screen.getByRole('button', { name: 'More actions' }))
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Reset Passkey' }))
+  const confirmation = await screen.findByRole('alertdialog')
+  expect(confirmation).toHaveTextContent('managed-user')
+  expect(del).not.toHaveBeenCalled()
+
+  await userEvent.click(
+    within(confirmation).getByRole('button', { name: 'Reset Passkey' })
+  )
+  // The confirmation steps aside while the identity check is on screen.
+  await screen.findByLabelText('Authenticator code or backup code')
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  expect(del).not.toHaveBeenCalled()
+  await completeTwoFactorVerification()
+
+  await waitFor(() =>
+    expect(del).toHaveBeenCalledWith(
+      '/api/user/2/reset_passkey',
+      expect.objectContaining({
+        headers: { 'X-Security-Proof': 'passkey-proof' },
+        singleUseAuthorization: true,
+      })
+    )
+  )
+  expect(post).toHaveBeenCalledWith(
+    '/api/verify',
+    expect.objectContaining({
+      scope: 'admin.user.passkey.reset',
+      context: { user_id: 2 },
+    }),
+    expect.anything()
+  )
+  await waitFor(() =>
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   )
 })

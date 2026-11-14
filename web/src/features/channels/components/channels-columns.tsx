@@ -1152,7 +1152,8 @@ export function useChannelsColumns(
           const groupArray = parseGroupsList(group)
           return groupArray.some((g) => value.includes(g))
         },
-        size: 150,
+        // Wide enough for two full group names with their ratios.
+        size: 280,
         enableSorting: false,
       },
 

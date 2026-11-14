@@ -231,6 +231,7 @@ export function ChannelsTable() {
       (groupsData?.data || []).map((g) => ({
         label: g,
         value: g,
+        desc: groupsData?.group_desc?.[g],
         suffix:
           sensitiveVisible && groupsData?.group_ratio?.[g] != null ? (
             <GroupMultiplierBadge ratio={groupsData.group_ratio[g]} />

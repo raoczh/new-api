@@ -22,9 +22,18 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { useIsSidebarModuleVisible } from '@/hooks/use-sidebar-config'
+import { cn } from '@/lib/utils'
 
 export interface StartChatActionProps {
   modelName: string
+  /**
+   * Group that serves the model. Passing it keeps the chat on a group that
+   * actually offers the model instead of the reader's default group.
+   */
+  group?: string
+  /** Matches the buttons it sits next to; a dialog footer uses `default`. */
+  size?: 'sm' | 'default'
+  className?: string
 }
 
 /**
@@ -42,9 +51,17 @@ export function StartChatAction(props: StartChatActionProps) {
   return (
     <Button
       role='link'
-      size='sm'
-      className='shrink-0'
-      render={<Link to='/playground' search={{ model: props.modelName }} />}
+      size={props.size ?? 'sm'}
+      className={cn('shrink-0', props.className)}
+      render={
+        <Link
+          to='/playground'
+          search={{
+            model: props.modelName,
+            ...(props.group ? { group: props.group } : {}),
+          }}
+        />
+      }
     >
       <MessageSquare data-icon='inline-start' aria-hidden='true' />
       {t('Start chatting')}

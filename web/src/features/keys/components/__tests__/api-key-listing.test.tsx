@@ -53,6 +53,7 @@ import {
 import { apiKeySchema, type ApiKey } from '../../types'
 import { ApiKeyQuotaCell } from '../api-key-quota-cell'
 import { useApiKeysColumns } from '../api-keys-columns'
+import { ApiKeysDialogs } from '../api-keys-dialogs'
 import { ApiKeysProvider } from '../api-keys-provider'
 import { ApiKeysTable } from '../api-keys-table'
 
@@ -298,6 +299,7 @@ function KeysPage() {
   return (
     <ApiKeysProvider>
       <ApiKeysTable />
+      <ApiKeysDialogs />
       <Toaster />
     </ApiKeysProvider>
   )
@@ -496,76 +498,46 @@ async function renderKeysPageWithGroups(storedKey: ApiKey) {
     if (url === `/api/token/${storedKey.id}`) {
       return { data: { success: true, data: storedKey } }
     }
+    if (url === '/api/token/auto-groups') {
+      return { data: { success: true, data: { groups: [], max_count: 3 } } }
+    }
+    if (url === '/api/user/models') {
+      return { data: { success: true, data: [] } }
+    }
     return { data: { success: true, data: { items: [key], total: 1 } } }
   })
   return page
 }
 
-function getGroupOption(description: string): HTMLElement {
-  const option = [
-    ...document.querySelectorAll<HTMLElement>('[data-slot="command-item"]'),
-  ].find((item) => item.textContent?.includes(description))
-  if (!option) throw new Error(`Missing group option "${description}"`)
-  return option
-}
-
-it('saves a group picked in the table from the latest stored key and confirms it', async () => {
+it('opens the edit dialog on a key when its lines are clicked in the table', async () => {
   const user = userEvent.setup()
-  const storedKey = { ...key, remain_quota: 25_000_000, allow_ips: '192.0.2.1' }
-  const { put } = await renderKeysPageWithGroups(storedKey)
-  const trigger = screen.getByRole('combobox', {
-    name: 'Change group for production',
-  })
-  expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  await renderKeysPageWithGroups(key)
 
-  await user.click(trigger)
-  expect(trigger).toHaveAttribute('aria-expanded', 'true')
-  await user.click(getGroupOption('Priority tier'))
+  await user.click(
+    screen.getByRole('button', { name: 'Edit lines of production' })
+  )
 
+  const dialog = await screen.findByRole('dialog', { name: 'Update API Key' })
   await waitFor(() =>
-    expect(put).toHaveBeenCalledWith('/api/token/', {
-      id: 7,
-      name: 'production',
-      remain_quota: 25_000_000,
-      expired_time: -1,
-      unlimited_quota: false,
-      model_limits_enabled: false,
-      model_limits: '',
-      allow_ips: '192.0.2.1',
-      group: 'vip',
-      auto_groups: [],
-      cross_group_retry: false,
-    })
+    expect(within(dialog).getByLabelText('Name')).toHaveValue('production')
   )
-  expect(await screen.findByText('Group changed to vip')).toBeInTheDocument()
-})
-
-it('keeps the current group without a request when it is picked again', async () => {
-  const user = userEvent.setup()
-  const { put } = await renderKeysPageWithGroups(key)
-  await user.click(
-    screen.getByRole('combobox', { name: 'Change group for production' })
-  )
-  await user.click(getGroupOption('Default tier'))
-  expect(put).not.toHaveBeenCalled()
-  expect(vi.mocked(api.get)).not.toHaveBeenCalledWith('/api/token/7')
-})
-
-it('shows the server reason and no success message when a table group change is refused', async () => {
-  const user = userEvent.setup()
-  const { put } = await renderKeysPageWithGroups(key)
-  put.mockResolvedValue({
-    data: { success: false, message: 'Group is not available' },
-  })
-  await user.click(
-    screen.getByRole('combobox', { name: 'Change group for production' })
-  )
-  await user.click(getGroupOption('Priority tier'))
-  expect(await screen.findByText('Group is not available')).toBeInTheDocument()
-  expect(screen.queryByText('Group changed to vip')).not.toBeInTheDocument()
+  // The lines are changed in the dialog, never by a list in the table.
   expect(
-    screen.getByRole('combobox', { name: 'Change group for production' })
-  ).toBeEnabled()
+    screen.queryByRole('combobox', { name: /Change group for/ })
+  ).not.toBeInTheDocument()
+})
+
+it('names a key with several lines as multi-line routing and lists them on hover', async () => {
+  await renderKeysPage(1, {
+    group: 'auto',
+    auto_groups: ['vip', 'default'],
+    cross_group_retry: true,
+  })
+
+  const lines = screen.getByRole('button', { name: 'Edit lines of production' })
+  expect(lines).toHaveTextContent('Multi-line routing · 2')
+  expect(lines).toHaveAttribute('title', 'vip → default')
+  expect(screen.queryByText('Cross-group')).not.toBeInTheDocument()
 })
 
 it('keeps mobile quota readable and opens complete model and IP restrictions by tapping', async () => {

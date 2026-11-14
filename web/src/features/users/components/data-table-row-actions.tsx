@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -17,7 +18,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { Row } from '@tanstack/react-table'
-import { useNavigate } from '@tanstack/react-router'
 import {
   Pencil,
   Trash2,
@@ -34,11 +34,9 @@ import {
   ScrollText,
   Wallet,
 } from 'lucide-react'
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DataTableRowActionMenu } from '@/components/data-table/core/row-action-menu'
 import { Button } from '@/components/ui/button'
 import {
@@ -51,11 +49,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { UserSubscriptionsDialog } from '@/features/subscriptions/components/dialogs/user-subscriptions-dialog'
 import { handleServerError } from '@/lib/handle-server-error'
 import { AuthOperationError } from '@/lib/secure-verification'
 
-import { manageUser, resetUserPasskey, resetUserTwoFA } from '../api'
+import { manageUser } from '../api'
 import {
   USER_STATUS,
   USER_ROLE,
@@ -64,9 +61,7 @@ import {
 } from '../constants'
 import { getUserActionMessage } from '../lib'
 import type { ManageUserAction, User } from '../types'
-import { UserBindingDialog } from './dialogs/user-binding-dialog'
-import { UserRechargeHistoryDialog } from './dialogs/user-recharge-history-dialog'
-import { useUsers } from './users-provider'
+import { useUsersActions } from './users-provider'
 
 /** Status and role changes the row menu drives through /api/user/manage. */
 type RowManageAction = Extract<
@@ -114,47 +109,16 @@ interface DataTableRowActionsProps {
   row: Row<User>
 }
 
-export function DataTableRowActions({ row }: DataTableRowActionsProps) {
+/**
+ * Buttons and menu of one list row. Every dialog they open is mounted once for
+ * the whole page (see `UsersDialogs`), so a row holds no dialog of its own and
+ * is not rendered again when one opens.
+ */
+export function DataTableRowActions(props: DataTableRowActionsProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const user = row.original
-  const {
-    setOpen,
-    setCurrentRow,
-    triggerRefresh,
-    requestVerification,
-    verificationActive,
-  } = useUsers()
-  const [resetPasskeyOpen, setResetPasskeyOpen] = useState(false)
-  const [resetTwoFAOpen, setResetTwoFAOpen] = useState(false)
-  const [bindingDialogOpen, setBindingDialogOpen] = useState(false)
-  const [subscriptionsDialogOpen, setSubscriptionsDialogOpen] = useState(false)
-  const [rechargeHistoryOpen, setRechargeHistoryOpen] = useState(false)
-
-  const handleEdit = () => {
-    setCurrentRow(user)
-    setOpen('update')
-  }
-
-  const handleDelete = () => {
-    setCurrentRow(user)
-    setOpen('delete')
-  }
-
-  const handleAdjustQuota = () => {
-    setCurrentRow(user)
-    setOpen('quota')
-  }
-
-  const handleManageGroups = () => {
-    setCurrentRow(user)
-    setOpen('groups')
-  }
-
-  const handleManageApiKeys = () => {
-    setCurrentRow(user)
-    setOpen('api-keys')
-  }
+  const user = props.row.original
+  const users = useUsersActions()
 
   /** 直接带着用户名打开调用日志，支持排查时不用再手输一遍。 */
   const handleViewLogs = () => {
@@ -167,7 +131,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
   const handleManage = async (action: RowManageAction) => {
     try {
-      const proof = await requestVerification({
+      const proof = await users.requestVerification({
         scope: 'admin.user.manage',
         context: { user_id: user.id, action },
         title: t(MANAGE_ACTION_TITLES[action]),
@@ -180,7 +144,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
       const result = await manageUser(user.id, action, proof.proof_token)
       if (result.success) {
         toast.success(t(getUserActionMessage(action)))
-        triggerRefresh()
+        users.triggerRefresh()
       } else {
         handleServerError(result, t('Failed to {{action}} user', { action }))
       }
@@ -189,64 +153,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         AuthOperationError.from(error),
         t(ERROR_MESSAGES.UNEXPECTED)
       )
-    }
-  }
-
-  const handleResetPasskey = async () => {
-    try {
-      const proof = await requestVerification({
-        scope: 'admin.user.passkey.reset',
-        context: { user_id: user.id },
-        title: t('Verify to reset Passkey'),
-        description: t(
-          'Confirm your identity before changing the account {{username}}.',
-          { username: user.username }
-        ),
-      })
-      if (!proof) return
-      const result = await resetUserPasskey(user.id, proof.proof_token)
-      if (result.success) {
-        toast.success(t('Passkey reset successfully'))
-        triggerRefresh()
-      } else {
-        handleServerError(result, t('Failed to reset Passkey'))
-      }
-    } catch (error) {
-      handleServerError(
-        AuthOperationError.from(error),
-        t(ERROR_MESSAGES.UNEXPECTED)
-      )
-    } finally {
-      setResetPasskeyOpen(false)
-    }
-  }
-
-  const handleResetTwoFA = async () => {
-    try {
-      const proof = await requestVerification({
-        scope: 'admin.user.2fa.disable',
-        context: { user_id: user.id },
-        title: t('Verify to reset 2FA'),
-        description: t(
-          'Confirm your identity before changing the account {{username}}.',
-          { username: user.username }
-        ),
-      })
-      if (!proof) return
-      const result = await resetUserTwoFA(user.id, proof.proof_token)
-      if (result.success) {
-        toast.success(t('Two-factor authentication reset'))
-        triggerRefresh()
-      } else {
-        handleServerError(result, t('Failed to reset 2FA'))
-      }
-    } catch (error) {
-      handleServerError(
-        AuthOperationError.from(error),
-        t(ERROR_MESSAGES.UNEXPECTED)
-      )
-    } finally {
-      setResetTwoFAOpen(false)
     }
   }
 
@@ -260,19 +166,31 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
   return (
     <div className='-ml-1.5 flex items-center gap-1'>
-      <RowActionButton label={t('Edit')} onSelect={handleEdit}>
+      <RowActionButton
+        label={t('Edit')}
+        onSelect={() => users.openDialog('update', user)}
+      >
         <Pencil />
       </RowActionButton>
 
-      <RowActionButton label={t('Adjust Quota')} onSelect={handleAdjustQuota}>
+      <RowActionButton
+        label={t('Adjust Quota')}
+        onSelect={() => users.openDialog('quota', user)}
+      >
         <Wallet />
       </RowActionButton>
 
-      <RowActionButton label={t('Groups')} onSelect={handleManageGroups}>
+      <RowActionButton
+        label={t('Groups')}
+        onSelect={() => users.openDialog('groups', user)}
+      >
         <Layers />
       </RowActionButton>
 
-      <RowActionButton label={t('API Keys')} onSelect={handleManageApiKeys}>
+      <RowActionButton
+        label={t('API Keys')}
+        onSelect={() => users.openDialog('api-keys', user)}
+      >
         <KeyRound />
       </RowActionButton>
 
@@ -315,12 +233,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </DropdownMenuItem>
         )}
 
-        <DropdownMenuItem
-          onSelect={(event) => {
-            event.preventDefault()
-            setBindingDialogOpen(true)
-          }}
-        >
+        <DropdownMenuItem onClick={() => users.openDialog('bindings', user)}>
           {t('Manage Bindings')}
           <DropdownMenuShortcut>
             <Link2 size={16} />
@@ -328,10 +241,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         </DropdownMenuItem>
 
         <DropdownMenuItem
-          onSelect={(event) => {
-            event.preventDefault()
-            setSubscriptionsDialogOpen(true)
-          }}
+          onClick={() => users.openDialog('subscriptions', user)}
         >
           {t('Manage Subscriptions')}
           <DropdownMenuShortcut>
@@ -346,7 +256,9 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </DropdownMenuShortcut>
         </DropdownMenuItem>
 
-        <DropdownMenuItem onClick={() => setRechargeHistoryOpen(true)}>
+        <DropdownMenuItem
+          onClick={() => users.openDialog('recharge-history', user)}
+        >
           {t('Recharge records')}
           <DropdownMenuShortcut>
             <History size={16} />
@@ -356,10 +268,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         <DropdownMenuSeparator />
 
         <DropdownMenuItem
-          onSelect={(event) => {
-            event.preventDefault()
-            setResetPasskeyOpen(true)
-          }}
+          onClick={() => users.openDialog('reset-passkey', user)}
           disabled={isRoot}
         >
           {t('Reset Passkey')}
@@ -369,10 +278,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         </DropdownMenuItem>
 
         <DropdownMenuItem
-          onSelect={(event) => {
-            event.preventDefault()
-            setResetTwoFAOpen(true)
-          }}
+          onClick={() => users.openDialog('reset-2fa', user)}
           disabled={isRoot}
         >
           {t('Reset 2FA')}
@@ -384,7 +290,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         <DropdownMenuSeparator />
 
         <DropdownMenuItem
-          onClick={handleDelete}
+          onClick={() => users.openDialog('delete', user)}
           className='text-destructive focus:text-destructive'
           disabled={isRoot}
         >
@@ -394,51 +300,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </DropdownMenuShortcut>
         </DropdownMenuItem>
       </DataTableRowActionMenu>
-
-      <ConfirmDialog
-        open={resetPasskeyOpen && !verificationActive}
-        onOpenChange={setResetPasskeyOpen}
-        title={t('Reset Passkey')}
-        desc={t(
-          'Reset Passkey for {{username}}? The user will need to register a new Passkey before using passwordless login.',
-          { username: user.username }
-        )}
-        confirmText={t('Reset Passkey')}
-        handleConfirm={handleResetPasskey}
-      />
-
-      <ConfirmDialog
-        open={resetTwoFAOpen && !verificationActive}
-        onOpenChange={setResetTwoFAOpen}
-        title={t('Reset Two-Factor Authentication')}
-        desc={t(
-          'Reset 2FA for {{username}}? The user must set up 2FA again to continue using it.',
-          { username: user.username }
-        )}
-        confirmText={t('Reset 2FA')}
-        handleConfirm={handleResetTwoFA}
-      />
-
-      <UserBindingDialog
-        open={bindingDialogOpen}
-        onOpenChange={setBindingDialogOpen}
-        userId={user.id}
-        onUnbindSuccess={triggerRefresh}
-      />
-
-      <UserSubscriptionsDialog
-        open={subscriptionsDialogOpen}
-        onOpenChange={setSubscriptionsDialogOpen}
-        user={{ id: user.id, username: user.username }}
-        onSuccess={triggerRefresh}
-      />
-      {rechargeHistoryOpen && (
-        <UserRechargeHistoryDialog
-          key={user.id}
-          user={user}
-          onOpenChange={setRechargeHistoryOpen}
-        />
-      )}
     </div>
   )
 }

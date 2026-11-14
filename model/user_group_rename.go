@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -63,24 +64,26 @@ var groupNameOptions = []struct {
 }
 
 // groupNameColumns lists every column that stores a single group name and
-// still affects routing, billing, subscriptions or statistics. Request logs
-// keep the name they were written with.
+// still affects routing, billing, subscriptions or statistics, with the
+// column that holds the id of that group. Tokens bind their ids themselves.
+// Request logs keep the name they were written with.
 var groupNameColumns = []struct {
-	model  any
-	column string
+	model    any
+	column   string
+	idColumn string
 }{
-	{&User{}, "group"},
-	{&Token{}, "group"},
-	{&SubscriptionPlan{}, "upgrade_group"},
-	{&SubscriptionPlan{}, "downgrade_group"},
-	{&UserSubscription{}, "upgrade_group"},
-	{&UserSubscription{}, "prev_user_group"},
-	{&UserSubscription{}, "downgrade_group"},
-	{&Task{}, "group"},
-	{&ImageStudioTask{}, "group"},
-	{&QuotaData{}, "use_group"},
-	{&StatusProbe{}, "group_name"},
-	{&IQProbeResult{}, "group_name"},
+	{&User{}, "group", "group_id"},
+	{&Token{}, "group", ""},
+	{&SubscriptionPlan{}, "upgrade_group", "upgrade_group_id"},
+	{&SubscriptionPlan{}, "downgrade_group", "downgrade_group_id"},
+	{&UserSubscription{}, "upgrade_group", "upgrade_group_id"},
+	{&UserSubscription{}, "prev_user_group", "prev_user_group_id"},
+	{&UserSubscription{}, "downgrade_group", "downgrade_group_id"},
+	{&Task{}, "group", "group_id"},
+	{&ImageStudioTask{}, "group", "group_id"},
+	{&QuotaData{}, "use_group", "use_group_id"},
+	{&StatusProbe{}, "group_name", "group_id"},
+	{&IQProbeResult{}, "group_name", "group_id"},
 }
 
 func renameGroupName(renames map[string]string, name string) string {
@@ -227,11 +230,12 @@ func renameGroupInChannels(tx *gorm.DB, oldName, newName string) (bool, error) {
 				return false, err
 			}
 		}
-		if err := tx.Model(&Channel{}).Where("id = ?", channel.Id).Update("group", groupList).Error; err != nil {
+		if err := tx.Model(&Channel{}).Where("id = ?", channel.Id).UpdateColumn("group", groupList).Error; err != nil {
 			return false, err
 		}
 	}
-	result := tx.Model(&Ability{}).Where(commonGroupCol+" = ?", oldName).Update("group", newName)
+	// The group keeps its id, so only the name moves.
+	result := tx.Model(&Ability{}).Where(commonGroupCol+" = ?", oldName).UpdateColumn("group", newName)
 	if result.Error != nil {
 		return false, result.Error
 	}
@@ -239,12 +243,15 @@ func renameGroupInChannels(tx *gorm.DB, oldName, newName string) (bool, error) {
 }
 
 // renameGroupsInUserSettings rewrites the per-user extra and hidden group
-// lists and returns the ids of the users it changed.
+// lists and the per-user group ratios, and returns the ids of the users it
+// changed.
 func renameGroupsInUserSettings(tx *gorm.DB, renames map[string]string) ([]int, error) {
-	// Only users with extra or hidden group lists can reference a group in
-	// their settings; the names themselves are matched exactly in Go.
+	// Only users with group lists or group ratios of their own can reference a
+	// group in their settings; the names themselves are matched exactly in Go.
 	var users []User
-	if err := tx.Select("id", "setting").Where("setting LIKE ?", "%usable_groups%").Find(&users).Error; err != nil {
+	if err := tx.Select("id", "setting").
+		Where("setting LIKE ? OR setting LIKE ?", "%usable_groups%", "%group_ratios%").
+		Find(&users).Error; err != nil {
 		return nil, err
 	}
 	var userIds []int
@@ -268,6 +275,18 @@ func renameGroupsInUserSettings(tx *gorm.DB, renames map[string]string) ([]int, 
 					groups[i] = renamed
 					changed = true
 				}
+			}
+		}
+		if ratios, ok := setting["group_ratios"].(map[string]any); ok {
+			for name := range ratios {
+				if _, renamed := renames[name]; !renamed {
+					continue
+				}
+				setting["group_ratios"] = renameJSONKeys(ratios, func(name string) string {
+					return renameGroupName(renames, name)
+				})
+				changed = true
+				break
 			}
 		}
 		if !changed {
@@ -312,6 +331,37 @@ func renameGroupInPerfMetrics(tx *gorm.DB, oldName, newName string) error {
 	}
 	for _, chunk := range lo.Chunk(ids, 500) {
 		if err := tx.Model(&PerfMetric{}).Where("id IN ?", chunk).Update("group", newName).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// saveGroupOptions writes rewritten group options. An alias option that has
+// no row of its own is left out of options, so it is neither stored nor
+// applied.
+func saveGroupOptions(tx *gorm.DB, options map[string]string) error {
+	for _, item := range groupNameOptions {
+		value, ok := options[item.key]
+		if !ok {
+			continue
+		}
+		option := Option{Key: item.key}
+		if item.storedOnly {
+			var count int64
+			if err := tx.Model(&Option{}).Where(commonKeyCol+" = ?", item.key).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				delete(options, item.key)
+				continue
+			}
+		}
+		if err := tx.FirstOrCreate(&option, Option{Key: item.key}).Error; err != nil {
+			return err
+		}
+		option.Value = value
+		if err := tx.Save(&option).Error; err != nil {
 			return err
 		}
 	}
@@ -383,16 +433,36 @@ func RenameGroups(renames []GroupRename) (map[string]string, error) {
 
 	var affectedUserIds []int
 	channelsChanged := false
+	newNames := slices.Collect(maps.Values(byOldName))
 	err = DB.Transaction(func(tx *gorm.DB) error {
 		var groups []UserGroup
 		if err := tx.Find(&groups).Error; err != nil {
 			return err
 		}
 		for _, group := range groups {
+			// A name taken by this rename is no longer the former name of any group.
+			former := group.formerNames()
+			kept := slices.DeleteFunc(slices.Clone(former), func(name string) bool {
+				return slices.Contains(newNames, name)
+			})
+			updates := map[string]any{}
 			if newName, ok := byOldName[group.Name]; ok {
-				if err := tx.Model(&UserGroup{}).Where("id = ?", group.Id).Update("name", newName).Error; err != nil {
+				updates["name"] = newName
+				kept = append(kept, group.Name)
+			}
+			if len(updates) == 0 && len(kept) == len(former) {
+				continue
+			}
+			updates["former_names"] = ""
+			if len(kept) > 0 {
+				encoded, err := common.Marshal(kept)
+				if err != nil {
 					return err
 				}
+				updates["former_names"] = string(encoded)
+			}
+			if err := tx.Model(&UserGroup{}).Where("id = ?", group.Id).Updates(updates).Error; err != nil {
+				return err
 			}
 		}
 		for oldName, newName := range byOldName {
@@ -425,31 +495,7 @@ func RenameGroups(renames []GroupRename) (map[string]string, error) {
 			return err
 		}
 		affectedUserIds = append(affectedUserIds, settingUserIds...)
-		for _, item := range groupNameOptions {
-			value, ok := options[item.key]
-			if !ok {
-				continue
-			}
-			option := Option{Key: item.key}
-			if item.storedOnly {
-				var count int64
-				if err := tx.Model(&Option{}).Where(commonKeyCol+" = ?", item.key).Count(&count).Error; err != nil {
-					return err
-				}
-				if count == 0 {
-					delete(options, item.key)
-					continue
-				}
-			}
-			if err := tx.FirstOrCreate(&option, Option{Key: item.key}).Error; err != nil {
-				return err
-			}
-			option.Value = value
-			if err := tx.Save(&option).Error; err != nil {
-				return err
-			}
-		}
-		return nil
+		return saveGroupOptions(tx, options)
 	})
 	if err != nil {
 		return nil, err
@@ -461,6 +507,11 @@ func RenameGroups(renames []GroupRename) (map[string]string, error) {
 		}
 	}
 	refreshGroupRegistryAfterOptionSync()
+	// Rows that already carried a new name before a group took it belong to
+	// that group now, and a channel that listed both names lists one.
+	if _, err := bindStoredGroupIds(); err != nil {
+		common.SysError(common.LogText("failed to bind group ids after group rename: %s", err.Error()))
+	}
 	slices.Sort(affectedUserIds)
 	if err := invalidateUserCaches(slices.Compact(affectedUserIds)); err != nil {
 		common.SysError(common.LogText("failed to invalidate user caches after group rename: %s", err.Error()))

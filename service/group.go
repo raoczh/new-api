@@ -162,11 +162,9 @@ func GetGroupsEnabledChatModels(groups []string) []string {
 
 // GetUserGroupRatio 获取用户使用某个分组的倍率
 // userGroup 用户分组
+// userSetting 用户设置，其中管理员为该用户单独设置的分组倍率优先
 // group 需要获取倍率的分组
-func GetUserGroupRatio(userGroup, group string) float64 {
-	ratio, ok := ratio_setting.GetGroupGroupRatio(userGroup, group)
-	if ok {
-		return ratio
-	}
-	return ratio_setting.GetGroupRatio(group)
+func GetUserGroupRatio(userGroup string, userSetting dto.UserSetting, group string) float64 {
+	ratio, _ := ratio_setting.ResolveGroupRatio(userSetting.GroupRatios, userGroup, group)
+	return ratio
 }

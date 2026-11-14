@@ -33,7 +33,6 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { API_KEY_STATUSES } from '../constants'
 import type { ApiKey } from '../types'
-import type { ApiKeyGroupOption } from './api-key-group-combobox'
 import { ApiKeyGroupEditableCell } from './api-key-group-editable-cell'
 import { ApiKeyQuotaCell } from './api-key-quota-cell'
 import {
@@ -49,14 +48,12 @@ import { DataTableRowActions } from './data-table-row-actions'
 
 type UserGroupData = {
   ratios: Record<string, number | string>
-  options: ApiKeyGroupOption[]
   /** Icon of the vendor the administrator assigned to each group. */
   vendorIcons: Record<string, string>
 }
 
 const EMPTY_GROUP_DATA: UserGroupData = {
   ratios: {},
-  options: [],
   vendorIcons: {},
 }
 
@@ -68,7 +65,6 @@ function useUserGroupData(): UserGroupData {
     select: (res): UserGroupData => {
       if (!res.success || !res.data) return EMPTY_GROUP_DATA
       const ratios: Record<string, number | string> = {}
-      const options: ApiKeyGroupOption[] = []
       const vendorIcons: Record<string, string> = {}
       const iconByVendor = new Map(
         (res.vendors ?? []).map((vendor) => [vendor.id, vendor.icon ?? ''])
@@ -79,14 +75,8 @@ function useUserGroupData(): UserGroupData {
         }
         const icon = iconByVendor.get(info.vendor_id ?? 0)
         if (icon) vendorIcons[group] = icon
-        options.push({
-          value: group,
-          label: group,
-          desc: info.desc || group,
-          ratio: info.ratio,
-        })
       }
-      return { ratios, options, vendorIcons }
+      return { ratios, vendorIcons }
     },
   })
 
@@ -98,11 +88,7 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
   useSystemConfigStore((state) => state.config.currency)
   const { meta: currency } = getCurrencyDisplay()
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
-  const {
-    ratios: groupRatios,
-    options: groupOptions,
-    vendorIcons,
-  } = useUserGroupData()
+  const { ratios: groupRatios, vendorIcons } = useUserGroupData()
   const shouldReduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const justNowLabel = t('Just now')
@@ -214,7 +200,6 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
           return (
             <ApiKeyGroupEditableCell
               apiKey={apiKey}
-              groupOptions={groupOptions}
               ratio={groupRatios[group]}
               shouldReduceMotion={shouldReduceMotion}
             />
@@ -290,6 +275,15 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
         meta: { pinned: 'right' as const },
       },
     ],
-    [t, quotaUnit, now, groupRatios, groupOptions, vendorIcons, shouldReduceMotion, locale, justNowLabel]
+    [
+      t,
+      quotaUnit,
+      now,
+      groupRatios,
+      vendorIcons,
+      shouldReduceMotion,
+      locale,
+      justNowLabel,
+    ]
   )
 }

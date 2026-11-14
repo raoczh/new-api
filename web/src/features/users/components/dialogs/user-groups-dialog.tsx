@@ -16,30 +16,29 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
-import { CheckCircle2, Eye, EyeOff, MinusCircle } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
 import { ErrorState } from '@/components/error-state'
 import { LoadingState } from '@/components/loading-state'
-import { MultiSelect } from '@/components/multi-select'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Combobox } from '@/components/ui/combobox'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { formatNumber } from '@/lib/format'
 import {
   getServerErrorMessage,
   requireServerSuccess,
 } from '@/lib/server-error-message'
+import { cn } from '@/lib/utils'
 
 import { getUserGroups, updateUserGroups } from '../../api'
-import type { AdminUserGroupOption } from '../../types'
-import { useUsers } from '../users-provider'
+import type { AdminUserGroupOption, AdminUserGroups } from '../../types'
 
 interface UserGroupsDialogProps {
   open: boolean
@@ -48,137 +47,272 @@ interface UserGroupsDialogProps {
   onSuccess?: () => void
 }
 
+/** Largest ratio the server accepts for one user in one group. */
+const MAX_USER_GROUP_RATIO = 1000
+
+/** A typed ratio is a plain decimal between 0 and the limit; empty means none. */
+function parseRatio(text: string): number | null {
+  if (!/^\d+(\.\d+)?$/.test(text.trim())) return null
+  const ratio = Number(text)
+  return ratio <= MAX_USER_GROUP_RATIO ? ratio : null
+}
+
+interface UserGroupsFormProps {
+  userId: number
+  /** What is saved for the user right now. */
+  saved: AdminUserGroups
+  formId: string
+  onSavingChange: (saving: boolean) => void
+  onSaved: () => void
+}
+
 /**
- * Group settings for one user, kept out of the edit drawer so an administrator
- * can see at a glance which groups the user may call and at what ratio, and
- * change the group or the per-user overrides without touching anything else.
+ * Every group of the site as one list. A tick means the user can use the
+ * group; ticking or clearing one only records the difference from what the
+ * user's own group already gives, which is what the edit drawer shows as
+ * extra visible and hidden groups.
  */
-export function UserGroupsDialog(props: UserGroupsDialogProps) {
+function UserGroupsForm(props: UserGroupsFormProps) {
   const { t } = useTranslation()
-  const { triggerRefresh } = useUsers()
-  const userId = props.user?.id ?? 0
-  const username = props.user?.username ?? ''
+  const [group, setGroup] = useState(props.saved.group)
+  const [extra, setExtra] = useState(props.saved.extra_usable_groups ?? [])
+  const [hidden, setHidden] = useState(props.saved.hidden_usable_groups ?? [])
+  const [ratioTexts, setRatioTexts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      Object.entries(props.saved.group_ratios ?? {}).map(([name, ratio]) => [
+        name,
+        String(ratio),
+      ])
+    )
+  )
 
-  const groups = useQuery({
-    queryKey: ['users', userId, 'groups'],
-    enabled: props.open && userId > 0,
-    queryFn: async () => requireServerSuccess(await getUserGroups(userId)),
+  // The defaults depend on the own group, so picking another one asks the
+  // server what that group would give before anything is saved.
+  const preview = useQuery({
+    queryKey: ['users', props.userId, 'groups', 'preview', group],
+    enabled: group !== props.saved.group,
+    placeholderData: keepPreviousData,
+    queryFn: async () =>
+      requireServerSuccess(await getUserGroups(props.userId, group)),
   })
+  const shown =
+    group === props.saved.group
+      ? props.saved
+      : (preview.data?.data ?? props.saved)
 
-  const [group, setGroup] = useState('')
-  const [extraGroups, setExtraGroups] = useState<string[]>([])
-  const [hiddenGroups, setHiddenGroups] = useState<string[]>([])
-  const [saving, setSaving] = useState(false)
-
-  const payload = groups.data?.data
-  useEffect(() => {
-    if (!payload) return
-    setGroup(payload.group)
-    setExtraGroups(payload.extra_usable_groups ?? [])
-    setHiddenGroups(payload.hidden_usable_groups ?? [])
-  }, [payload])
-
-  const options = (payload?.groups ?? []).map((item) => ({
-    value: item.name,
-    label: item.name,
-  }))
-  // 只允许改动已经存在的分组，避免把用户指向一个不存在的分组导致请求被拒。
-  const knownGroups = new Set(options.map((option) => option.value))
-  for (const name of [...extraGroups, ...hiddenGroups]) {
-    if (!knownGroups.has(name)) {
-      options.push({ value: name, label: name })
-    }
+  const isUsable = (item: AdminUserGroupOption) => {
+    if (item.name === group) return true
+    if (hidden.includes(item.name)) return false
+    return item.default_usable || extra.includes(item.name)
   }
 
-  const conflicting = extraGroups.find((name) => hiddenGroups.includes(name))
-  const hidesOwnGroup = hiddenGroups.includes(group)
-  const isInvalid = !!conflicting || hidesOwnGroup
+  const toggleUsable = (item: AdminUserGroupOption) => {
+    const without = (names: string[]) =>
+      names.filter((name) => name !== item.name)
+    if (isUsable(item)) {
+      setExtra(without(extra))
+      setHidden(item.default_usable ? [...without(hidden), item.name] : hidden)
+      return
+    }
+    setHidden(without(hidden))
+    setExtra(item.default_usable ? extra : [...without(extra), item.name])
+  }
 
-  const handleSave = async () => {
+  const invalidRatioGroups = Object.entries(ratioTexts)
+    .filter(([, text]) => text.trim() !== '' && parseRatio(text) === null)
+    .map(([name]) => name)
+  const isInvalid = invalidRatioGroups.length > 0
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
     if (isInvalid) return
-    setSaving(true)
+    const groupRatios: Record<string, number> = {}
+    for (const [name, text] of Object.entries(ratioTexts)) {
+      const ratio = parseRatio(text)
+      if (ratio !== null) groupRatios[name] = ratio
+    }
+    props.onSavingChange(true)
     try {
-      const result = await updateUserGroups(userId, {
+      const result = await updateUserGroups(props.userId, {
         group,
-        extra_usable_groups: extraGroups,
-        hidden_usable_groups: hiddenGroups,
+        extra_usable_groups: extra,
+        // The own group is always usable, so it is never sent as hidden.
+        hidden_usable_groups: hidden.filter((name) => name !== group),
+        group_ratios: groupRatios,
       })
       if (result.success) {
         toast.success(t('Groups updated'))
-        triggerRefresh()
-        props.onSuccess?.()
-        props.onOpenChange(false)
+        props.onSaved()
       } else {
         toast.error(result.message || t('Failed to update groups'))
       }
     } catch (error) {
       toast.error(getServerErrorMessage(error))
     } finally {
-      setSaving(false)
+      props.onSavingChange(false)
     }
   }
 
-  const renderGroupRow = (item: AdminUserGroupOption) => {
-    const isOwnGroup = item.name === group
-    const isExtra = extraGroups.includes(item.name)
-    const isHidden = hiddenGroups.includes(item.name)
-    return (
-      <div
-        key={item.name}
-        className='flex items-center justify-between gap-3 rounded-md border px-3 py-2'
-      >
-        <div className='min-w-0'>
-          <div className='flex flex-wrap items-center gap-2'>
-            <span className='truncate font-mono text-sm'>{item.name}</span>
-            {isOwnGroup && (
-              <StatusBadge
-                label={t('Own group')}
-                variant='info'
-                copyable={false}
-              />
-            )}
-            {isExtra && (
-              <StatusBadge
-                icon={Eye}
-                label={t('Extra visible')}
-                variant='purple'
-                copyable={false}
-              />
-            )}
-            {isHidden && (
-              <StatusBadge
-                icon={EyeOff}
-                label={t('Hidden')}
-                variant='neutral'
-                copyable={false}
-              />
-            )}
-          </div>
-          {item.desc && (
-            <p className='text-muted-foreground truncate text-xs'>
-              {item.desc}
-            </p>
+  const usableCount = shown.groups.filter(isUsable).length
+
+  return (
+    <form id={props.formId} onSubmit={handleSubmit} className='space-y-5'>
+      <div className='space-y-2'>
+        <Label>{t('Own group')}</Label>
+        <Combobox
+          options={shown.groups
+            .filter((item) => item.has_ratio)
+            .map((item) => ({ value: item.name, label: item.name }))}
+          value={group}
+          onValueChange={(value) => value && setGroup(value)}
+          className='w-full sm:max-w-sm'
+          placeholder={t('Select a group')}
+        />
+        <p className='text-muted-foreground text-xs'>
+          {t(
+            'The own group decides which groups are usable by default and their default ratio.'
           )}
-        </div>
-        <div className='flex shrink-0 items-center gap-3 text-sm tabular-nums'>
-          <span className='text-muted-foreground'>
-            {t('Billing ratio')} ×{formatNumber(item.ratio)}
-          </span>
-          {item.usable ? (
-            <CheckCircle2 className='text-success size-4' aria-hidden='true' />
-          ) : (
-            <MinusCircle
-              className='text-muted-foreground size-4'
-              aria-hidden='true'
-            />
-          )}
-          <span className='w-16 text-end text-xs'>
-            {item.usable ? t('Usable') : t('Not usable')}
-          </span>
-        </div>
+        </p>
       </div>
-    )
-  }
+
+      <div className='space-y-2'>
+        <div className='flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1'>
+          <Label>{t('Groups this user can use')}</Label>
+          <span className='text-muted-foreground text-xs tabular-nums'>
+            {t('{{count}} of {{total}} usable', {
+              count: usableCount,
+              total: shown.groups.length,
+            })}
+          </span>
+        </div>
+        <ul className='divide-y rounded-lg border'>
+          {shown.groups.map((item) => {
+            const usable = isUsable(item)
+            const isOwnGroup = item.name === group
+            const ratioText = ratioTexts[item.name] ?? ''
+            const ratioInvalid = invalidRatioGroups.includes(item.name)
+            const checkboxId = `${props.formId}-usable-${item.name}`
+            return (
+              <li
+                key={item.name}
+                className={cn(
+                  'flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5',
+                  !usable && 'bg-muted/40'
+                )}
+              >
+                <Checkbox
+                  id={checkboxId}
+                  checked={usable}
+                  disabled={isOwnGroup}
+                  onCheckedChange={() => toggleUsable(item)}
+                />
+                <label
+                  htmlFor={checkboxId}
+                  className='min-w-0 flex-1 basis-48 cursor-pointer'
+                >
+                  <span className='flex flex-wrap items-center gap-x-2 gap-y-1'>
+                    <span
+                      className={cn(
+                        'font-mono text-sm break-all',
+                        !usable && 'text-muted-foreground'
+                      )}
+                    >
+                      {item.name}
+                    </span>
+                    {isOwnGroup && (
+                      <StatusBadge
+                        label={t('Own group')}
+                        variant='info'
+                        copyable={false}
+                      />
+                    )}
+                    {!isOwnGroup && usable && !item.default_usable && (
+                      <StatusBadge
+                        label={t('Added for this user')}
+                        variant='success'
+                        copyable={false}
+                      />
+                    )}
+                    {!isOwnGroup && !usable && item.default_usable && (
+                      <StatusBadge
+                        label={t('Blocked for this user')}
+                        variant='warning'
+                        copyable={false}
+                      />
+                    )}
+                  </span>
+                  {item.desc && item.desc !== item.name && (
+                    <span className='text-muted-foreground block text-xs break-words'>
+                      {t(item.desc)}
+                    </span>
+                  )}
+                </label>
+                {item.has_ratio && (
+                  <div className='flex shrink-0 items-center gap-2'>
+                    <span className='text-muted-foreground text-xs tabular-nums'>
+                      {t('Default ratio')} ×{formatNumber(item.default_ratio)}
+                    </span>
+                    <Input
+                      inputMode='decimal'
+                      value={ratioText}
+                      onChange={(event) =>
+                        setRatioTexts({
+                          ...ratioTexts,
+                          [item.name]: event.target.value,
+                        })
+                      }
+                      placeholder={formatNumber(item.default_ratio)}
+                      aria-label={t('Ratio of {{group}} for this user', {
+                        group: item.name,
+                      })}
+                      aria-invalid={ratioInvalid}
+                      className='h-8 w-24 text-sm tabular-nums'
+                    />
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+        <p className='text-muted-foreground text-xs'>
+          {t(
+            'Type a ratio to charge this user differently in that group; leave it empty to use the default. Changes apply from the next request after saving.'
+          )}
+        </p>
+        {isInvalid && (
+          <p className='text-destructive text-sm' role='alert'>
+            {t('A ratio must be a number from 0 to {{max}}.', {
+              max: MAX_USER_GROUP_RATIO,
+            })}
+          </p>
+        )}
+      </div>
+    </form>
+  )
+}
+
+/**
+ * Group settings for one user: which group they belong to, which groups they
+ * can use, and the ratio they are charged in each, all in one list.
+ */
+export function UserGroupsDialog(props: UserGroupsDialogProps) {
+  const { t } = useTranslation()
+  const formId = useId()
+  const userId = props.user?.id ?? 0
+  const username = props.user?.username ?? ''
+  const [saving, setSaving] = useState(false)
+
+  const groups = useQuery({
+    queryKey: ['users', userId, 'groups'],
+    enabled: props.open && userId > 0,
+    // The form starts from what was loaded; reloading behind the administrator
+    // would throw away what they have ticked so far.
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    gcTime: 0,
+    queryFn: async () => requireServerSuccess(await getUserGroups(userId)),
+  })
+  const saved = groups.data?.data
 
   return (
     <Dialog
@@ -186,10 +320,10 @@ export function UserGroupsDialog(props: UserGroupsDialogProps) {
       onOpenChange={props.onOpenChange}
       title={t('Groups of {{username}}', { username })}
       description={t(
-        'The group decides which models the user can call and at what billing ratio. Extra visible groups are added on top of the ones their group already allows.'
+        'Tick the groups this user can use. What you change here is the same setting as the extra visible and hidden groups in the edit form.'
       )}
       contentClassName='sm:max-w-3xl'
-      bodyClassName='space-y-5'
+      contentHeight='min(70vh, 42rem)'
       footer={
         <>
           <Button
@@ -199,11 +333,7 @@ export function UserGroupsDialog(props: UserGroupsDialogProps) {
           >
             {t('Cancel')}
           </Button>
-          <Button
-            type='button'
-            disabled={saving || groups.isPending || isInvalid}
-            onClick={() => void handleSave()}
-          >
+          <Button type='submit' form={formId} disabled={saving || !saved}>
             {saving ? t('Saving...') : t('Save')}
           </Button>
         </>
@@ -217,64 +347,18 @@ export function UserGroupsDialog(props: UserGroupsDialogProps) {
           onRetry={() => void groups.refetch()}
         />
       )}
-      {groups.isSuccess && (
-        <>
-          <div className='space-y-2'>
-            <Label htmlFor='admin-user-group'>{t('Own group')}</Label>
-            <Combobox
-              options={options}
-              value={group}
-              onValueChange={(value) => setGroup(value ?? '')}
-              className='w-full'
-              placeholder={t('Select a group')}
-            />
-          </div>
-
-          <div className='space-y-2'>
-            <Label>{t('Groups this user can use')}</Label>
-            <ScrollArea className='max-h-64 pr-2'>
-              <div className='space-y-2'>
-                {(payload?.groups ?? []).map(renderGroupRow)}
-              </div>
-            </ScrollArea>
-          </div>
-
-          <div className='grid gap-4 sm:grid-cols-2'>
-            <div className='space-y-2'>
-              <Label>{t('Extra visible groups')}</Label>
-              <MultiSelect
-                options={options}
-                selected={extraGroups}
-                onChange={setExtraGroups}
-                placeholder={t('Select groups')}
-              />
-            </div>
-            <div className='space-y-2'>
-              <Label>{t('Hidden groups')}</Label>
-              <MultiSelect
-                options={options}
-                selected={hiddenGroups}
-                onChange={setHiddenGroups}
-                placeholder={t('Select groups')}
-              />
-            </div>
-          </div>
-
-          {conflicting && (
-            <p className='text-destructive text-sm' role='alert'>
-              {t('{{group}} cannot be both extra visible and hidden.', {
-                group: conflicting,
-              })}
-            </p>
-          )}
-          {hidesOwnGroup && (
-            <p className='text-destructive text-sm' role='alert'>
-              {t('Cannot hide {{group}}: the user belongs to this group.', {
-                group,
-              })}
-            </p>
-          )}
-        </>
+      {props.open && saved && (
+        <UserGroupsForm
+          key={groups.dataUpdatedAt}
+          userId={userId}
+          saved={saved}
+          formId={formId}
+          onSavingChange={setSaving}
+          onSaved={() => {
+            props.onSuccess?.()
+            props.onOpenChange(false)
+          }}
+        />
       )}
     </Dialog>
   )

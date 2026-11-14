@@ -349,6 +349,14 @@ func InitResources() error {
 		return err
 	}
 
+	// 检查所有保存了分组的表：为只有分组名的数据绑定分组 id，并清理已删除分组的残留。
+	// 需要在 Redis 就绪之后执行，才能让受影响用户的缓存失效。
+	if common.IsMasterNode {
+		if err := model.SyncGroupReferences(); err != nil {
+			common.SysError(common.LogText("failed to check group references: %s", err.Error()))
+		}
+	}
+
 	perfmetrics.Init()
 
 	// 启动系统监控

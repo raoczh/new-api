@@ -32,8 +32,9 @@ import { cn } from '@/lib/utils'
 import { GroupRatioBadge, type GroupRatio } from './auto-group-visuals'
 
 type ApiKeyGroupCellProps = {
-  crossGroupRetry: boolean
   group: string
+  /** Number of lines an Auto key lists in its own order; 0 follows the site. */
+  lineCount?: number
   ratio?: GroupRatio
   shouldReduceMotion: boolean
   /**
@@ -53,7 +54,13 @@ export function ApiKeyGroupCell(props: ApiKeyGroupCellProps) {
       return (
         <span className='flex min-w-0 items-center gap-3 overflow-visible text-xs'>
           <StatusBadge
-            label={t('Cross-group')}
+            label={
+              props.lineCount
+                ? t('Multi-line routing · {{count}}', {
+                    count: props.lineCount,
+                  })
+                : t('Multi-line routing')
+            }
             variant='info'
             copyable={false}
             className='px-0'
@@ -118,7 +125,7 @@ export function ApiKeyGroupCell(props: ApiKeyGroupCellProps) {
         }
       >
         <StatusBadge
-          label={t('Cross-group')}
+          label={t('Multi-line routing')}
           variant='info'
           copyable={false}
           className='px-0'
@@ -132,7 +139,7 @@ export function ApiKeyGroupCell(props: ApiKeyGroupCellProps) {
       <TooltipContent>
         <span className='text-xs'>
           {t(
-            'Automatically selects the best available group with circuit breaker mechanism'
+            'Tries the lines of this key in order: when one is busy or fails, the next one takes over.'
           )}
         </span>
       </TooltipContent>

@@ -110,6 +110,39 @@ func GetGroupVendors() map[string]int {
 	return maps.Clone(groupDisplay.vendors)
 }
 
+// OrderedVendorIDs lists the vendor of every group in the group display order,
+// so providers can be shown the way groups are arranged in group management.
+// Groups without a vendor contribute nothing; the remaining vendors follow in
+// name order, which keeps the result stable when no order is configured.
+func OrderedVendorIDs() []int {
+	groupDisplay.RLock()
+	order := slices.Clone(groupDisplay.order)
+	vendors := maps.Clone(groupDisplay.vendors)
+	groupDisplay.RUnlock()
+
+	ids := make([]int, 0, len(vendors))
+	seen := make(map[int]bool, len(vendors))
+	for _, name := range order {
+		id, ok := vendors[name]
+		if !ok || id == 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+		delete(vendors, name)
+	}
+	remaining := make([]int, 0, len(vendors))
+	for _, id := range vendors {
+		if id == 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		remaining = append(remaining, id)
+	}
+	slices.Sort(remaining)
+	return append(ids, remaining...)
+}
+
 func GroupVendorsJSONString() string {
 	groupDisplay.RLock()
 	defer groupDisplay.RUnlock()

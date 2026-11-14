@@ -210,8 +210,7 @@ For commercial licensing, please contact support@quantumnous.com
   --popover-foreground: #e8ecf7;
   --tc-brand-accent: #818cf8;
   --tc-shadow-sm: 0 1px 2px rgb(0 0 0 / 32%);
-  --tc-shadow-md:
-    0 1px 2px rgb(0 0 0 / 32%), 0 6px 16px -12px rgb(0 0 0 / 48%);
+  --tc-shadow-md: 0 1px 2px rgb(0 0 0 / 32%), 0 6px 16px -12px rgb(0 0 0 / 48%);
   --tc-shadow-lg:
     0 1px 2px rgb(0 0 0 / 32%), 0 16px 36px -20px rgb(129 140 248 / 26%);
   --tc-ambient-indigo: color-mix(
@@ -308,6 +307,11 @@ For commercial licensing, please contact support@quantumnous.com
       transparent 70%
     );
   background-repeat: no-repeat;
+  /* The wash is drawn one screen tall, at the top and at the bottom of the
+     page. Sized against the whole page it grew and shrank with the content,
+     so the page changed colour whenever a list got shorter or longer. */
+  background-position: top, top, bottom;
+  background-size: 100% 100svh;
 }
 
 .tc-public-shell::before,
@@ -318,7 +322,8 @@ For commercial licensing, please contact support@quantumnous.com
     transparent 46%
   );
   content: '';
-  inset: 0;
+  height: 100svh;
+  inset: 0 0 auto;
   pointer-events: none;
   position: absolute;
 }

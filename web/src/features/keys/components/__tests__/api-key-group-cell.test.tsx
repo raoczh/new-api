@@ -32,10 +32,8 @@ await i18n.use(initReactI18next).init({
     en: {
       translation: {
         Auto: 'Auto',
-        'Cross-group': 'Cross-group',
+        'Multi-line routing': 'Multi-line routing',
         Ratio: 'Ratio',
-        'Automatically selects the best available group with circuit breaker mechanism':
-          'Automatically selects the best available group with circuit breaker mechanism',
       },
     },
   },
@@ -44,7 +42,6 @@ await i18n.use(initReactI18next).init({
 function CellHarness(props: {
   group: string
   ratio?: number | string
-  crossGroupRetry?: boolean
   shouldReduceMotion?: boolean
 }) {
   return (
@@ -53,7 +50,6 @@ function CellHarness(props: {
         <ApiKeyGroupCell
           group={props.group}
           ratio={props.ratio}
-          crossGroupRetry={props.crossGroupRetry ?? false}
           shouldReduceMotion={props.shouldReduceMotion ?? false}
         />
       </TooltipProvider>
@@ -63,10 +59,8 @@ function CellHarness(props: {
 
 describe('API key group table cell', () => {
   test('keeps the group and compact localized multiplier together with one subtle flowing edge', () => {
-    const { container } = render(
-      <CellHarness group='auto' ratio='自动' crossGroupRetry />
-    )
-    const group = screen.getByText('Cross-group')
+    const { container } = render(<CellHarness group='auto' ratio='自动' />)
+    const group = screen.getByText('Multi-line routing')
     const multiplier = screen
       .getByText('Auto')
       .closest<HTMLElement>('[data-slot="badge"]')
@@ -93,7 +87,7 @@ describe('API key group table cell', () => {
 
   test('does not invent a multiplier while automatic ratio data is unavailable', () => {
     render(<CellHarness group='auto' />)
-    expect(screen.getByText('Cross-group')).toBeInTheDocument()
+    expect(screen.getByText('Multi-line routing')).toBeInTheDocument()
     expect(screen.queryByText('Auto')).not.toBeInTheDocument()
   })
 

@@ -462,8 +462,8 @@ export function buildClientPages(urls: DocUrls): DocPage[] {
                   zh: '打开本站“使用日志”，确认出现了一条使用所配置模型的新记录。',
                 },
                 {
-                  en: 'No entry? Check that config.toml is in the user home folder (project-level .codex/config.toml ignores provider settings), the TOML is valid, and the model supports the Responses endpoint in Model Square.',
-                  zh: '没有记录？检查 config.toml 是否位于用户主目录（项目内的 .codex/config.toml 会忽略服务商设置）、TOML 语法是否正确，以及模型广场中该模型是否支持 Responses 接口。',
+                  en: 'No entry? Check that config.toml is in the user home folder (project-level .codex/config.toml ignores provider settings), the TOML is valid, and the model supports the Responses endpoint on the model prices page.',
+                  zh: '没有记录？检查 config.toml 是否位于用户主目录（项目内的 .codex/config.toml 会忽略服务商设置）、TOML 语法是否正确，以及模型价格页中该模型是否支持 Responses 接口。',
                 },
               ],
             },
@@ -838,8 +838,8 @@ export function buildClientPages(urls: DocUrls): DocPage[] {
                   zh: '打开“设置 → 模型”，添加自定义模型，选择“自定义 / Custom”以便手动填写地址。',
                 },
                 {
-                  en: `Enter URL ${api}, your sk- key and an exact model ID from Model Square. WorkBuddy adds /chat/completions itself.`,
-                  zh: `URL 填 ${api}，API Key 填 sk- 密钥，模型名填模型广场里的准确模型 ID。WorkBuddy 会自动补全 /chat/completions。`,
+                  en: `Enter URL ${api}, your sk- key and an exact model ID from the model prices page. WorkBuddy adds /chat/completions itself.`,
+                  zh: `URL 填 ${api}，API Key 填 sk- 密钥，模型名填模型价格页里的准确模型 ID。WorkBuddy 会自动补全 /chat/completions。`,
                 },
                 {
                   en: 'Save, start a new task, pick the model from the custom group in the model picker and send a short request.',

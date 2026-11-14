@@ -47,6 +47,7 @@ import type {
   UserRechargeRecord,
 } from '../../../types'
 import { DataTableRowActions } from '../../data-table-row-actions'
+import { UserRowDialogs } from '../../users-dialogs'
 import { UsersProvider } from '../../users-provider'
 
 const language = createInstance()
@@ -133,6 +134,7 @@ function renderActions() {
         <TooltipProvider>
           <UsersProvider>
             <RowActions user={user} />
+            <UserRowDialogs />
           </UsersProvider>
         </TooltipProvider>
       </QueryClientProvider>
@@ -300,7 +302,17 @@ it('resets pagination for another user and responds to a language change', async
       },
     },
   })
+  // The dialog belongs to the user it was opened for; another user's history
+  // is opened from that user's own row.
+  await interaction.keyboard('{Escape}')
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  )
   view.switchUser({ ...target, id: 3, username: 'another-owner' })
+  await interaction.click(screen.getByRole('button', { name: 'More actions' }))
+  await interaction.click(
+    screen.getByRole('menuitem', { name: 'Recharge records' })
+  )
   expect(
     await screen.findByText('Recharge history for another-owner')
   ).toBeInTheDocument()

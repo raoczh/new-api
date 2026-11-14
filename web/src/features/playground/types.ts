@@ -72,12 +72,6 @@ export interface ChatCompletionRequest {
   group?: string
   messages: ChatCompletionMessage[]
   stream: boolean
-  temperature?: number
-  top_p?: number
-  max_tokens?: number
-  frequency_penalty?: number
-  presence_penalty?: number
-  seed?: number
 }
 
 export interface ChatCompletionChunk {
@@ -123,22 +117,7 @@ export interface ChatCompletionResponse {
 export interface PlaygroundConfig {
   model: string
   group: string
-  temperature: number
-  top_p: number
-  max_tokens: number
-  frequency_penalty: number
-  presence_penalty: number
-  seed: number | null
   stream: boolean
-}
-
-export interface ParameterEnabled {
-  temperature: boolean
-  top_p: boolean
-  max_tokens: boolean
-  frequency_penalty: boolean
-  presence_penalty: boolean
-  seed: boolean
 }
 
 // Conversation history

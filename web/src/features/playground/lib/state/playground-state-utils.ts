@@ -16,9 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { DEFAULT_CONFIG, DEFAULT_PARAMETER_ENABLED } from '../../constants'
-import type { Message, ParameterEnabled, PlaygroundConfig } from '../../types'
-import { loadConfig, loadParameterEnabled } from '../storage/storage'
+import { DEFAULT_CONFIG } from '../../constants'
+import type { Message, PlaygroundConfig } from '../../types'
+import { loadConfig } from '../storage/storage'
 
 export type MessageStateUpdater =
   | Message[]
@@ -26,10 +26,6 @@ export type MessageStateUpdater =
 
 export function getInitialPlaygroundConfig(): PlaygroundConfig {
   return { ...DEFAULT_CONFIG, ...loadConfig() }
-}
-
-export function getInitialParameterEnabled(): ParameterEnabled {
-  return { ...DEFAULT_PARAMETER_ENABLED, ...loadParameterEnabled() }
 }
 
 export function applyMessageStateUpdate(

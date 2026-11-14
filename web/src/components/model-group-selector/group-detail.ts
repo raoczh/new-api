@@ -27,7 +27,7 @@ export interface GroupDetailSource {
 /**
  * The line under a group name: its description and billing ratio. Built-in
  * descriptions arrive as English source keys, and the auto group has a
- * non-numeric ratio.
+ * non-numeric ratio. Groups without a description show the ratio alone.
  */
 export function formatGroupDetail(
   group: GroupDetailSource,
@@ -36,7 +36,10 @@ export function formatGroupDetail(
   const description = group.desc
     ? translateServerText(t, group.desc)
     : (group.description ?? '')
-  if (!group.ratio) return description
-  const value = typeof group.ratio === 'number' ? group.ratio : t('Auto')
-  return `${description} · ${t('Ratio: {{value}}', { value })}`
+  const ratio = group.ratio
+    ? t('Ratio: {{value}}', {
+        value: typeof group.ratio === 'number' ? group.ratio : t('Auto'),
+      })
+    : ''
+  return [description, ratio].filter(Boolean).join(' · ')
 }

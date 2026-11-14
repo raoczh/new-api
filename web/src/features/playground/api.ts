@@ -81,12 +81,24 @@ export async function getUserGroups(): Promise<GroupOption[]> {
     string,
     { desc: string; ratio: number | string }
   >
+  // Groups come back as an object, so their order is taken from the display
+  // order configured in group management; groups it does not list go last.
+  const configuredOrder: string[] = Array.isArray(data.group_order)
+    ? data.group_order
+    : []
+  const listed = configuredOrder.filter((group) =>
+    Object.hasOwn(groupData, group)
+  )
+  const groupNames = [
+    ...listed,
+    ...Object.keys(groupData).filter((group) => !listed.includes(group)),
+  ]
 
   // label is for button display (name only); desc is for dropdown content
-  return Object.entries(groupData).map(([group, info]) => ({
+  return groupNames.map((group) => ({
     label: group,
     value: group,
-    ratio: info.ratio,
-    desc: info.desc,
+    ratio: groupData[group].ratio,
+    desc: groupData[group].desc,
   }))
 }

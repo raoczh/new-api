@@ -32,13 +32,18 @@ describe('model group selector layout', () => {
     expect(groupScrollClasses.includes('content-start')).toBeTruthy()
   })
 
+  test('gives the group column a fixed width wide enough for long group names', () => {
+    const contentClasses =
+      modelGroupSelectorLayoutClasses.desktopContent.split(' ')
+
+    expect(
+      contentClasses.includes('md:grid-cols-[12.5rem_minmax(0,1fr)]')
+    ).toBeTruthy()
+  })
+
   test('centers the selected group inside its own scroll container', () => {
     const scrollCalls: ScrollToOptions[] = []
-    const selectedOption = {
-      offsetHeight: 32,
-      offsetTop: 160,
-      scrollIntoView() {},
-    }
+    const selectedOption = { offsetHeight: 32, offsetTop: 160 }
     const scrollContainer = {
       clientHeight: 200,
       scrollTop: 0,
@@ -52,16 +57,22 @@ describe('model group selector layout', () => {
     expect(scrollCalls).toEqual([{ top: 76, behavior: 'auto' }])
   })
 
-  test('falls back to scrollIntoView when no group container is provided', () => {
-    const scrollCalls: ScrollIntoViewOptions[] = []
-    const selectedOption = {
-      scrollIntoView(options?: ScrollIntoViewOptions) {
-        scrollCalls.push(options ?? {})
-      },
-    }
+  test('keeps an option near the top of the list at the start instead of a negative offset', () => {
+    const scrollContainer = { clientHeight: 200, scrollTop: 40 }
 
-    scrollSelectedOptionIntoView(selectedOption)
+    scrollSelectedOptionIntoView(
+      { offsetHeight: 32, offsetTop: 16 },
+      scrollContainer
+    )
 
-    expect(scrollCalls).toEqual([{ block: 'center', inline: 'nearest' }])
+    expect(scrollContainer.scrollTop).toBe(0)
+  })
+
+  test('leaves the list where it is while nothing is selected', () => {
+    const scrollContainer = { clientHeight: 200, scrollTop: 40 }
+
+    scrollSelectedOptionIntoView(null, scrollContainer)
+
+    expect(scrollContainer.scrollTop).toBe(40)
   })
 })

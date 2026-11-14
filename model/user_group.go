@@ -3,15 +3,21 @@ package model
 import (
 	"maps"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+
+	"gorm.io/gorm"
 )
 
-// UserGroup gives every group name a stable id. Group settings, channels and
-// abilities stay keyed by name, while tokens bind to the id, so renaming a
-// group keeps every existing API key attached to it.
+// UserGroup gives every group name a stable id. Every table that stores a
+// group name also stores this id next to it. Tokens read their group through
+// the id, so renaming a group keeps every existing API key attached to it; the
+// other tables keep the name as the working value and carry the id as the
+// binding that a rename and the startup check follow.
 //
 // Name is deliberately not unique in the database: MySQL compares strings
 // case-insensitively, while group names are case-sensitive keys everywhere
@@ -21,13 +27,27 @@ type UserGroup struct {
 	Id          int    `json:"id"`
 	Name        string `json:"name" gorm:"type:varchar(64);not null"`
 	CreatedTime int64  `json:"created_time" gorm:"bigint"`
+	// FormerNames is the JSON list of names this group was renamed from. A row
+	// written under one of them after the rename still finds its group.
+	FormerNames string `json:"-" gorm:"type:text"`
+}
+
+func (group *UserGroup) formerNames() []string {
+	var names []string
+	if group.FormerNames != "" {
+		_ = common.UnmarshalJsonStr(group.FormerNames, &names)
+	}
+	return names
 }
 
 var groupRegistry = struct {
 	sync.RWMutex
 	names map[int]string
 	ids   map[string]int
-}{names: map[int]string{}, ids: map[string]int{}}
+	// former maps a name no group uses any more to the one group that was
+	// renamed from it.
+	former map[string]int
+}{names: map[int]string{}, ids: map[string]int{}, former: map[string]int{}}
 
 // isRegistrableGroupName reports whether a token group value names a real
 // group: an empty value follows the user's group and "auto" is a routing mode.
@@ -44,9 +64,25 @@ func storeGroupRegistry(groups []UserGroup) {
 			ids[group.Name] = group.Id
 		}
 	}
+	former := make(map[string]int)
+	ambiguous := make(map[string]bool)
+	for _, group := range groups {
+		for _, name := range group.formerNames() {
+			if _, inUse := ids[name]; inUse || ambiguous[name] {
+				continue
+			}
+			if id, ok := former[name]; ok && id != group.Id {
+				delete(former, name)
+				ambiguous[name] = true
+				continue
+			}
+			former[name] = group.Id
+		}
+	}
 	groupRegistry.Lock()
 	groupRegistry.names = names
 	groupRegistry.ids = ids
+	groupRegistry.former = former
 	groupRegistry.Unlock()
 }
 
@@ -73,6 +109,51 @@ func GroupIdByName(name string) (int, bool) {
 	return id, ok
 }
 
+// groupIdOf returns the id bound to name, or 0 for a name that is not a
+// registered group.
+func groupIdOf(name string) int {
+	id, _ := GroupIdByName(name)
+	return id
+}
+
+// groupIdList encodes the ids of a channel's groups in the order of its group
+// list, with 0 for a name that is not a registered group.
+func groupIdList(groups []string) string {
+	ids := make([]string, len(groups))
+	for i, group := range groups {
+		ids[i] = strconv.Itoa(groupIdOf(strings.TrimSpace(group)))
+	}
+	return strings.Join(ids, ",")
+}
+
+// currentGroupName returns the present name of the group that was renamed
+// from name. It reports false for a name that is in use or was never a group.
+func currentGroupName(name string) (string, bool) {
+	groupRegistry.RLock()
+	defer groupRegistry.RUnlock()
+	id, ok := groupRegistry.former[name]
+	if !ok {
+		return "", false
+	}
+	current, ok := groupRegistry.names[id]
+	return current, ok
+}
+
+// bindGroupIdsInUpdate adds the group id to an update that sets a group name
+// through a map of columns. idByNameColumn maps each name column to its id
+// column.
+func bindGroupIdsInUpdate(tx *gorm.DB, idByNameColumn map[string]string) {
+	columns, ok := tx.Statement.Dest.(map[string]any)
+	if !ok {
+		return
+	}
+	for nameColumn, idColumn := range idByNameColumn {
+		if name, ok := columns[nameColumn].(string); ok {
+			columns[idColumn] = groupIdOf(name)
+		}
+	}
+}
+
 // GetGroupRegistry returns the id of every group name the registry knows.
 func GetGroupRegistry() map[string]int {
 	groupRegistry.RLock()
@@ -80,16 +161,33 @@ func GetGroupRegistry() map[string]int {
 	return maps.Clone(groupRegistry.ids)
 }
 
-// EnsureGroupId returns the id bound to name, registering the name when no
-// node has done so yet.
+// EnsureGroupId returns the id a reference to name binds to: the group with
+// that name, or else the group that was renamed from it. A name nothing is
+// known about is registered.
 func EnsureGroupId(name string) (int, error) {
 	if id, ok := GroupIdByName(name); ok {
 		return id, nil
 	}
-	// Another node may have registered the name since the last sync.
+	// Another node may have registered or renamed the group since the last sync.
 	if err := loadGroupRegistry(); err != nil {
 		return 0, err
 	}
+	if id, ok := GroupIdByName(name); ok {
+		return id, nil
+	}
+	groupRegistry.RLock()
+	renamedId, renamed := groupRegistry.former[name]
+	groupRegistry.RUnlock()
+	if renamed {
+		return renamedId, nil
+	}
+	return registerGroupName(name)
+}
+
+// registerGroupName gives name an id of its own. A name listed in the group
+// ratios is a group in its own right even when another group was once called
+// that.
+func registerGroupName(name string) (int, error) {
 	if id, ok := GroupIdByName(name); ok {
 		return id, nil
 	}
@@ -100,6 +198,7 @@ func EnsureGroupId(name string) (int, error) {
 	groupRegistry.Lock()
 	groupRegistry.names[group.Id] = group.Name
 	groupRegistry.ids[group.Name] = group.Id
+	delete(groupRegistry.former, group.Name)
 	groupRegistry.Unlock()
 	return group.Id, nil
 }
@@ -115,7 +214,7 @@ func RefreshGroupRegistry() error {
 		if !isRegistrableGroupName(name) {
 			continue
 		}
-		if _, err := EnsureGroupId(name); err != nil {
+		if _, err := registerGroupName(name); err != nil {
 			return err
 		}
 	}
@@ -126,7 +225,9 @@ const groupBackfillBatchSize = 500
 
 // InitGroupRegistry loads the group registry at startup. The master node also
 // binds tokens that still reference groups only by name, which covers data
-// written before group ids existed; the backfill is idempotent.
+// written before group ids existed; the backfill is idempotent. Every other
+// stored group reference is checked by SyncGroupReferences once the caches
+// it has to invalidate are connected.
 func InitGroupRegistry() error {
 	if err := RefreshGroupRegistry(); err != nil {
 		return err

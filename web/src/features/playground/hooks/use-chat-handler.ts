@@ -35,12 +35,11 @@ import {
   isAssistantMessageFinal,
   isAssistantMessagePending,
 } from '../lib'
-import type { Message, PlaygroundConfig, ParameterEnabled } from '../types'
+import type { Message, PlaygroundConfig } from '../types'
 import { useStreamRequest } from './use-stream-request'
 
 interface UseChatHandlerOptions {
   config: PlaygroundConfig
-  parameterEnabled: ParameterEnabled
   onMessageUpdate: (updater: (prev: Message[]) => Message[]) => void
 }
 
@@ -69,7 +68,6 @@ function mergePendingStreamChunk(
  */
 export function useChatHandler({
   config,
-  parameterEnabled,
   onMessageUpdate,
 }: UseChatHandlerOptions) {
   const { t } = useTranslation()
@@ -250,11 +248,7 @@ export function useChatHandler({
       abortControllerRef.current = null
       discardPendingStreamUpdates(generation)
       setIsRequesting(true)
-      const payload = buildChatCompletionPayload(
-        messages,
-        config,
-        parameterEnabled
-      )
+      const payload = buildChatCompletionPayload(messages, config)
       void sendStreamRequest(
         payload,
         (type, chunk) => handleStreamUpdate(generation, type, chunk),
@@ -264,7 +258,6 @@ export function useChatHandler({
     },
     [
       config,
-      parameterEnabled,
       sendStreamRequest,
       discardPendingStreamUpdates,
       handleStreamUpdate,
@@ -276,11 +269,7 @@ export function useChatHandler({
   // Send non-streaming chat request
   const sendNonStreamingChat = useCallback(
     async (messages: Message[]) => {
-      const payload = buildChatCompletionPayload(
-        messages,
-        config,
-        parameterEnabled
-      )
+      const payload = buildChatCompletionPayload(messages, config)
       const generation = requestGenerationRef.current + 1
       const abortController = new AbortController()
 
@@ -338,7 +327,6 @@ export function useChatHandler({
     },
     [
       config,
-      parameterEnabled,
       stopStream,
       discardPendingStreamUpdates,
       onMessageUpdate,

@@ -26,6 +26,7 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { useBillingTime } from '../hooks/use-billing-time'
+import { pickChatGroup } from '../lib/chat-group'
 import {
   getDynamicDisplayGroupRatio,
   getDynamicPricingSummary,
@@ -36,6 +37,7 @@ import {
   type ModelPriceFactOptions,
 } from '../lib/price-facts'
 import type { PricingModel, TokenUnit } from '../types'
+import { StartChatAction } from './start-chat-action'
 
 export interface ModelListRowProps {
   model: PricingModel
@@ -44,9 +46,21 @@ export interface ModelListRowProps {
   usdExchangeRate?: number
   tokenUnit?: TokenUnit
   selectedGroup?: string
+  /** The reader's groups; when given the row offers to chat with the model. */
+  chatGroups?: string[]
 }
 
 const MAX_TAGS_IN_ROW = 3
+
+// The chat button stays out of the way until the row is pointed at or reached
+// with the keyboard, then slides in from the right with a slight overshoot. A
+// device without hover shows it all the time.
+const CHAT_REVEAL_CLASS_NAME =
+  'grid shrink-0 grid-cols-[0fr] opacity-0 transition-[grid-template-columns,opacity] duration-300 ease-out group-hover/model-row:grid-cols-[1fr] group-hover/model-row:opacity-100 group-focus-within/model-row:grid-cols-[1fr] group-focus-within/model-row:opacity-100 [@media(hover:none)]:grid-cols-[1fr] [@media(hover:none)]:opacity-100 motion-reduce:transition-none'
+
+// A band of light crosses the button once it has slid in, and its icon tilts.
+const CHAT_BUTTON_CLASS_NAME =
+  "relative translate-x-3 overflow-hidden transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover/model-row:translate-x-0 group-focus-within/model-row:translate-x-0 [@media(hover:none)]:translate-x-0 focus-visible:ring-inset before:pointer-events-none before:absolute before:inset-y-0 before:-left-1/2 before:w-1/3 before:-skew-x-12 before:bg-white/35 before:transition-[left] before:delay-150 before:duration-700 before:ease-out before:content-[''] group-hover/model-row:before:left-[130%] [&_svg]:transition-transform [&_svg]:duration-300 group-hover/model-row:[&_svg]:-rotate-12 group-hover/model-row:[&_svg]:scale-110 motion-reduce:translate-x-0 motion-reduce:transition-none motion-reduce:before:hidden"
 
 /**
  * One model of the vendor-grouped list: the name and what it is good for on the
@@ -135,7 +149,7 @@ export const ModelListRow = memo(function ModelListRow(
   }
 
   return (
-    <li className='flex items-center gap-1'>
+    <li className='group/model-row flex items-center gap-1'>
       <button
         type='button'
         onClick={() => props.onClick(props.model.model_name || '')}
@@ -178,6 +192,21 @@ export const ModelListRow = memo(function ModelListRow(
           />
         </span>
       </button>
+      {props.chatGroups && (
+        <span className={CHAT_REVEAL_CLASS_NAME}>
+          <span className='min-w-0 overflow-hidden'>
+            <StartChatAction
+              modelName={props.model.model_name ?? ''}
+              group={pickChatGroup(
+                props.model.enable_groups,
+                props.chatGroups,
+                props.selectedGroup
+              )}
+              className={CHAT_BUTTON_CLASS_NAME}
+            />
+          </span>
+        </span>
+      )}
       <CopyButton
         value={props.model.model_name}
         tooltip={t('Copy model name')}

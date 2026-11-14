@@ -174,9 +174,12 @@ type SubscriptionPlan struct {
 
 	// Upgrade user group after purchase (empty = no change)
 	UpgradeGroup string `json:"upgrade_group" gorm:"type:varchar(64);default:''"`
+	// UpgradeGroupId / DowngradeGroupId 是对应分组在 user_groups 中的 id，写入时随分组名一起绑定。
+	UpgradeGroupId int `json:"-" gorm:"default:0"`
 
 	// Downgrade user group on expiry (empty = revert to the group held before purchase)
-	DowngradeGroup string `json:"downgrade_group" gorm:"type:varchar(64);default:''"`
+	DowngradeGroup   string `json:"downgrade_group" gorm:"type:varchar(64);default:''"`
+	DowngradeGroupId int    `json:"-" gorm:"default:0"`
 
 	// Total quota (amount in quota units, 0 = unlimited)
 	TotalAmount int64 `json:"total_amount" gorm:"type:bigint;not null;default:0"`
@@ -269,6 +272,10 @@ type UserSubscription struct {
 
 	UpgradeGroup  string `json:"upgrade_group" gorm:"type:varchar(64);default:''"`
 	PrevUserGroup string `json:"prev_user_group" gorm:"type:varchar(64);default:''"`
+	// 以下三个 id 是对应分组在 user_groups 中的 id，写入时随分组名一起绑定。
+	UpgradeGroupId   int `json:"-" gorm:"default:0"`
+	PrevUserGroupId  int `json:"-" gorm:"default:0"`
+	DowngradeGroupId int `json:"-" gorm:"default:0"`
 
 	// Downgrade target group on expiry (snapshot from plan; empty = revert to PrevUserGroup)
 	DowngradeGroup string `json:"downgrade_group" gorm:"type:varchar(64);default:''"`

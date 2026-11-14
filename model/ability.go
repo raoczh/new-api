@@ -20,7 +20,9 @@ import (
 )
 
 type Ability struct {
-	Group     string  `json:"group" gorm:"type:varchar(64);primaryKey;autoIncrement:false"`
+	Group string `json:"group" gorm:"type:varchar(64);primaryKey;autoIncrement:false"`
+	// GroupId 是 group 所指分组在 user_groups 中的 id，写入时随分组名一起绑定。
+	GroupId   int     `json:"-" gorm:"default:0"`
 	Model     string  `json:"model" gorm:"type:varchar(255);primaryKey;autoIncrement:false"`
 	ChannelId int     `json:"channel_id" gorm:"primaryKey;autoIncrement:false;index"`
 	Enabled   bool    `json:"enabled"`

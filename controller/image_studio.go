@@ -556,7 +556,7 @@ func ListImageStudioModels(c *gin.Context) {
 		if !service.IsUserSelectableGroup(userCache.Group, userSetting, group) {
 			continue
 		}
-		groupRatio := service.GetUserGroupRatio(userCache.Group, group)
+		groupRatio := service.GetUserGroupRatio(userCache.Group, userSetting, group)
 		models := make([]imageStudioModelOption, 0, 8)
 		for _, item := range pricing {
 			if !slices.Contains(item.EnableGroup, group) {

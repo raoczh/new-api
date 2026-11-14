@@ -226,7 +226,11 @@ export async function resetUserTwoFA(
  * Get all available groups
  */
 export async function getGroups(): Promise<
-  ApiResponse<string[]> & { group_ratio?: Record<string, number> }
+  ApiResponse<string[]> & {
+    group_ratio?: Record<string, number>
+    /** Description of each group that has one, by group name. */
+    group_desc?: Record<string, string>
+  }
 > {
   const res = await api.get('/api/group/')
   return res.data
@@ -247,7 +251,7 @@ export async function getPermissionCatalog(): Promise<PermissionCatalog> {
 
 /**
  * List one user's API keys as an administrator. The backend returns masked
- * keys; reading a full key is a separate, proof-guarded call.
+ * keys only.
  */
 export async function getUserApiKeys(
   userId: number,
@@ -273,18 +277,17 @@ export async function setUserApiKeyStatus(
 }
 
 /**
- * Read the full key of a managed user; requires an `admin.user.manage` proof
- * bound to the `token_key_read` action.
+ * Move one of a managed user's API keys to another group. An empty group
+ * makes the key follow the user's own group.
  */
-export async function revealUserApiKey(
+export async function setUserApiKeyGroup(
   userId: number,
   tokenId: number,
-  proofToken: string
-): Promise<ApiResponse<{ key: string }>> {
-  const res = await api.get(
-    `/api/user/${userId}/tokens/${tokenId}/key`,
-    securityProofConfig(proofToken)
-  )
+  group: string
+): Promise<ApiResponse> {
+  const res = await api.put(`/api/user/${userId}/tokens/${tokenId}/group`, {
+    group,
+  })
   return res.data
 }
 
@@ -304,11 +307,19 @@ export async function deleteUserApiKey(
   return res.data
 }
 
-/** Read a managed user's group, usable groups, and per-user overrides. */
+/**
+ * Read a managed user's group, usable groups, and per-user overrides.
+ * `previewGroup` asks what the defaults would be if the user belonged to that
+ * group instead, without saving anything.
+ */
 export async function getUserGroups(
-  userId: number
+  userId: number,
+  previewGroup?: string
 ): Promise<ApiResponse<AdminUserGroups>> {
-  const res = await api.get(`/api/user/${userId}/groups`)
+  const res = await api.get(
+    `/api/user/${userId}/groups`,
+    previewGroup ? { params: { group: previewGroup } } : undefined
+  )
   return res.data
 }
 

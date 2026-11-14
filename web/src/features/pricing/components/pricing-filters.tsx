@@ -16,17 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ChevronDown, RotateCcw } from 'lucide-react'
+import { Check, Layers, RotateCcw, Store } from 'lucide-react'
 import { memo, useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
@@ -41,14 +36,7 @@ type FilterOption = {
   icon?: ReactNode
 }
 
-type FilterSectionProps = {
-  title: string
-  value: string
-  options: FilterOption[]
-  onChange: (value: string) => void
-}
-
-export interface PricingSidebarProps {
+export interface PricingFiltersProps {
   vendorFilter: string
   groupFilter: string
   onVendorChange: (value: string) => void
@@ -78,13 +66,21 @@ function FilterChip(props: {
   return (
     <Button
       type='button'
-      variant={props.active ? 'secondary' : 'outline'}
+      variant='outline'
       size='sm'
       onClick={props.onClick}
       aria-pressed={props.active}
-      className='h-auto max-w-full gap-1.5 px-2 py-1 text-xs'
       title={props.option.label}
+      className={cn(
+        'h-7 max-w-full gap-1.5 rounded-full border px-2.5 text-xs font-normal shadow-none transition-colors',
+        props.active
+          ? 'border-primary/40 bg-primary/10 text-foreground hover:bg-primary/15 font-medium'
+          : 'text-muted-foreground hover:border-primary/30 hover:text-foreground'
+      )}
     >
+      {props.active ? (
+        <Check className='text-primary size-3 shrink-0' aria-hidden='true' />
+      ) : null}
       {props.option.icon && (
         <span className='shrink-0'>{props.option.icon}</span>
       )}
@@ -92,9 +88,9 @@ function FilterChip(props: {
       {(props.option.suffix || props.option.count != null) && (
         <span
           className={cn(
-            'rounded-md px-1.5 py-0.5 text-[12px]',
+            'rounded-full px-1.5 py-0.5 text-[11px] tabular-nums',
             props.active
-              ? 'bg-background text-foreground'
+              ? 'bg-primary/15 text-foreground'
               : 'bg-muted text-muted-foreground'
           )}
         >
@@ -105,36 +101,40 @@ function FilterChip(props: {
   )
 }
 
-function FilterSection(props: FilterSectionProps) {
+function FilterRow(props: {
+  icon: ReactNode
+  label: string
+  options: FilterOption[]
+  value: string
+  onChange: (value: string) => void
+}) {
   return (
-    <Collapsible
-      defaultOpen
-      className='border-border/70 border-b pb-3 last:border-b-0'
-    >
-      <CollapsibleTrigger className='group flex w-full items-center justify-between py-2.5 text-left'>
-        <span className='text-foreground text-sm font-semibold'>
-          {props.title}
-        </span>
-        <ChevronDown className='text-muted-foreground size-4 transition-transform group-data-[panel-open]:rotate-180' />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className='flex flex-wrap gap-1.5'>
-          {props.options.map((option) => (
-            <FilterChip
-              key={option.value}
-              option={option}
-              active={props.value === option.value}
-              onClick={() => props.onChange(option.value)}
-            />
-          ))}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+    <div className='flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3'>
+      <div className='text-muted-foreground flex shrink-0 items-center gap-1.5 pt-1.5 text-xs font-medium sm:w-14 sm:justify-end'>
+        {props.icon}
+        <span>{props.label}</span>
+      </div>
+      <div className='flex min-w-0 flex-wrap gap-1.5'>
+        {props.options.map((option) => (
+          <FilterChip
+            key={option.value}
+            option={option}
+            active={props.value === option.value}
+            onClick={() => props.onChange(option.value)}
+          />
+        ))}
+      </div>
+    </div>
   )
 }
 
-export const PricingSidebar = memo(function PricingSidebar(
-  props: PricingSidebarProps
+/**
+ * Filter bar that sits right above the model list: the same provider and group
+ * choices the page used to keep in a side column, laid out as chips so the
+ * reader sees what is being filtered before scrolling into the list.
+ */
+export const PricingFilters = memo(function PricingFilters(
+  props: PricingFiltersProps
 ) {
   const { t } = useTranslation()
   const vendorCounts = useMemo(() => {
@@ -175,13 +175,20 @@ export const PricingSidebar = memo(function PricingSidebar(
   ]
 
   return (
-    <aside className={cn('bg-card rounded-xl border p-3', props.className)}>
-      <div className='mb-2.5 flex items-center justify-between gap-2'>
-        <div>
-          <h2 className='text-foreground text-sm font-bold'>{t('Filter')}</h2>
-          <p className='text-muted-foreground mt-1 text-xs'>
-            {t('Refine models by provider and group.')}
-          </p>
+    <section
+      aria-label={t('Filter')}
+      className={cn('bg-card rounded-xl border p-3 sm:p-4', props.className)}
+    >
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <div className='flex items-center gap-2'>
+          <h2 className='text-foreground text-sm font-semibold'>
+            {t('Filter')}
+          </h2>
+          {props.hasActiveFilters && (
+            <Badge variant='secondary' className='h-5 px-1.5 text-[11px]'>
+              {t('Filters active')}
+            </Badge>
+          )}
         </div>
         <Button
           type='button'
@@ -196,26 +203,22 @@ export const PricingSidebar = memo(function PricingSidebar(
         </Button>
       </div>
 
-      {props.hasActiveFilters && (
-        <Badge variant='secondary' className='mb-3'>
-          {t('Filters active')}
-        </Badge>
-      )}
-
-      <div className='space-y-1'>
-        <FilterSection
-          title={t('All Vendors')}
-          value={props.vendorFilter}
+      <div className='mt-3 space-y-2.5'>
+        <FilterRow
+          icon={<Store className='size-3.5' aria-hidden='true' />}
+          label={t('Vendors')}
           options={vendorOptions}
+          value={props.vendorFilter}
           onChange={props.onVendorChange}
         />
-        <FilterSection
-          title={t('Groups')}
-          value={props.groupFilter}
+        <FilterRow
+          icon={<Layers className='size-3.5' aria-hidden='true' />}
+          label={t('Groups')}
           options={groupOptions}
+          value={props.groupFilter}
           onChange={props.onGroupChange}
         />
       </div>
-    </aside>
+    </section>
   )
 })

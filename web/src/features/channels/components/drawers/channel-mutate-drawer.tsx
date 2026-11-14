@@ -751,6 +751,8 @@ export function ChannelMutateDrawer({
     return [...allGroups].map((group) => ({
       value: group,
       label: group,
+      // The administrator's note tells similar group names apart.
+      hint: groupsData?.group_desc?.[group],
       suffix:
         groupsData?.group_ratio?.[group] != null ? (
           <GroupMultiplierBadge ratio={groupsData.group_ratio[group]} />

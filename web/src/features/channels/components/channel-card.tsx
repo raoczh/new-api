@@ -100,7 +100,6 @@ function ChannelCardComponent({
           channel={row.original}
           groupOptions={groupOptions}
           groupRatios={groupRatios}
-          layout='card'
         />
       )
     }

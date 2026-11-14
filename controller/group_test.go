@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,29 +19,36 @@ import (
 func TestGetGroupsReturnsOrderedNamesAndGlobalRatios(t *testing.T) {
 	previousRatios := ratio_setting.GroupRatio2JSONString()
 	previousOrder := setting.GroupOrderJSONString()
+	previousUsable := setting.UserUsableGroups2JSONString()
 	t.Cleanup(func() {
+		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(previousUsable))
 		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousRatios))
 		require.NoError(t, setting.UpdateGroupOrder(previousOrder))
 	})
 	require.NoError(t, setting.UpdateGroupOrder(`["premium","default"]`))
+	// 备注只随有倍率的分组返回；已不在倍率设置里的名字不出现。
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"premium":"Premium line","retired":"Old line"}`))
 
 	for _, tc := range []struct {
 		name   string
 		ratios string
 		groups []string
 		want   map[string]float64
+		descs  map[string]string
 	}{
 		{
 			name:   "configured groups preserve zero and fractional ratios",
 			ratios: `{"default":1,"premium":1.23456,"free":0}`,
 			groups: []string{"premium", "default", "free"},
 			want:   map[string]float64{"default": 1, "premium": 1.23456, "free": 0},
+			descs:  map[string]string{"premium": "Premium line"},
 		},
 		{
 			name:   "empty configuration returns empty collections",
 			ratios: `{}`,
 			groups: []string{},
 			want:   map[string]float64{},
+			descs:  map[string]string{},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -54,11 +62,13 @@ func TestGetGroupsReturnsOrderedNamesAndGlobalRatios(t *testing.T) {
 				Success    bool               `json:"success"`
 				Data       []string           `json:"data"`
 				GroupRatio map[string]float64 `json:"group_ratio"`
+				GroupDesc  map[string]string  `json:"group_desc"`
 			}
 			require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
 			assert.True(t, response.Success)
 			assert.Equal(t, tc.groups, response.Data)
 			assert.Equal(t, tc.want, response.GroupRatio)
+			assert.Equal(t, tc.descs, response.GroupDesc)
 		})
 	}
 }
@@ -121,6 +131,7 @@ func TestRenameGroupsDatabaseMatrix(t *testing.T) {
 			vipId := 0
 			for range 2 {
 				require.NoError(t, model.InitGroupRegistry())
+				require.NoError(t, model.SyncGroupReferences())
 				var tokens []model.Token
 				require.NoError(t, db.Order("id").Find(&tokens).Error)
 				id, ok := model.GroupIdByName("vip")
@@ -134,6 +145,29 @@ func TestRenameGroupsDatabaseMatrix(t *testing.T) {
 				var registered int64
 				require.NoError(t, db.Model(&model.UserGroup{}).Count(&registered).Error)
 				assert.Equal(t, int64(2), registered)
+
+				// Every other reference is bound to the id of the group it names.
+				var boundUser model.User
+				require.NoError(t, db.First(&boundUser, user.Id).Error)
+				assert.Equal(t, vipId, boundUser.GroupId)
+				var boundChannels []model.Channel
+				require.NoError(t, db.Order("id").Find(&boundChannels).Error)
+				require.Len(t, boundChannels, 2)
+				assert.Equal(t, fmt.Sprintf("%d,%d", defaultId, vipId), boundChannels[0].GroupIds)
+				assert.Equal(t, fmt.Sprintf("%d,0", vipId), boundChannels[1].GroupIds, "a removed group has no id")
+				var boundAbilities []model.Ability
+				require.NoError(t, db.Where("channel_id = ?", channels[0].Id).Find(&boundAbilities).Error)
+				assert.ElementsMatch(t, []int{defaultId, vipId}, []int{boundAbilities[0].GroupId, boundAbilities[1].GroupId})
+				var boundPlan model.SubscriptionPlan
+				require.NoError(t, db.First(&boundPlan, plan.Id).Error)
+				assert.Equal(t, vipId, boundPlan.UpgradeGroupId)
+				assert.Zero(t, boundPlan.DowngradeGroupId)
+				var boundTask model.Task
+				require.NoError(t, db.Where("task_id = ?", "rename-matrix-task").First(&boundTask).Error)
+				assert.Equal(t, vipId, boundTask.GroupId)
+				var boundMetrics []model.PerfMetric
+				require.NoError(t, db.Order("bucket_ts, request_count").Find(&boundMetrics).Error)
+				assert.Equal(t, []int{vipId, vipId, 0}, []int{boundMetrics[0].GroupId, boundMetrics[1].GroupId, boundMetrics[2].GroupId})
 			}
 
 			var rejected struct{ Success bool }
@@ -163,23 +197,29 @@ func TestRenameGroupsDatabaseMatrix(t *testing.T) {
 			var reloadedUser model.User
 			require.NoError(t, db.First(&reloadedUser, user.Id).Error)
 			assert.Equal(t, "vip-pro", reloadedUser.Group)
+			assert.Equal(t, vipId, reloadedUser.GroupId, "a rename keeps the id")
 			assert.JSONEq(t, `{"extra_usable_groups":["vip-pro"]}`, reloadedUser.Setting)
 			var reloadedChannels []model.Channel
 			require.NoError(t, db.Order("id").Find(&reloadedChannels).Error)
 			require.Len(t, reloadedChannels, 2)
 			assert.Equal(t, "default,vip-pro", reloadedChannels[0].Group)
 			assert.Equal(t, "vip-pro", reloadedChannels[1].Group)
+			assert.Equal(t, fmt.Sprint(vipId), reloadedChannels[1].GroupIds)
 			var abilities []model.Ability
 			require.NoError(t, db.Order("channel_id").Find(&abilities).Error)
 			abilityGroups := map[int][]string{}
 			for _, ability := range abilities {
 				abilityGroups[ability.ChannelId] = append(abilityGroups[ability.ChannelId], ability.Group)
+				if ability.Group == "vip-pro" {
+					assert.Equal(t, vipId, ability.GroupId)
+				}
 			}
 			assert.ElementsMatch(t, []string{"default", "vip-pro"}, abilityGroups[channels[0].Id])
 			assert.Equal(t, []string{"vip-pro"}, abilityGroups[channels[1].Id])
 			var reloadedPlan model.SubscriptionPlan
 			require.NoError(t, db.First(&reloadedPlan, plan.Id).Error)
 			assert.Equal(t, "vip-pro", reloadedPlan.UpgradeGroup)
+			assert.Equal(t, vipId, reloadedPlan.UpgradeGroupId)
 			var task model.Task
 			require.NoError(t, db.Where("task_id = ?", "rename-matrix-task").First(&task).Error)
 			assert.Equal(t, "vip-pro", task.Group)
@@ -188,6 +228,15 @@ func TestRenameGroupsDatabaseMatrix(t *testing.T) {
 			require.Len(t, metrics, 3)
 			assert.Equal(t, []string{"vip-pro", "vip", "vip-pro"}, []string{metrics[0].Group, metrics[1].Group, metrics[2].Group},
 				"a bucket the new name already owns keeps its row")
+			assert.Equal(t, []int{vipId, 0, vipId}, []int{metrics[0].GroupId, metrics[1].GroupId, metrics[2].GroupId},
+				"the id follows the name a row is stored under")
+
+			// A restart after the rename finds nothing left to change.
+			require.NoError(t, model.InitGroupRegistry())
+			require.NoError(t, model.SyncGroupReferences())
+			require.NoError(t, db.First(&reloadedUser, user.Id).Error)
+			assert.Equal(t, "vip-pro", reloadedUser.Group)
+			assert.Equal(t, vipId, reloadedUser.GroupId)
 
 			var storedRatio model.Option
 			require.NoError(t, db.Where(&model.Option{Key: "GroupRatio"}).First(&storedRatio).Error)
@@ -220,12 +269,14 @@ func TestGetUserGroupsReportsConfiguredVendors(t *testing.T) {
 	})
 	vendor := model.Vendor{Name: "Anthropic", Icon: "Claude.Color", Description: "Long-form writing", Status: 1}
 	require.NoError(t, db.Create(&vendor).Error)
+	codexVendor := model.Vendor{Name: "Codex", Icon: "OpenAI.Color", Description: "Code assistance", Status: 1}
+	require.NoError(t, db.Create(&codexVendor).Error)
 	model.InvalidatePricingCache()
 	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"claude-b":1.5,"claude-a":2,"internal":1}`))
 	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default","claude-a":"Stable","claude-b":"Budget"}`))
 	require.NoError(t, setting.UpdateGroupOrder(`["claude-a","claude-b","default"]`))
 	require.NoError(t, setting.UpdateGroupVendors(common.GetJsonString(map[string]int{
-		"claude-a": vendor.Id, "claude-b": vendor.Id, "internal": vendor.Id, "default": 0,
+		"claude-a": vendor.Id, "claude-b": codexVendor.Id, "internal": vendor.Id, "default": 0,
 	})))
 
 	recorder := httptest.NewRecorder()
@@ -243,9 +294,43 @@ func TestGetUserGroupsReportsConfiguredVendors(t *testing.T) {
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response), recorder.Body.String())
 	require.True(t, response.Success)
 	assert.Equal(t, vendor.Id, response.Data["claude-a"].VendorID)
-	assert.Equal(t, vendor.Id, response.Data["claude-b"].VendorID)
+	assert.Equal(t, codexVendor.Id, response.Data["claude-b"].VendorID)
 	assert.Zero(t, response.Data["default"].VendorID)
 	assert.NotContains(t, response.Data, "internal", "a group the user cannot use stays hidden")
 	assert.Equal(t, []string{"claude-a", "claude-b", "default"}, response.GroupOrder)
-	assert.Equal(t, []model.PricingVendor{{ID: vendor.Id, Name: "Anthropic", Description: "Long-form writing", Icon: "Claude.Color"}}, response.Vendors)
+	// 厂商顺序跟着分组顺序走：claude-a 排在 claude-b 前面，各自的厂商也按此排序。
+	assert.Equal(
+		t,
+		[]model.PricingVendor{
+			{ID: vendor.Id, Name: "Anthropic", Description: "Long-form writing", Icon: "Claude.Color"},
+			{ID: codexVendor.Id, Name: "Codex", Description: "Code assistance", Icon: "OpenAI.Color"},
+		},
+		response.Vendors,
+	)
+}
+
+// TestOrderVendorsByGroupOrder keeps providers without a group at the end, in
+// the order they arrived, so a half-configured group list never scrambles the
+// model square.
+func TestOrderVendorsByGroupOrder(t *testing.T) {
+	previousVendors := setting.GroupVendorsJSONString()
+	previousOrder := setting.GroupOrderJSONString()
+	t.Cleanup(func() {
+		require.NoError(t, setting.UpdateGroupVendors(previousVendors))
+		require.NoError(t, setting.UpdateGroupOrder(previousOrder))
+	})
+
+	require.NoError(t, setting.UpdateGroupOrder(`["vip","unused","default"]`))
+	require.NoError(t, setting.UpdateGroupVendors(common.GetJsonString(map[string]int{
+		"vip": 7, "unused": 0, "default": 3,
+	})))
+
+	ordered := orderVendorsByGroupOrder([]model.PricingVendor{
+		{ID: 1, Name: "One"},
+		{ID: 9, Name: "Nine"},
+		{ID: 3, Name: "Three"},
+		{ID: 7, Name: "Seven"},
+	})
+
+	assert.Equal(t, []int{7, 3, 1, 9}, []int{ordered[0].ID, ordered[1].ID, ordered[2].ID, ordered[3].ID})
 }

@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import type { OnChangeFn, SortingState } from '@tanstack/react-table'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -37,6 +37,7 @@ import {
 
 import { getGroups, getUsers, searchUsers } from '../api'
 import {
+  USERS_LIST_QUERY_KEY,
   USER_STATUS,
   getUserStatusOptions,
   getUserRoleOptions,
@@ -45,7 +46,7 @@ import {
 import type { User, UserSortBy } from '../types'
 import { DataTableBulkActions } from './data-table-bulk-actions'
 import { useUsersColumns } from './users-columns'
-import { useUsers } from './users-provider'
+import { useUsersActions } from './users-provider'
 
 const route = getRouteApi('/_authenticated/users/')
 
@@ -64,13 +65,14 @@ function isDisabledUserRow(user: User) {
 
 export function UsersTable() {
   const { t } = useTranslation()
-  const { refreshTrigger, setCurrentRow, setOpen } = useUsers()
-  const columns = useUsersColumns({
-    onAdjustQuota: (user) => {
-      setCurrentRow(user)
-      setOpen('quota')
-    },
-  })
+  // Only the actions are read here. They never change, so opening a dialog
+  // renders neither the list nor its column definitions again.
+  const openDialog = useUsersActions().openDialog
+  const onAdjustQuota = useCallback(
+    (user: User) => openDialog('quota', user),
+    [openDialog]
+  )
+  const columns = useUsersColumns({ onAdjustQuota })
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [sorting, setSorting] = useState<SortingState>([])
 
@@ -141,7 +143,7 @@ export function UsersTable() {
   // Fetch data with React Query
   const { data, isLoading, isFetching } = useQuery({
     queryKey: [
-      'users',
+      ...USERS_LIST_QUERY_KEY,
       pagination.pageIndex + 1,
       pagination.pageSize,
       globalFilter,
@@ -150,7 +152,6 @@ export function UsersTable() {
       groupFilter,
       rechargedFilter,
       sortParams,
-      refreshTrigger,
     ],
     queryFn: async () => {
       const hasFilter = globalFilter?.trim()

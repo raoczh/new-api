@@ -21,7 +21,6 @@ import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
 import { beforeAll, describe, expect, test, vi } from 'vitest'
 
-import { DEFAULT_CONFIG, DEFAULT_PARAMETER_ENABLED } from '../../../constants'
 import { PlaygroundInput } from '../playground-input'
 
 vi.mock('@/components/model-group-selector', () => ({
@@ -44,22 +43,14 @@ function renderInput(options: {
 
   return render(
     <PlaygroundInput
-      config={{
-        ...DEFAULT_CONFIG,
-        model: models[0]?.value ?? '',
-        group: 'default',
-      }}
       groups={groups}
       groupValue='default'
       hasNoChatModels={options.hasNoChatModels}
       models={models}
       modelValue={models[0]?.value ?? ''}
-      onConfigChange={() => undefined}
       onGroupChange={() => undefined}
       onModelChange={() => undefined}
-      onParameterEnabledChange={() => undefined}
       onSubmit={() => undefined}
-      parameterEnabled={DEFAULT_PARAMETER_ENABLED}
     />
   )
 }

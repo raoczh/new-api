@@ -20,8 +20,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
-import { SettingsPageActionsPortal } from '@/features/system-settings/components/settings-page-context'
 import { BILLING_SECTION_IDS } from '@/features/system-settings/billing/section-registry'
+import { SettingsPageActionsPortal } from '@/features/system-settings/components/settings-page-context'
 import { api } from '@/lib/api'
 
 import { GroupManagement } from '..'
@@ -32,7 +32,9 @@ vi.mock('@/features/system-settings/models/ratio-settings-card', () => ({
     groupDefaults: { GroupRatio: string; GroupGroupRatio: string }
   }) => (
     <div data-testid='group-editor'>
-      <span data-testid='visible-tabs'>{JSON.stringify(props.visibleTabs)}</span>
+      <span data-testid='visible-tabs'>
+        {JSON.stringify(props.visibleTabs)}
+      </span>
       <span data-testid='group-ratio'>{props.groupDefaults.GroupRatio}</span>
       <span data-testid='special-ratio'>
         {props.groupDefaults.GroupGroupRatio}
@@ -93,6 +95,25 @@ it('edits groups on their own page with the loaded settings', async () => {
   expect(
     screen.getByRole('button', { name: 'Save group settings' })
   ).toBeVisible()
+})
+
+it('lets the page body scroll, because the group editor has no scroll area of its own', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: [{ key: 'GroupRatio', value: '{"default":1}' }],
+    },
+  })
+
+  renderPage()
+
+  // A long group list must stay reachable: the body that holds the editor
+  // scrolls instead of clipping whatever does not fit the viewport.
+  const body = (await screen.findByTestId('group-editor')).closest(
+    '.tc-page-body'
+  )
+  expect(body).toHaveClass('overflow-auto')
+  expect(body).not.toHaveClass('overflow-hidden')
 })
 
 it('no longer offers group pricing inside billing settings', () => {

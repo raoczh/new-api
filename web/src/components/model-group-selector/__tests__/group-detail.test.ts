@@ -53,4 +53,15 @@ describe('model group selector group detail', () => {
       'No ratio'
     )
   })
+
+  test('shows the ratio alone when the group has no description', async () => {
+    const i18n = createInstance()
+    await i18n.init({ lng: 'en', resources: { en: { translation: {} } } })
+
+    expect(formatGroupDetail({ ratio: 2 }, i18n.t)).toBe('Ratio: 2')
+    expect(formatGroupDetail({ desc: '', ratio: 0.5 }, i18n.t)).toBe(
+      'Ratio: 0.5'
+    )
+    expect(formatGroupDetail({}, i18n.t)).toBe('')
+  })
 })

@@ -143,8 +143,8 @@ export function buildGettingStartedPages(urls: DocUrls): DocPage[] {
                   zh: '状态监控：状态监控页公开展示各模型的可用率和延迟，便于区分是自己配置的问题还是上游故障。',
                 },
                 {
-                  en: 'Model Square with live pricing: browse every model available to you, its exact model ID, supported endpoints and the price for each group.',
-                  zh: '模型广场与实时价格：查看当前可用的全部模型、准确的模型 ID、支持的接口类型以及各分组价格。',
+                  en: 'Model prices with live billing: browse every model available to you, its exact model ID, supported endpoints and the price for each group.',
+                  zh: '模型价格页：查看当前可用的全部模型、准确的模型 ID、支持的接口类型以及各分组价格。',
                 },
                 {
                   en: 'Wallet, redemption codes and tickets: top up or redeem in the console, and open a ticket when something needs the operator.',
@@ -271,8 +271,8 @@ export function buildGettingStartedPages(urls: DocUrls): DocPage[] {
                 [
                   { en: 'Group', zh: '分组' },
                   {
-                    en: 'Selects the upstream channels and the price multiplier the key uses. Model Square shows the price per group. The auto group tries groups in the configured order.',
-                    zh: '决定这把密钥使用哪组上游渠道和价格倍率，模型广场可查看各分组价格。auto 分组会按配置的顺序依次尝试各分组。',
+                    en: 'Selects the upstream channels and the price multiplier the key uses. The model prices page shows the price per group. The auto group tries groups in the configured order.',
+                    zh: '决定这把密钥使用哪组上游渠道和价格倍率，模型价格页可查看各分组价格。auto 分组会按配置的顺序依次尝试各分组。',
                   },
                 ],
                 [
@@ -389,8 +389,8 @@ export function buildGettingStartedPages(urls: DocUrls): DocPage[] {
                 [
                   { en: 'Model ID', zh: '模型 ID' },
                   {
-                    en: 'An exact ID copied from Model Square or /v1/models. Display names and IDs can differ.',
-                    zh: '从模型广场或 /v1/models 复制的准确 ID，展示名称和 ID 可能不同。',
+                    en: 'An exact ID copied from the model prices page or /v1/models. Display names and IDs can differ.',
+                    zh: '从模型价格页或 /v1/models 复制的准确 ID，展示名称和 ID 可能不同。',
                   },
                 ],
               ],
@@ -524,7 +524,7 @@ export function buildGettingStartedPages(urls: DocUrls): DocPage[] {
     },
     {
       slug: 'models',
-      title: { en: 'Model Square', zh: '模型广场' },
+      title: { en: 'Model prices', zh: '模型价格' },
       summary: {
         en: 'Find the exact model ID, the endpoints a model supports and its price per group.',
         zh: '查找准确的模型 ID、模型支持的接口类型以及各分组价格。',
@@ -532,7 +532,10 @@ export function buildGettingStartedPages(urls: DocUrls): DocPage[] {
       sections: [
         {
           id: 'reading',
-          title: { en: 'What Model Square shows', zh: '模型广场能看到什么' },
+          title: {
+            en: 'What the model prices page shows',
+            zh: '模型价格页能看到什么',
+          },
           blocks: [
             {
               type: 'bullets',
@@ -564,7 +567,7 @@ export function buildGettingStartedPages(urls: DocUrls): DocPage[] {
               items: [
                 {
                   to: '/pricing',
-                  text: { en: 'Open Model Square', zh: '打开模型广场' },
+                  text: { en: 'Open model prices', zh: '打开模型价格' },
                 },
                 {
                   to: '/status-monitor',

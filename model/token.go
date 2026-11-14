@@ -421,6 +421,24 @@ func (token *Token) UpdateStatus() (err error) {
 	return DB.Model(&Token{}).Where("id = ?", token.Id).Update("status", token.Status).Error
 }
 
+// UpdateGroup 只写分组相关的列并失效令牌缓存。与 UpdateStatus 同理：令牌额度可能正在
+// 被并发扣减，整体回写会用读到的旧快照覆盖新值，因此按列更新。
+func (token *Token) UpdateGroup() error {
+	if cacheErr := invalidateTokenCacheForMutation(token.Key); cacheErr != nil {
+		common.SysLog(common.LogText("failed to invalidate token cache before group update: %s", cacheErr.Error()))
+	}
+	if err := token.bindGroupIds(); err != nil {
+		return err
+	}
+	return DB.Model(&Token{}).Where("id = ?", token.Id).Updates(map[string]any{
+		"group":             token.Group,
+		"group_id":          token.GroupId,
+		"cross_group_retry": token.CrossGroupRetry,
+		"auto_groups":       token.AutoGroups,
+		"auto_group_ids":    token.AutoGroupIds,
+	}).Error
+}
+
 func (token *Token) Delete() (err error) {
 	if cacheErr := invalidateTokenCacheForMutation(token.Key); cacheErr != nil {
 		common.SysLog(common.LogText("failed to invalidate token cache before delete: %s", cacheErr.Error()))

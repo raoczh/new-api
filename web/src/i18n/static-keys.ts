@@ -197,7 +197,7 @@ export const STATIC_I18N_KEYS = [
   // Header navigation
   'Home',
   'Console',
-  'Model Square',
+  'Model prices',
   'Docs',
   'About',
 
@@ -422,19 +422,6 @@ export const STATIC_I18N_KEYS = [
   'Match models containing this name',
   'Match models ending with this name',
 
-  // Playground parameter controls
-  'Temperature',
-  'Top P',
-  'Frequency Penalty',
-  'Presence Penalty',
-  'Max Tokens',
-  'Seed',
-  'Controls randomness and creativity',
-  'Limits token selection to a probability mass',
-  'Reduces repeated wording',
-  'Encourages new topics',
-  'Caps the response length',
-  'Keeps compatible responses more repeatable',
   'All Status',
   'All Sync Status',
   'Official Sync',

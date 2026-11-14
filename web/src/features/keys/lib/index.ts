@@ -36,6 +36,7 @@ export {
   type KeyVendor,
   type KeyVendorChoice,
   groupKeyVendors,
+  keyToRoute,
   resolveVendorAutoRoute,
   routeToKeyGroups,
   suggestKeyName,

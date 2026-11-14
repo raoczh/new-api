@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQueryClient } from '@tanstack/react-query'
 import React, { useCallback, useMemo, useState } from 'react'
 
 import {
@@ -24,70 +25,88 @@ import {
 } from '@/features/auth/secure-verification'
 import useDialogState from '@/hooks/use-dialog'
 
+import { USERS_LIST_QUERY_KEY } from '../constants'
 import type { User, UsersDialogType } from '../types'
 
-type UsersContextType = {
-  open: UsersDialogType | null
-  setOpen: (str: UsersDialogType | null) => void
-  currentRow: User | null
+/**
+ * What the page can do. None of it ever changes, so the list and its rows can
+ * use these without being rendered again each time a dialog opens or closes.
+ */
+type UsersActions = {
+  setOpen: React.Dispatch<React.SetStateAction<UsersDialogType | null>>
   setCurrentRow: React.Dispatch<React.SetStateAction<User | null>>
-  refreshTrigger: number
+  /** Opens one dialog for one user, or for no user when creating. */
+  openDialog: (dialog: UsersDialogType, user: User | null) => void
+  /** Reloads the user list after something about a user changed. */
   triggerRefresh: () => void
   /** Step-up ceremony shared by every risky user-management action. */
   requestVerification: ReturnType<
     typeof useSecureVerification
   >['requestVerification']
+}
+
+type UsersContextType = UsersActions & {
+  open: UsersDialogType | null
+  currentRow: User | null
   /** True while the step-up dialog is showing; confirm dialogs yield to it. */
   verificationActive: boolean
 }
 
+const UsersActionsContext = React.createContext<UsersActions | null>(null)
 const UsersContext = React.createContext<UsersContextType | null>(null)
 
-export function UsersProvider({ children }: { children: React.ReactNode }) {
+export function UsersProvider(props: { children: React.ReactNode }) {
+  const queryClient = useQueryClient()
   const [open, setOpen] = useDialogState<UsersDialogType>(null)
   const [currentRow, setCurrentRow] = useState<User | null>(null)
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
   // The dialog mounts once here; consumers only receive the proof token, and
-  // the memoized value keeps dialog keystrokes from re-rendering the table.
+  // the memoized value keeps dialog keystrokes from re-rendering the page.
   const verification = useSecureVerification()
   const requestVerification = verification.requestVerification
   const verificationActive = verification.isActive
 
-  const triggerRefresh = useCallback(
-    () => setRefreshTrigger((prev) => prev + 1),
-    []
+  const openDialog = useCallback(
+    (dialog: UsersDialogType, user: User | null) => {
+      setCurrentRow(user)
+      setOpen(dialog)
+    },
+    [setOpen]
+  )
+
+  const triggerRefresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: USERS_LIST_QUERY_KEY })
+  }, [queryClient])
+
+  const actions = useMemo(
+    () => ({
+      setOpen,
+      setCurrentRow,
+      openDialog,
+      triggerRefresh,
+      requestVerification,
+    }),
+    [setOpen, openDialog, triggerRefresh, requestVerification]
   )
 
   const value = useMemo(
-    () => ({
-      open,
-      setOpen,
-      currentRow,
-      setCurrentRow,
-      refreshTrigger,
-      triggerRefresh,
-      requestVerification,
-      verificationActive,
-    }),
-    [
-      open,
-      setOpen,
-      currentRow,
-      refreshTrigger,
-      triggerRefresh,
-      requestVerification,
-      verificationActive,
-    ]
+    () => ({ ...actions, open, currentRow, verificationActive }),
+    [actions, open, currentRow, verificationActive]
   )
 
   return (
-    <UsersContext value={value}>
-      {children}
-      <SecureVerificationDialog {...verification.dialogProps} />
-    </UsersContext>
+    <UsersActionsContext value={actions}>
+      <UsersContext value={value}>
+        {props.children}
+        <SecureVerificationDialog {...verification.dialogProps} />
+      </UsersContext>
+    </UsersActionsContext>
   )
 }
 
+/**
+ * Dialog state together with the actions. Whoever reads it is rendered again
+ * whenever a dialog opens, closes or changes user, so it is for the dialogs.
+ */
 // eslint-disable-next-line react-refresh/only-export-components
 export const useUsers = () => {
   const usersContext = React.useContext(UsersContext)
@@ -97,4 +116,16 @@ export const useUsers = () => {
   }
 
   return usersContext
+}
+
+/** The actions alone, for the list, its rows and the page buttons. */
+// eslint-disable-next-line react-refresh/only-export-components
+export const useUsersActions = () => {
+  const usersActions = React.useContext(UsersActionsContext)
+
+  if (!usersActions) {
+    throw new Error('useUsersActions has to be used within <UsersContext>')
+  }
+
+  return usersActions
 }

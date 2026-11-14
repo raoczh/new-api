@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
@@ -77,41 +78,43 @@ func resolveUserSortOptions(sortOptions []UserSortOptions) UserSortOptions {
 // User if you add sensitive fields, don't forget to clean them in setupLogin function.
 // Otherwise, the sensitive information will be saved on local storage in plain text!
 type User struct {
-	Id                   int                        `json:"id"`
-	Username             string                     `json:"username" gorm:"unique;index" validate:"max=20"`
-	Password             string                     `json:"password" gorm:"not null;" validate:"min=8,max=128"`
-	HasPassword          bool                       `json:"-" gorm:"-:all"`
-	OriginalPassword     string                     `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
-	DisplayName          string                     `json:"display_name" gorm:"index" validate:"max=20"`
-	Role                 int                        `json:"role" gorm:"type:int;default:1"`   // admin, common
-	Status               int                        `json:"status" gorm:"type:int;default:1"` // enabled, disabled
-	Email                string                     `json:"email" gorm:"index" validate:"max=50"`
-	GitHubId             string                     `json:"github_id" gorm:"column:github_id;index"`
-	DiscordId            string                     `json:"discord_id" gorm:"column:discord_id;index"`
-	OidcId               string                     `json:"oidc_id" gorm:"column:oidc_id;index"`
-	WeChatId             string                     `json:"wechat_id" gorm:"column:wechat_id;index"`
-	TelegramId           string                     `json:"telegram_id" gorm:"column:telegram_id;index"`
-	VerificationCode     string                     `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
-	AccessToken          *string                    `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // Deprecated: 旧版面板访问令牌，仅在升级后的过渡期内使用；删除 users.access_token 列时一并移除。
-	AccessTokenCreatedAt *int64                     `json:"-" gorm:"type:bigint;column:access_token_created_at"`    // Deprecated: 旧版面板访问令牌，仅在升级后的过渡期内使用；删除 users.access_token 列时一并移除。
-	Quota                int                        `json:"quota" gorm:"type:int;default:0"`
-	UsedQuota            int                        `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
-	RequestCount         int                        `json:"request_count" gorm:"type:int;default:0;"`               // request number
-	Group                string                     `json:"group" gorm:"type:varchar(64);default:'default'"`
-	AffCode              string                     `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
-	AffCount             int                        `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
-	AffQuota             int                        `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
-	AffHistoryQuota      int                        `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
-	InviterId            int                        `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
-	DeletedAt            gorm.DeletedAt             `gorm:"index"`
-	LinuxDOId            string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`
-	Setting              string                     `json:"setting" gorm:"type:text;column:setting"`
-	Remark               string                     `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
-	StripeCustomer       string                     `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
-	CreatedAt            int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
-	LastLoginAt          int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
-	AuthVersion          int64                      `json:"-" gorm:"type:bigint;not null;default:1;column:auth_version"`
-	AdminPermissions     map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
+	Id                   int     `json:"id"`
+	Username             string  `json:"username" gorm:"unique;index" validate:"max=20"`
+	Password             string  `json:"password" gorm:"not null;" validate:"min=8,max=128"`
+	HasPassword          bool    `json:"-" gorm:"-:all"`
+	OriginalPassword     string  `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
+	DisplayName          string  `json:"display_name" gorm:"index" validate:"max=20"`
+	Role                 int     `json:"role" gorm:"type:int;default:1"`   // admin, common
+	Status               int     `json:"status" gorm:"type:int;default:1"` // enabled, disabled
+	Email                string  `json:"email" gorm:"index" validate:"max=50"`
+	GitHubId             string  `json:"github_id" gorm:"column:github_id;index"`
+	DiscordId            string  `json:"discord_id" gorm:"column:discord_id;index"`
+	OidcId               string  `json:"oidc_id" gorm:"column:oidc_id;index"`
+	WeChatId             string  `json:"wechat_id" gorm:"column:wechat_id;index"`
+	TelegramId           string  `json:"telegram_id" gorm:"column:telegram_id;index"`
+	VerificationCode     string  `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
+	AccessToken          *string `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // Deprecated: 旧版面板访问令牌，仅在升级后的过渡期内使用；删除 users.access_token 列时一并移除。
+	AccessTokenCreatedAt *int64  `json:"-" gorm:"type:bigint;column:access_token_created_at"`    // Deprecated: 旧版面板访问令牌，仅在升级后的过渡期内使用；删除 users.access_token 列时一并移除。
+	Quota                int     `json:"quota" gorm:"type:int;default:0"`
+	UsedQuota            int     `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
+	RequestCount         int     `json:"request_count" gorm:"type:int;default:0;"`               // request number
+	Group                string  `json:"group" gorm:"type:varchar(64);default:'default'"`
+	// GroupId 是 group 所指分组在 user_groups 中的 id，写入时随分组名一起绑定。
+	GroupId          int                        `json:"-" gorm:"default:0"`
+	AffCode          string                     `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
+	AffCount         int                        `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
+	AffQuota         int                        `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
+	AffHistoryQuota  int                        `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
+	InviterId        int                        `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
+	DeletedAt        gorm.DeletedAt             `gorm:"index"`
+	LinuxDOId        string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`
+	Setting          string                     `json:"setting" gorm:"type:text;column:setting"`
+	Remark           string                     `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
+	StripeCustomer   string                     `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
+	CreatedAt        int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
+	LastLoginAt      int64                      `json:"last_login_at" gorm:"default:0;column:last_login_at"`
+	AuthVersion      int64                      `json:"-" gorm:"type:bigint;not null;default:1;column:auth_version"`
+	AdminPermissions map[string]map[string]bool `json:"admin_permissions,omitempty" gorm:"-:all"`
 
 	// Per-user relay limits live in Setting. The API exposes them as top-level
 	// fields so the admin form can edit them; nil means "not provided" on update.
@@ -267,11 +270,29 @@ func (user *User) ApplyUserRelayLimitsToResponse() {
 	user.HiddenUsableGroups = setting.HiddenUsableGroups
 }
 
-// UpdateUserGroupOverrides 管理员专用：只更新用户分组与可见分组覆盖。
+// ValidateUserGroupRatios rejects per-user group ratios that could not be
+// charged safely: an unbounded list, a nameless group, or a ratio that is
+// negative, not a number, or above ratio_setting.MaxUserGroupRatio.
+func ValidateUserGroupRatios(ratios map[string]float64) error {
+	if len(ratios) > maxUsableGroupOverrides {
+		return fmt.Errorf("at most %d groups can be listed", maxUsableGroupOverrides)
+	}
+	for name, ratio := range ratios {
+		if name == "" || len(name) > 64 {
+			return fmt.Errorf("group name must be between 1 and 64 characters")
+		}
+		if !ratio_setting.IsValidUserGroupRatio(ratio) {
+			return fmt.Errorf("the ratio of group %s must be between 0 and %v", name, ratio_setting.MaxUserGroupRatio)
+		}
+	}
+	return nil
+}
+
+// UpdateUserGroupOverrides 管理员专用：只更新用户分组、可见分组覆盖与该用户的专属分组倍率。
 // 与 UpdateUserBindColumn 同理，只写 group 与 setting 两列，避免“读快照 → 改一个
 // 字段 → 整体回写”覆盖读快照期间并发发生的额度、封禁等变化。
 // 分组变化会推进 auth_version 并返回 true，调用方据此注销旧会话并刷新认证缓存。
-func UpdateUserGroupOverrides(userId int, group string, extra, hidden []string) (bool, error) {
+func UpdateUserGroupOverrides(userId int, group string, extra, hidden []string, ratios map[string]float64) (bool, error) {
 	if userId <= 0 || group == "" {
 		return false, common.NewMessage("User ID or group name is empty")
 	}
@@ -284,6 +305,7 @@ func UpdateUserGroupOverrides(userId int, group string, extra, hidden []string) 
 		setting := current.GetSetting()
 		setting.ExtraUsableGroups = extra
 		setting.HiddenUsableGroups = hidden
+		setting.GroupRatios = ratios
 		settingBytes, err := common.Marshal(setting)
 		if err != nil {
 			return err
@@ -952,6 +974,7 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 		}
 	}
 	newUser := *user
+	newUser.GroupId = groupIdOf(newUser.Group)
 	current := User{}
 	if err = tx.First(&current, user.Id).Error; err != nil {
 		return err
@@ -980,6 +1003,13 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 		"auth_version",
 	).Updates(newUser).Error; err != nil {
 		return err
+	}
+	if newUser.Group != "" && newUser.GroupId == 0 {
+		// Updates skips zero values: a group without an id must not keep the
+		// id of the previous group.
+		if err = tx.Model(&User{}).Where("id = ?", user.Id).UpdateColumn("group_id", 0).Error; err != nil {
+			return err
+		}
 	}
 	return tx.First(user, user.Id).Error
 }

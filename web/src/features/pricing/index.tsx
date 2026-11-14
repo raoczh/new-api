@@ -27,16 +27,17 @@ import {
   EmptyState,
   SearchBar,
   PricingTable,
-  PricingSidebar,
+  PricingFilters,
   PricingToolbar,
   ModelCardGrid,
-  ModelDetailsDrawer,
+  ModelDetailsDialog,
   VendorModelList,
   StartChatAction,
 } from './components'
 import { EXCLUDED_GROUPS, VIEW_MODES } from './constants'
 import { useFilters } from './hooks/use-filters'
 import { usePricingData } from './hooks/use-pricing-data'
+import { pickChatGroup } from './lib/chat-group'
 
 export function Pricing() {
   const { t } = useTranslation()
@@ -72,7 +73,6 @@ export function Pricing() {
     setViewMode,
     filteredModels,
     hasActiveFilters,
-    activeFilterCount,
     clearFilters,
     clearSearch,
   } = useFilters(models || [], groupOrder)
@@ -94,6 +94,16 @@ export function Pricing() {
   const availableGroups = useMemo(
     () => groupOrder.filter((g) => !EXCLUDED_GROUPS.includes(g)),
     [groupOrder]
+  )
+
+  // The chat must open on a group that actually serves the model, otherwise it
+  // falls back to the reader's default group and the model shows as unselected.
+  // The active group filter wins when it serves the model; otherwise the first
+  // usable group in the configured group order.
+  const chatGroup = useMemo(
+    () =>
+      pickChatGroup(selectedModel?.enable_groups, availableGroups, groupFilter),
+    [selectedModel, groupFilter, availableGroups]
   )
 
   const handleClearAll = useCallback(() => {
@@ -135,6 +145,7 @@ export function Pricing() {
           usdExchangeRate={usdExchangeRate}
           tokenUnit={tokenUnit}
           selectedGroup={groupFilter}
+          chatGroups={availableGroups}
         />
       )
     }
@@ -167,7 +178,7 @@ export function Pricing() {
         <PageTransition className='relative mx-auto w-full max-w-[1600px] px-4 pt-24 pb-8 sm:px-8 sm:pt-28 sm:pb-12'>
           <header className='bg-card mb-8 grid gap-x-12 rounded-xl border p-5 sm:p-8 lg:grid-cols-[1fr_minmax(20rem,0.75fr)]'>
             <h1 className='text-[clamp(2rem,4vw,3rem)] leading-[1.15] font-bold tracking-tight'>
-              {t('Model Square')}
+              {t('Model prices')}
             </h1>
             <p className='text-muted-foreground mt-3 text-sm sm:mt-4 sm:text-base'>
               {t('This site currently has {{count}} models enabled', {
@@ -190,8 +201,8 @@ export function Pricing() {
             />
           </header>
 
-          <div className='grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]'>
-            <PricingSidebar
+          <main className='min-w-0 space-y-4'>
+            <PricingFilters
               vendorFilter={vendorFilter}
               groupFilter={groupFilter}
               onVendorChange={setVendorFilter}
@@ -202,38 +213,24 @@ export function Pricing() {
               models={models || []}
               hasActiveFilters={hasActiveFilters}
               onClearFilters={clearFilters}
-              className='hover-scrollbar sticky top-20 hidden max-h-[calc(100dvh-6rem)] self-start overflow-y-auto xl:block'
             />
 
-            <main className='min-w-0 space-y-4'>
-              <PricingToolbar
-                filteredCount={filteredModels.length}
-                totalCount={models?.length}
-                sortBy={sortBy}
-                onSortChange={setSortBy}
-                tokenUnit={tokenUnit}
-                onTokenUnitChange={setTokenUnit}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                vendorFilter={vendorFilter}
-                groupFilter={groupFilter}
-                onVendorChange={setVendorFilter}
-                onGroupChange={setGroupFilter}
-                vendors={vendors || []}
-                groups={availableGroups}
-                groupRatios={groupRatio}
-                models={models || []}
-                hasActiveFilters={hasActiveFilters}
-                activeFilterCount={activeFilterCount}
-                onClearFilters={clearFilters}
-              />
+            <PricingToolbar
+              filteredCount={filteredModels.length}
+              totalCount={models?.length}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              tokenUnit={tokenUnit}
+              onTokenUnitChange={setTokenUnit}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+            />
 
-              {renderPricingContent()}
-            </main>
-          </div>
+            {renderPricingContent()}
+          </main>
 
           {selectedModel && (
-            <ModelDetailsDrawer
+            <ModelDetailsDialog
               open={Boolean(selectedModel)}
               onOpenChange={(open) => {
                 if (!open) setSelectedModelName(null)
@@ -252,7 +249,11 @@ export function Pricing() {
               usdExchangeRate={usdExchangeRate ?? 1}
               tokenUnit={tokenUnit}
               headerAction={
-                <StartChatAction modelName={selectedModel.model_name} />
+                <StartChatAction
+                  modelName={selectedModel.model_name}
+                  group={chatGroup}
+                  size='default'
+                />
               }
             />
           )}

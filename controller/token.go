@@ -689,6 +689,68 @@ func AdminSetUserTokenStatus(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+type adminTokenGroupRequest struct {
+	Group string `json:"group"`
+}
+
+// AdminSetUserTokenGroup 把用户的一个密钥改到另一个分组，下一次请求即按新分组
+// 路由和计费。只接受该用户自己能选的分组：空值表示跟随用户所属分组，auto 需要
+// 该用户可用 auto。改到普通分组时清掉只对 auto 有意义的跨分组重试和自选顺序；
+// 改到 auto 时与用户在密钥页自己切换一致：沿用站点的 auto 分组顺序并开启跨分组重试。
+func AdminSetUserTokenGroup(c *gin.Context) {
+	user, ok := adminTargetUser(c)
+	if !ok {
+		return
+	}
+	token, ok := adminTargetToken(c, user.Id)
+	if !ok {
+		return
+	}
+	var req adminTokenGroupRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	group := strings.TrimSpace(req.Group)
+	userSetting := user.GetSetting()
+	switch group {
+	case "":
+	case "auto":
+		if !service.GroupInUserUsableGroups(user.Group, userSetting, group) {
+			common.ApiErrorT(c, "Group {{group}} does not exist", map[string]any{"group": group})
+			return
+		}
+	default:
+		if !service.IsUserSelectableGroup(user.Group, userSetting, group) {
+			common.ApiErrorT(c, "Group {{group}} does not exist", map[string]any{"group": group})
+			return
+		}
+	}
+	if token.Group == group {
+		common.ApiSuccess(c, nil)
+		return
+	}
+	previousGroup := token.Group
+	token.Group = group
+	token.CrossGroupRetry = group == "auto"
+	if err := token.SetAutoGroups(nil); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := token.UpdateGroup(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAuditFor(c, user.Id, "user.token_group_update", map[string]any{
+		"username":       user.Username,
+		"token_id":       token.Id,
+		"token_name":     token.Name,
+		"group":          group,
+		"previous_group": previousGroup,
+	})
+	common.ApiSuccess(c, nil)
+}
+
 // AdminDeleteUserToken 删除用户的一个密钥。删除不可恢复，会立即中断该密钥正在
 // 承载的调用，因此需要管理员完成一次二次校验。
 func AdminDeleteUserToken(c *gin.Context) {

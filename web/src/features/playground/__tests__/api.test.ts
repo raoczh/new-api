@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
-import { getUserModels } from '../api'
+import { getUserGroups, getUserModels } from '../api'
 import { API_ENDPOINTS } from '../constants'
 
 const { get } = vi.hoisted(() => ({
@@ -61,5 +61,48 @@ describe('getUserModels', () => {
     get.mockResolvedValue({ data: { success: true } })
 
     await expect(getUserModels('default')).resolves.toEqual([])
+  })
+})
+
+describe('getUserGroups', () => {
+  beforeEach(() => {
+    get.mockReset()
+  })
+
+  test('lists groups in the configured display order, with unlisted groups last', async () => {
+    get.mockResolvedValue({
+      data: {
+        success: true,
+        // Object keys arrive alphabetically; the order comes from group_order.
+        data: {
+          alpha: { desc: 'Alpha', ratio: 1 },
+          beta: { desc: 'Beta', ratio: 2 },
+          gamma: { desc: 'Gamma', ratio: 0.5 },
+        },
+        group_order: ['gamma', 'removed-group', 'alpha'],
+      },
+    })
+
+    await expect(getUserGroups()).resolves.toEqual([
+      { label: 'gamma', value: 'gamma', ratio: 0.5, desc: 'Gamma' },
+      { label: 'alpha', value: 'alpha', ratio: 1, desc: 'Alpha' },
+      { label: 'beta', value: 'beta', ratio: 2, desc: 'Beta' },
+    ])
+  })
+
+  test('keeps the returned order when the server sends no display order', async () => {
+    get.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          default: { desc: 'Default', ratio: 1 },
+          vip: { desc: 'VIP', ratio: 2 },
+        },
+      },
+    })
+
+    const groups = await getUserGroups()
+
+    expect(groups.map((group) => group.value)).toEqual(['default', 'vip'])
   })
 })

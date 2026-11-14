@@ -58,7 +58,9 @@ export function GroupManagement() {
       actionsContainer={actionsContainer}
       titleStatusContainer={titleStatusContainer}
     >
-      <SectionPageLayout fixedContent>
+      {/* The editor has no scroll area of its own, so the page body scrolls.
+          `fixedContent` is for list pages whose table scrolls internally. */}
+      <SectionPageLayout>
         <SectionPageLayout.Title>
           <span className='inline-flex max-w-full min-w-0 items-center gap-2 align-middle'>
             <span className='truncate'>{t('Group Management')}</span>

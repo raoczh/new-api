@@ -30,11 +30,9 @@ import {
   loadConversationIndex,
   loadLegacyMessages,
   loadMessages,
-  loadParameterEnabled,
   saveConfig,
   saveConversationIndex,
   saveMessages,
-  saveParameterEnabled,
 } from '../storage'
 
 const messages: Message[] = [
@@ -73,22 +71,19 @@ afterEach(() => {
   useAuthStore.getState().auth.reset()
 })
 
-test('switching accounts isolates config, conversations and parameter toggles and preserves returning account data', () => {
+test('switching accounts isolates config and conversations and preserves returning account data', () => {
   useAuthStore.getState().auth.setUser({ id: 1, username: 'A', role: 1 })
   saveConfig({ model: 'account-a-model' })
   saveMessages('conversation-a', messages)
   saveConversationIndex(conversationIndex)
-  saveParameterEnabled({ temperature: true })
 
   useAuthStore.getState().auth.reset()
   useAuthStore.getState().auth.setUser({ id: 2, username: 'B', role: 1 })
   expect(loadConfig()).toEqual({})
   expect(loadMessages('conversation-a')).toBeNull()
   expect(loadConversationIndex()).toBeNull()
-  expect(loadParameterEnabled()).toEqual({})
   saveConfig({ model: 'account-b-model' })
   saveMessages('conversation-b', [])
-  saveParameterEnabled({ temperature: false })
 
   useAuthStore.getState().auth.setUser({ id: 1, username: 'A', role: 1 })
   expect(loadConfig()).toEqual({ model: 'account-a-model' })
@@ -97,7 +92,6 @@ test('switching accounts isolates config, conversations and parameter toggles an
     activeId: 'conversation-a',
     items: [conversationIndex.items[1], conversationIndex.items[0]],
   })
-  expect(loadParameterEnabled()).toEqual({ temperature: true })
 
   clearPlaygroundData()
   expect(loadMessages('conversation-a')).toBeNull()
@@ -105,7 +99,32 @@ test('switching accounts isolates config, conversations and parameter toggles an
   useAuthStore.getState().auth.setUser({ id: 2, username: 'B', role: 1 })
   expect(loadConfig()).toEqual({ model: 'account-b-model' })
   expect(loadMessages('conversation-b')).toEqual([])
-  expect(loadParameterEnabled()).toEqual({ temperature: false })
+})
+
+test('a config saved while the parameter panel existed loads without its sampling values', () => {
+  useAuthStore.getState().auth.setUser({ id: 1, username: 'A', role: 1 })
+  localStorage.setItem(
+    `${STORAGE_KEYS.CONFIG}:1`,
+    JSON.stringify({
+      version: 1,
+      data: { model: 'stored-model', group: 'vip', temperature: 0.2, seed: 7 },
+    })
+  )
+
+  expect(loadConfig()).toEqual({ model: 'stored-model', group: 'vip' })
+})
+
+test('clearing playground data removes the toggles the parameter panel left behind', () => {
+  useAuthStore.getState().auth.setUser({ id: 1, username: 'A', role: 1 })
+  const toggleKey = `${STORAGE_KEYS.PARAMETER_ENABLED}:1`
+  localStorage.setItem(
+    toggleKey,
+    JSON.stringify({ version: 1, data: { temperature: false } })
+  )
+
+  clearPlaygroundData()
+
+  expect(localStorage.getItem(toggleKey)).toBeNull()
 })
 
 test('conversation messages are stored per conversation and deleted individually', () => {
@@ -153,10 +172,7 @@ test('attachments are dropped before messages are persisted', () => {
 
 test('legacy single-conversation messages can be loaded and cleared during migration', () => {
   useAuthStore.getState().auth.setUser({ id: 1, username: 'A', role: 1 })
-  localStorage.setItem(
-    `${STORAGE_KEYS.MESSAGES}:1`,
-    JSON.stringify(messages)
-  )
+  localStorage.setItem(`${STORAGE_KEYS.MESSAGES}:1`, JSON.stringify(messages))
 
   expect(loadLegacyMessages()).toEqual(messages)
 
@@ -184,7 +200,6 @@ test('legacy global data is removed instead of assigned to the first signed-in a
   expect(loadConfig()).toEqual({})
   expect(loadMessages('conversation-a')).toBeNull()
   expect(loadConversationIndex()).toBeNull()
-  expect(loadParameterEnabled()).toEqual({})
   for (const key of Object.values(STORAGE_KEYS)) {
     expect(localStorage.getItem(key)).toBeNull()
   }
@@ -194,10 +209,8 @@ test('storage calls without a signed-in user do not persist shared data', () => 
   saveConfig({ model: 'signed-out-model' })
   saveMessages('conversation-a', messages)
   saveConversationIndex(conversationIndex)
-  saveParameterEnabled({ temperature: true })
   expect(loadConfig()).toEqual({})
   expect(loadMessages('conversation-a')).toBeNull()
   expect(loadConversationIndex()).toBeNull()
-  expect(loadParameterEnabled()).toEqual({})
   expect(localStorage.length).toBe(0)
 })

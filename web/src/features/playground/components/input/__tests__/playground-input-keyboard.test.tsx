@@ -21,10 +21,6 @@ import userEvent from '@testing-library/user-event'
 import i18next from 'i18next'
 import { beforeAll, describe, expect, test, vi } from 'vitest'
 
-import {
-  DEFAULT_CONFIG,
-  DEFAULT_PARAMETER_ENABLED,
-} from '../../../constants'
 import { PlaygroundInput } from '../playground-input'
 
 // The selector has its own coverage; here it only needs to render without
@@ -39,17 +35,13 @@ const groups = [{ label: 'default', value: 'default', ratio: 1 }]
 function renderInput(onSubmit: (text: string, attachments?: string[]) => void) {
   return render(
     <PlaygroundInput
-      config={{ ...DEFAULT_CONFIG, model: 'gpt-test', group: 'default' }}
       groups={groups}
       groupValue='default'
       models={models}
       modelValue='gpt-test'
-      onConfigChange={() => undefined}
       onGroupChange={() => undefined}
       onModelChange={() => undefined}
-      onParameterEnabledChange={() => undefined}
       onSubmit={onSubmit}
-      parameterEnabled={DEFAULT_PARAMETER_ENABLED}
     />
   )
 }

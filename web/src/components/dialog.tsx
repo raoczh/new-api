@@ -31,6 +31,11 @@ import { cn } from '@/lib/utils'
 
 type DialogProps = React.ComponentProps<typeof DialogRoot> & {
   title: React.ReactNode
+  /**
+   * Control shown right after the title, e.g. a copy button. It sits outside
+   * the heading so it does not become part of the dialog's accessible name.
+   */
+  titleAction?: React.ReactNode
   description?: React.ReactNode
   children: React.ReactNode
   trigger?: React.ReactElement
@@ -51,6 +56,7 @@ const dialogContentMotionClassName =
 
 export function Dialog({
   title,
+  titleAction,
   description,
   children,
   trigger,
@@ -86,7 +92,16 @@ export function Dialog({
         <DialogHeader
           className={cn('flex-shrink-0 text-start', headerClassName)}
         >
-          <DialogTitle className={titleClassName}>{title}</DialogTitle>
+          {titleAction ? (
+            <div className='flex min-w-0 items-center gap-2'>
+              <DialogTitle className={cn('min-w-0', titleClassName)}>
+                {title}
+              </DialogTitle>
+              {titleAction}
+            </div>
+          ) : (
+            <DialogTitle className={titleClassName}>{title}</DialogTitle>
+          )}
           {description ? (
             <DialogDescription className={descriptionClassName}>
               {description}

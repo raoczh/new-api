@@ -24,8 +24,13 @@ import { Playground } from '@/features/playground'
 import { isSidebarModuleEnabledForGuard } from '@/lib/nav-modules'
 
 const playgroundSearchSchema = z.object({
-  /** Model to start the conversation with, set by links from the model square. */
+  /** Model to start the conversation with, set by links from the model prices page. */
   model: z.string().optional().catch(undefined),
+  /**
+   * Group that serves the linked model. Without it the chat would fall back to
+   * the user's default group, which may not offer that model at all.
+   */
+  group: z.string().optional().catch(undefined),
 })
 
 export const Route = createFileRoute('/_authenticated/playground/')({
@@ -45,11 +50,11 @@ export const Route = createFileRoute('/_authenticated/playground/')({
 })
 
 function PlaygroundPage() {
-  const { model } = useSearch({ from: '/_authenticated/playground/' })
+  const { model, group } = useSearch({ from: '/_authenticated/playground/' })
 
   return (
     <Main className='p-0'>
-      <Playground initialModel={model} />
+      <Playground initialModel={model} initialGroup={group} />
     </Main>
   )
 }

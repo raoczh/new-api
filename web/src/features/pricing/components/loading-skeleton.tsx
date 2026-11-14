@@ -140,34 +140,28 @@ export function LoadingSkeleton(props: LoadingSkeletonProps) {
         <Skeleton className='mt-2 h-5 w-full max-w-xl' />
         <Skeleton className='mt-4 h-10 w-full max-w-2xl sm:mt-6' />
       </div>
-      <div className='grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]'>
-        <div className='hidden self-start rounded-xl border p-3 xl:block'>
-          <Skeleton className='mb-4 h-5 w-24' />
-          {Array.from({ length: 5 }, (_, index) => (
-            <div
-              key={index}
-              className='flex flex-col gap-3 border-b py-4 last:border-0'
-            >
-              <Skeleton className='h-4 w-28' />
-              <div className='flex flex-wrap gap-2'>
-                <Skeleton className='h-7 w-24' />
-                <Skeleton className='h-7 w-20' />
-                <Skeleton className='h-7 w-28' />
-              </div>
+      <div className='flex min-w-0 flex-col gap-4'>
+        {/* Filter bar: one row of chips per filter, above the list. */}
+        <div className='flex flex-col gap-3 rounded-xl border p-3 sm:p-4'>
+          <Skeleton className='h-5 w-20' />
+          {Array.from({ length: 2 }, (_, row) => (
+            <div key={row} className='flex flex-wrap gap-2'>
+              <Skeleton className='h-7 w-24 rounded-full' />
+              <Skeleton className='h-7 w-20 rounded-full' />
+              <Skeleton className='h-7 w-28 rounded-full' />
+              <Skeleton className='h-7 w-20 rounded-full' />
             </div>
           ))}
         </div>
-        <div className='flex min-w-0 flex-col gap-4'>
-          <div className='flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3'>
+        <div className='flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3'>
+          <Skeleton className='h-7 w-20' />
+          <div className='flex flex-wrap gap-2'>
+            <Skeleton className='h-7 w-32' />
             <Skeleton className='h-7 w-20' />
-            <div className='flex flex-wrap gap-2'>
-              <Skeleton className='h-7 w-32' />
-              <Skeleton className='h-7 w-20' />
-              <Skeleton className='h-7 w-24' />
-            </div>
+            <Skeleton className='h-7 w-24' />
           </div>
-          {content}
         </div>
+        {content}
       </div>
     </div>
   )

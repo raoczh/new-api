@@ -54,6 +54,13 @@ type AutoGroupOrderEditorProps = Omit<ComponentProps<'div'>, 'onChange'> & {
   addPlaceholder?: string
   /** Shows each custom entry's position, so the fallback order reads at a glance. */
   numbered?: boolean
+  /**
+   * Keeps chosen groups in the picker with a tick, so one can be cleared where
+   * it was picked, and shows each chosen group's ratio in the list below.
+   */
+  tickInPicker?: boolean
+  /** Replaces the Auto wording shown while no group is chosen. */
+  emptyText?: string
   'data-slot'?: string
   'data-form-root'?: string
 }
@@ -68,10 +75,22 @@ export function AutoGroupOrderEditor(props: AutoGroupOrderEditorProps) {
     () =>
       props.options.filter(
         (option) =>
-          option.value !== 'auto' && !props.value.includes(option.value)
+          option.value !== 'auto' &&
+          (props.tickInPicker || !props.value.includes(option.value))
       ),
-    [props.options, props.value]
+    [props.options, props.value, props.tickInPicker]
   )
+  const ratioByGroup = new Map(
+    props.options.map((option) => [option.value, option.ratio])
+  )
+
+  const handlePick = (group: string) => {
+    if (props.tickInPicker && props.value.includes(group)) {
+      handleRemove(group)
+      return
+    }
+    handleAdd(group)
+  }
 
   const handleAdd = (group: string) => {
     if (atLimit || props.value.includes(group)) return
@@ -137,13 +156,16 @@ export function AutoGroupOrderEditor(props: AutoGroupOrderEditorProps) {
       <ApiKeyGroupCombobox
         options={candidates}
         value={undefined}
-        onValueChange={handleAdd}
+        onValueChange={handlePick}
+        selectedValues={props.tickInPicker ? props.value : undefined}
+        compact={props.tickInPicker}
+        aria-label={props.addPlaceholder ?? t('Add Auto group')}
         placeholder={
           atLimit
             ? t('Maximum {{max}} groups selected', { max: maxCount })
             : (props.addPlaceholder ?? t('Add Auto group'))
         }
-        disabled={atLimit || candidates.length === 0}
+        disabled={candidates.length === 0 || (atLimit && !props.tickInPicker)}
       />
 
       {isInheriting && props.globalOptions.length === 0 && (
@@ -210,11 +232,14 @@ export function AutoGroupOrderEditor(props: AutoGroupOrderEditorProps) {
       {!isInheriting && props.value.length === 0 && (
         <Empty className='min-h-24 border'>
           <EmptyHeader>
-            <EmptyTitle>{t('Auto group order')}</EmptyTitle>
+            {!props.emptyText && (
+              <EmptyTitle>{t('Auto group order')}</EmptyTitle>
+            )}
             <EmptyDescription>
-              {t(
-                'No valid custom Auto groups remain. Add a group or restore global Auto.'
-              )}
+              {props.emptyText ??
+                t(
+                  'No valid custom Auto groups remain. Add a group or restore global Auto.'
+                )}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -245,7 +270,11 @@ export function AutoGroupOrderEditor(props: AutoGroupOrderEditorProps) {
               }
               onMove={handleMove}
               onRemove={handleRemove}
-            />
+            >
+              {props.tickInPicker && (
+                <GroupRatioBadge ratio={ratioByGroup.get(group)} />
+              )}
+            </AutoGroupOrderItem>
           ))}
         </Reorder.Group>
       )}

@@ -102,6 +102,12 @@ export const getUserRoleOptions = (t: (key: string) => string) => [
 
 export const DEFAULT_GROUP = 'default' as const
 
+/**
+ * Prefix of every user list query. Reloading the list after a change goes
+ * through it, so the table does not have to watch any dialog state.
+ */
+export const USERS_LIST_QUERY_KEY = ['users', 'list'] as const
+
 // ============================================================================
 // Third-party Binding Fields
 // ============================================================================

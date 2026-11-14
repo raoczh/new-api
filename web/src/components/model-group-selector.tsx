@@ -59,6 +59,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 
@@ -598,6 +604,7 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
   const [groupFilter, setGroupFilter] = useState<string | null>(null)
   const isMobile = useIsMobile()
   const groupScrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const modelScrollContainerRef = useRef<HTMLDivElement | null>(null)
   const selectedGroupOptionRef = useRef<HTMLButtonElement | null>(null)
   const selectedModelOptionRef = useRef<HTMLDivElement | null>(null)
 
@@ -683,7 +690,10 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
           selectedGroupOptionRef.current,
           groupScrollContainerRef.current
         )
-        scrollSelectedOptionIntoView(selectedModelOptionRef.current)
+        scrollSelectedOptionIntoView(
+          selectedModelOptionRef.current,
+          modelScrollContainerRef.current
+        )
       })
     })
 
@@ -736,35 +746,71 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
         )}
         ref={groupScrollContainerRef}
       >
-        {groups.map((group) => {
-          const isSelected = selectedGroup === group.value
+        {/* A short shared delay keeps tooltips from flashing while the pointer
+            only passes over the column on its way to the model list. */}
+        <TooltipProvider delay={150}>
+          {groups.map((group) => {
+            const isSelected = selectedGroup === group.value
+            const detail = formatGroupDetail(group, t)
 
-          return (
-            <button
-              className={cn(
-                'flex min-w-0 items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-[12px] leading-4 transition-colors',
-                isSelected
-                  ? 'bg-primary/10 text-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-              )}
-              disabled={disabled}
-              key={group.value}
-              onClick={() => handleGroupChange(group.value)}
-              ref={isSelected ? selectedGroupOptionRef : undefined}
-              type='button'
-            >
-              <span className='min-w-0 truncate font-medium'>
-                {group.label}
-              </span>
-              <Check
+            const option = (
+              <button
                 className={cn(
-                  'size-3.5 shrink-0',
-                  isSelected ? 'opacity-100' : 'opacity-0'
+                  'flex min-w-0 items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-[12px] leading-4 transition-colors',
+                  isSelected
+                    ? 'bg-primary/10 text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 )}
-              />
-            </button>
-          )
-        })}
+                disabled={disabled}
+                key={group.value}
+                onClick={() => handleGroupChange(group.value)}
+                ref={isSelected ? selectedGroupOptionRef : undefined}
+                type='button'
+              >
+                <span className='flex min-w-0 flex-col'>
+                  <span className='truncate font-medium'>{group.label}</span>
+                  {/* Touch screens have no hover, so the detail sits inline. */}
+                  {isMobile && detail ? (
+                    <span className='text-muted-foreground truncate text-[11px] font-normal'>
+                      {detail}
+                    </span>
+                  ) : null}
+                </span>
+                <Check
+                  className={cn(
+                    'size-3.5 shrink-0',
+                    isSelected ? 'opacity-100' : 'opacity-0'
+                  )}
+                />
+              </button>
+            )
+
+            if (isMobile) {
+              return option
+            }
+
+            // The column truncates long names; hovering shows the full name
+            // with the group description and ratio, beside the list so the
+            // models stay visible.
+            return (
+              <Tooltip key={group.value}>
+                <TooltipTrigger render={option} />
+                <TooltipContent
+                  align='start'
+                  className='max-w-64 flex-col items-start gap-1'
+                  side='left'
+                >
+                  <span className='font-medium break-all'>{group.label}</span>
+                  {detail ? (
+                    <span className='text-background/75 text-[11px] leading-4'>
+                      {detail}
+                    </span>
+                  ) : null}
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </TooltipProvider>
       </div>
     </div>
   )
@@ -786,8 +832,11 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
       />
       <CommandList
         className={
-          isMobile ? 'max-h-[45vh]' : modelGroupSelectorLayoutClasses.modelList
+          isMobile
+            ? 'relative max-h-[45vh]'
+            : modelGroupSelectorLayoutClasses.modelList
         }
+        ref={modelScrollContainerRef}
       >
         {filteredModels.length === 0 ? (
           <div className='text-muted-foreground px-3 py-8 text-center text-[12px] leading-5'>
@@ -847,7 +896,7 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
     <div
       className={
         isMobile
-          ? 'grid gap-3 p-2 md:grid-cols-[9.5rem_minmax(0,1fr)]'
+          ? 'grid gap-3 p-2 md:grid-cols-[12.5rem_minmax(0,1fr)]'
           : modelGroupSelectorLayoutClasses.desktopContent
       }
     >
@@ -881,7 +930,7 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
       <PopoverContent
         align='end'
         className={cn(
-          'bg-popover z-50 w-[34rem] max-w-[calc(100vw-2rem)] rounded-xl border p-0 shadow-lg',
+          'bg-popover z-50 w-[38rem] max-w-[calc(100vw-2rem)] rounded-xl border p-0 shadow-lg',
           modelGroupSelectorLayoutClasses.desktopPanel
         )}
         collisionPadding={8}

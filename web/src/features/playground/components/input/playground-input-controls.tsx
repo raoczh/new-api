@@ -27,16 +27,9 @@ import {
 import { ModelGroupSelector } from '@/components/model-group-selector'
 
 import { getInputControlState } from '../../lib'
-import type {
-  GroupOption,
-  ModelOption,
-  ParameterEnabled,
-  PlaygroundConfig,
-} from '../../types'
-import { PlaygroundParameterPanel } from './playground-parameter-panel'
+import type { GroupOption, ModelOption } from '../../types'
 
 type PlaygroundInputControlsProps = {
-  config: PlaygroundConfig
   disabled?: boolean
   groups: GroupOption[]
   groupValue: string
@@ -44,24 +37,14 @@ type PlaygroundInputControlsProps = {
   isModelLoading?: boolean
   models: ModelOption[]
   modelValue: string
-  onConfigChange: <K extends keyof PlaygroundConfig>(
-    key: K,
-    value: PlaygroundConfig[K]
-  ) => void
   onGroupChange: (value: string) => void
   onModelChange: (value: string) => void
-  onParameterEnabledChange: (
-    key: keyof ParameterEnabled,
-    value: boolean
-  ) => void
   onStop?: () => void
-  parameterEnabled: ParameterEnabled
   text: string
   tools: ReactNode
 }
 
 export function PlaygroundInputControls({
-  config,
   disabled,
   groups,
   groupValue,
@@ -69,12 +52,9 @@ export function PlaygroundInputControls({
   isModelLoading = false,
   models,
   modelValue,
-  onConfigChange,
   onGroupChange,
   onModelChange,
-  onParameterEnabledChange,
   onStop,
-  parameterEnabled,
   text,
   tools,
 }: PlaygroundInputControlsProps) {
@@ -91,16 +71,6 @@ export function PlaygroundInputControls({
       models,
       text,
     })
-
-  const renderParameterPanel = () => (
-    <PlaygroundParameterPanel
-      config={config}
-      disabled={disabled}
-      onConfigChange={onConfigChange}
-      onParameterEnabledChange={onParameterEnabledChange}
-      parameterEnabled={parameterEnabled}
-    />
-  )
 
   const renderSelector = () => (
     <ModelGroupSelector
@@ -141,7 +111,6 @@ export function PlaygroundInputControls({
   return (
     <div className='flex w-full flex-col gap-2.5 md:flex-row md:items-center md:justify-between'>
       <div className='flex min-w-0 items-center justify-end gap-1 md:hidden'>
-        {renderParameterPanel()}
         {renderSelector()}
       </div>
 
@@ -153,7 +122,6 @@ export function PlaygroundInputControls({
       </div>
 
       <div className='hidden min-w-0 items-center gap-1.5 md:flex'>
-        {renderParameterPanel()}
         {renderSelector()}
         {renderSubmitButton()}
       </div>

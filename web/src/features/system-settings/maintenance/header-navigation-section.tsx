@@ -219,7 +219,7 @@ export function HeaderNavigationSection({
       enabledKey: 'pricingEnabled',
       requireAuthKey: 'pricingRequireAuth',
       requireAuthDependsOn: 'pricingEnabled',
-      title: t('Model Square'),
+      title: t('Model prices'),
       description: t('Public model catalog and pricing page.'),
       requireAuthTitle: t('Require login to view models'),
       requireAuthDescription: t(

@@ -18,14 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { DEFAULT_CONFIG, DEFAULT_PARAMETER_ENABLED } from '../constants'
+import { DEFAULT_CONFIG } from '../constants'
 import {
   applyMessageStateUpdate,
   clearLegacyMessages,
   createConversation,
   deleteConversationMessages,
   deriveConversationTitle,
-  getInitialParameterEnabled,
   getInitialPlaygroundConfig,
   loadConversationIndex,
   loadLegacyMessages,
@@ -33,7 +32,6 @@ import {
   saveConfig,
   saveConversationIndex,
   saveMessages,
-  saveParameterEnabled,
   type MessageStateUpdater,
 } from '../lib'
 import type {
@@ -41,7 +39,6 @@ import type {
   PlaygroundConfig,
   PlaygroundConversation,
   PlaygroundConversationIndex,
-  ParameterEnabled,
   ModelOption,
   GroupOption,
 } from '../types'
@@ -67,21 +64,26 @@ function upsertConversationSummary(
  * Main state management hook for playground.
  * Owns the conversation index and the messages of the active conversation.
  *
- * `initialModel` seeds the selected model, so a link from the model square
- * ("start chatting with this model") opens the chat on that model instead of
- * whatever was stored last. It is not written to storage: a one-off deep link
- * should not silently change the model the user picked for themselves.
+ * `initialModel` and `initialGroup` seed the selection, so a link from the
+ * model square ("start chatting with this model") opens the chat on that model
+ * in a group that actually serves it, instead of whatever was stored last.
+ * They are not written to storage: a one-off deep link should not silently
+ * change the model the user picked for themselves.
  */
-export function usePlaygroundState(initialModel?: string) {
+export function usePlaygroundState(
+  initialModel?: string,
+  initialGroup?: string
+) {
   // Load initial state from localStorage
   const [config, setConfig] = useState<PlaygroundConfig>(() => {
     const stored = getInitialPlaygroundConfig()
-    return initialModel ? { ...stored, model: initialModel } : stored
+    if (!initialModel && !initialGroup) return stored
+    return {
+      ...stored,
+      ...(initialModel ? { model: initialModel } : {}),
+      ...(initialGroup ? { group: initialGroup } : {}),
+    }
   })
-
-  const [parameterEnabled, setParameterEnabled] = useState<ParameterEnabled>(
-    getInitialParameterEnabled
-  )
 
   const [conversations, setConversations] = useState<PlaygroundConversation[]>(
     []
@@ -217,24 +219,19 @@ export function usePlaygroundState(initialModel?: string) {
 
   useEffect(() => () => flushPendingSave(), [flushPendingSave])
 
-  // Update config with automatic save
+  // Update config with automatic save. A selection that only follows a link
+  // passes `persist: false`, so it does not replace what the user picked.
   const updateConfig = useCallback(
-    <K extends keyof PlaygroundConfig>(key: K, value: PlaygroundConfig[K]) => {
+    <K extends keyof PlaygroundConfig>(
+      key: K,
+      value: PlaygroundConfig[K],
+      options?: { persist?: boolean }
+    ) => {
       setConfig((prev) => {
         const updated = { ...prev, [key]: value }
-        saveConfig(updated)
-        return updated
-      })
-    },
-    []
-  )
-
-  // Update parameter enabled with automatic save
-  const updateParameterEnabled = useCallback(
-    (key: keyof ParameterEnabled, value: boolean) => {
-      setParameterEnabled((prev) => {
-        const updated = { ...prev, [key]: value }
-        saveParameterEnabled(updated)
+        if (options?.persist !== false) {
+          saveConfig(updated)
+        }
         return updated
       })
     },
@@ -352,15 +349,12 @@ export function usePlaygroundState(initialModel?: string) {
   // Reset config to defaults
   const resetConfig = useCallback(() => {
     setConfig(DEFAULT_CONFIG)
-    setParameterEnabled(DEFAULT_PARAMETER_ENABLED)
     saveConfig(DEFAULT_CONFIG)
-    saveParameterEnabled(DEFAULT_PARAMETER_ENABLED)
   }, [])
 
   return {
     // State
     config,
-    parameterEnabled,
     messages,
     isLoadingMessages,
     conversations,
@@ -374,7 +368,6 @@ export function usePlaygroundState(initialModel?: string) {
 
     // Actions
     updateConfig,
-    updateParameterEnabled,
     updateMessages,
     clearMessages,
     createNewConversation,

@@ -9,24 +9,28 @@ import (
 
 // PerfMetric stores aggregated relay performance metrics for the model square.
 type PerfMetric struct {
-	Id             int    `json:"id" gorm:"primaryKey"`
-	ModelName      string `json:"model_name" gorm:"size:128;uniqueIndex:idx_perf_model_group_bucket,priority:1"`
-	Group          string `json:"group" gorm:"column:group;size:64;uniqueIndex:idx_perf_model_group_bucket,priority:2"`
-	BucketTs       int64  `json:"bucket_ts" gorm:"uniqueIndex:idx_perf_model_group_bucket,priority:3;index:idx_perf_bucket_ts"`
-	RequestCount   int64  `json:"-" gorm:"default:0"`
-	SuccessCount   int64  `json:"-" gorm:"default:0"`
-	TotalLatencyMs int64  `json:"-" gorm:"default:0"`
-	TtftSumMs      int64  `json:"-" gorm:"default:0"`
-	TtftCount      int64  `json:"-" gorm:"default:0"`
-	OutputTokens   int64  `json:"-" gorm:"default:0"`
-	GenerationMs   int64  `json:"-" gorm:"default:0"`
+	Id        int    `json:"id" gorm:"primaryKey"`
+	ModelName string `json:"model_name" gorm:"size:128;uniqueIndex:idx_perf_model_group_bucket,priority:1"`
+	Group     string `json:"group" gorm:"column:group;size:64;uniqueIndex:idx_perf_model_group_bucket,priority:2"`
+	// GroupId 是 group 所指分组在 user_groups 中的 id，写入时随分组名一起绑定。
+	GroupId        int   `json:"-" gorm:"default:0"`
+	BucketTs       int64 `json:"bucket_ts" gorm:"uniqueIndex:idx_perf_model_group_bucket,priority:3;index:idx_perf_bucket_ts"`
+	RequestCount   int64 `json:"-" gorm:"default:0"`
+	SuccessCount   int64 `json:"-" gorm:"default:0"`
+	TotalLatencyMs int64 `json:"-" gorm:"default:0"`
+	TtftSumMs      int64 `json:"-" gorm:"default:0"`
+	TtftCount      int64 `json:"-" gorm:"default:0"`
+	OutputTokens   int64 `json:"-" gorm:"default:0"`
+	GenerationMs   int64 `json:"-" gorm:"default:0"`
 }
 
 // StatusProbe stores synthetic checks separately from customer traffic. It is
 // only used to fill unobserved group hours, never for billing or relay metrics.
 type StatusProbe struct {
-	ID         int64  `gorm:"primaryKey"`
-	GroupName  string `gorm:"size:64;index:idx_status_probe_group_ts,priority:1"`
+	ID        int64  `gorm:"primaryKey"`
+	GroupName string `gorm:"size:64;index:idx_status_probe_group_ts,priority:1"`
+	// GroupId 是 group_name 所指分组在 user_groups 中的 id，写入时随分组名一起绑定。
+	GroupId    int    `gorm:"default:0"`
 	ModelName  string `gorm:"size:128"`
 	Source     string `gorm:"size:16"`
 	ObservedAt int64  `gorm:"index:idx_status_probe_group_ts,priority:2;index"`

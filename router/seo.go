@@ -46,7 +46,7 @@ var seoDocsPages = []seoDocsPage{
 	{"", "介绍", "本站是什么、该填哪个地址，以及一把密钥可以调用的三种接口协议。"},
 	{"apikey", "API 密钥", "创建密钥、设置限制并妥善保管。"},
 	{"quickstart", "快速开始", "先验证密钥，再用 curl、PowerShell、Python 或 Node.js 发出第一条消息。"},
-	{"models", "模型广场", "查找准确的模型 ID、模型支持的接口类型以及各分组价格。"},
+	{"models", "模型价格", "查找准确的模型 ID、模型支持的接口类型以及各分组价格。"},
 	{"config/ccswitch", "CC Switch（推荐）", "一键把本站导入 Claude Code、Codex、Gemini CLI、OpenCode、OpenClaw 和 Hermes。"},
 	{"config/claude-code", "手动配置 Claude Code", "用环境变量或 settings.json 让 Claude Code 命令行与 VS Code 插件连接本站。"},
 	{"config/codex", "手动配置 Codex", "Codex 命令行、IDE 插件和桌面 App 共用同一份 config.toml。"},
@@ -76,7 +76,7 @@ var seoStaticPages = []struct {
 	Module      string
 }{
 	{"/about", "关于我们", "了解 TokenCome（杜康）的定位、能力与联系方式。", "0.6", "about"},
-	{"/pricing", "模型广场", "查看模型广场中的可用模型、接口类型与分组价格。", "0.8", "pricing"},
+	{"/pricing", "模型价格", "查看模型价格页中的可用模型、接口类型与分组价格。", "0.8", "pricing"},
 	{"/status-monitor", "状态监控", "查看各模型分组与上游渠道的实时可用性。", "0.5", "statusMonitor"},
 	{"/iq-monitor", "智商监控", "查看模型定期生成的 SVG 结果，识别输出退化或异常。", "0.4", "iqMonitor"},
 	{"/terms-of-service", "服务条款", "TokenCome（杜康）服务条款，说明使用本站服务时的权利与义务。", "0.3", ""},
@@ -530,7 +530,7 @@ func seoRenderLLMsTxt() string {
 	b.WriteString("## 主要页面\n\n")
 	fmt.Fprintf(&b, "- [首页](%s/): 产品介绍、协议矩阵与常见问题\n", site)
 	fmt.Fprintf(&b, "- [使用文档](%s/docs): 快速开始、客户端配置、API 参考与计费说明\n", site)
-	fmt.Fprintf(&b, "- [模型广场](%s/pricing): 可用模型、接口类型与分组价格\n", site)
+	fmt.Fprintf(&b, "- [模型价格](%s/pricing): 可用模型、接口类型与分组价格\n", site)
 	fmt.Fprintf(&b, "- [状态监控](%s/status-monitor): 各模型分组的实时可用性\n", site)
 	fmt.Fprintf(&b, "- [关于我们](%s/about): 项目定位与联系方式\n\n", site)
 	b.WriteString("## 接入地址\n\n")

@@ -50,6 +50,8 @@ type ImageStudioTask struct {
 
 	Model string `json:"model" gorm:"type:varchar(191)"`
 	Group string `json:"group" gorm:"type:varchar(64)"`
+	// GroupId 是 group 所指分组在 user_groups 中的 id，写入时随分组名一起绑定。
+	GroupId int `json:"-" gorm:"default:0"`
 
 	// Prompt is stored verbatim so a record can be reused as a new submission
 	// without asking the user to retype it.
@@ -68,11 +70,11 @@ type ImageStudioTask struct {
 
 	// Quota is the amount actually charged. It stays zero while queued so a
 	// canceled or expired task never needs a refund.
-	Quota       int   `json:"quota"`
-	Favorite    bool  `json:"favorite" gorm:"index"`
-	ChannelId   int   `json:"channel_id"`
-	RequestId   string `json:"request_id" gorm:"type:varchar(64);index"`
-	ElapsedMs   int64 `json:"elapsed_ms"`
+	Quota     int    `json:"quota"`
+	Favorite  bool   `json:"favorite" gorm:"index"`
+	ChannelId int    `json:"channel_id"`
+	RequestId string `json:"request_id" gorm:"type:varchar(64);index"`
+	ElapsedMs int64  `json:"elapsed_ms"`
 
 	CreatedAt  int64 `json:"created_at" gorm:"index"`
 	UpdatedAt  int64 `json:"updated_at"`

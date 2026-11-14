@@ -66,7 +66,7 @@ const PRIVATE_PREFIXES = [
 /** Translation keys for public static pages, matching the server's titles. */
 const STATIC_TITLE_KEYS: Record<string, string> = {
   '/about': 'About',
-  '/pricing': 'Model Square',
+  '/pricing': 'Model prices',
   '/status-monitor': 'Status Monitor',
   '/iq-monitor': 'IQ Monitor',
   '/terms-of-service': 'Terms of Service',
@@ -85,7 +85,7 @@ const DOC_TITLES: Record<string, { zh: string; en: string }> = {
   '': { zh: '介绍', en: 'Introduction' },
   apikey: { zh: 'API 密钥', en: 'API Key' },
   quickstart: { zh: '快速开始', en: 'Quick start' },
-  models: { zh: '模型广场', en: 'Model Square' },
+  models: { zh: '模型价格', en: 'Model prices' },
   'config/ccswitch': { zh: 'CC Switch（推荐）', en: 'CC Switch (recommended)' },
   'config/claude-code': {
     zh: '手动配置 Claude Code',

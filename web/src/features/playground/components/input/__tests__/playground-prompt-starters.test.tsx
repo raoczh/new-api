@@ -20,11 +20,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, test, vi } from 'vitest'
 
-import {
-  DEFAULT_CONFIG,
-  DEFAULT_PARAMETER_ENABLED,
-  PROMPT_STARTERS,
-} from '../../../constants'
+import { PROMPT_STARTERS } from '../../../constants'
 import { PlaygroundInput } from '../playground-input'
 
 vi.mock('@/components/model-group-selector', () => ({
@@ -41,18 +37,14 @@ function renderInput(
 
   return render(
     <PlaygroundInput
-      config={{ ...DEFAULT_CONFIG, model: 'gpt-5', group: 'default' }}
       groups={[{ label: 'default', value: 'default', ratio: 1 }]}
       groupValue='default'
       hasNoChatModels={options.hasNoChatModels}
       models={models}
       modelValue='gpt-5'
-      onConfigChange={() => undefined}
       onGroupChange={() => undefined}
       onModelChange={() => undefined}
-      onParameterEnabledChange={() => undefined}
       onSubmit={() => undefined}
-      parameterEnabled={DEFAULT_PARAMETER_ENABLED}
       showPromptStarters={options.showPromptStarters}
     />
   )

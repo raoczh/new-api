@@ -140,11 +140,17 @@ export function ApiKeyReadyDialog(props: ApiKeyReadyDialogProps) {
                   'No setup needed. Start talking to a model in your browser.'
                 )}
               >
+                {/* Opens in a new tab, so the key stays on screen to copy. */}
                 <Button
                   role='link'
                   size='sm'
-                  render={<Link to='/playground' />}
-                  onClick={() => props.onOpenChange(false)}
+                  render={
+                    <Link
+                      to='/playground'
+                      target='_blank'
+                      rel='noopener noreferrer'
+                    />
+                  }
                 >
                   {t('Start chatting')}
                   <ArrowRight data-icon='inline-end' aria-hidden='true' />
@@ -181,9 +187,13 @@ export function ApiKeyReadyDialog(props: ApiKeyReadyDialogProps) {
                 size='sm'
                 variant='outline'
                 render={
-                  <Link to='/docs/$' params={{ _splat: 'config/agents' }} />
+                  <Link
+                    to='/docs/$'
+                    params={{ _splat: 'config/agents' }}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                  />
                 }
-                onClick={() => props.onOpenChange(false)}
               >
                 {t('View guide')}
               </Button>

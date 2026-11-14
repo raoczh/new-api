@@ -22,11 +22,19 @@ func GetGroups(c *gin.Context) {
 		groupNames = append(groupNames, groupName)
 	}
 	groupNames = setting.OrderedGroupNames(groupNames)
+	// 分组备注随列表一起返回，管理端挑选分组时不必只靠名字辨认。
+	groupDescs := make(map[string]string)
+	for groupName, desc := range setting.GetUserUsableGroupsCopy() {
+		if _, ok := groupRatios[groupName]; ok && desc != "" {
+			groupDescs[groupName] = desc
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success":     true,
 		"message":     "",
 		"data":        groupNames,
 		"group_ratio": groupRatios,
+		"group_desc":  groupDescs,
 	})
 }
 
@@ -44,7 +52,7 @@ func GetUserGroups(c *gin.Context) {
 		// UserUsableGroups contains the groups that the user can use
 		if desc, ok := userUsableGroups[groupName]; ok {
 			usableGroups[groupName] = map[string]any{
-				"ratio": service.GetUserGroupRatio(userGroup, groupName),
+				"ratio": service.GetUserGroupRatio(userGroup, userSetting, groupName),
 				"desc":  desc,
 			}
 		}
@@ -80,7 +88,7 @@ func GetUserGroups(c *gin.Context) {
 			vendors = append(vendors, vendor)
 		}
 	}
-	slices.SortFunc(vendors, func(a, b model.PricingVendor) int { return strings.Compare(a.Name, b.Name) })
+	orderVendorsByGroupOrder(vendors)
 	c.JSON(http.StatusOK, gin.H{
 		"success":     true,
 		"message":     "",
